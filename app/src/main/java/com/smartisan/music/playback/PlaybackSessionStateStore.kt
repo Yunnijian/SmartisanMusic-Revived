@@ -37,6 +37,11 @@ internal data class PlaybackSessionSnapshot(
 internal data class PlaybackQueueSnapshotItem(
     val mediaId: String,
     val stableKey: String = "",
+    val title: String = "",
+    val artist: String = "",
+    val album: String = "",
+    val durationMs: Long = 0L,
+    val artworkUri: String = "",
 )
 
 internal class PlaybackSessionStateStore(private val context: Context) {
@@ -93,6 +98,11 @@ internal fun List<PlaybackQueueSnapshotItem>.encodeQueueItemsForStore(): String 
                 JSONObject()
                     .put(QueueItemMediaIdKey, item.mediaId.trim())
                     .put(QueueItemStableKeyKey, item.stableKey.trim())
+                    .put(QueueItemTitleKey, item.title.trim())
+                    .put(QueueItemArtistKey, item.artist.trim())
+                    .put(QueueItemAlbumKey, item.album.trim())
+                    .put(QueueItemDurationMsKey, item.durationMs.coerceAtLeast(0L))
+                    .put(QueueItemArtworkUriKey, item.artworkUri.trim()),
             )
         }
     return array.toString()
@@ -139,6 +149,11 @@ private fun decodeJsonQueueItems(rawValue: String): List<PlaybackQueueSnapshotIt
                 PlaybackQueueSnapshotItem(
                     mediaId = mediaId,
                     stableKey = root.optString(QueueItemStableKeyKey).trim(),
+                    title = root.optString(QueueItemTitleKey).trim(),
+                    artist = root.optString(QueueItemArtistKey).trim(),
+                    album = root.optString(QueueItemAlbumKey).trim(),
+                    durationMs = root.optLong(QueueItemDurationMsKey, 0L).coerceAtLeast(0L),
+                    artworkUri = root.optString(QueueItemArtworkUriKey).trim(),
                 )
             )
         }
@@ -155,3 +170,8 @@ private val ShuffleModeEnabledKey = booleanPreferencesKey("shuffle_mode_enabled"
 
 private const val QueueItemMediaIdKey = "mediaId"
 private const val QueueItemStableKeyKey = "stableKey"
+private const val QueueItemTitleKey = "title"
+private const val QueueItemArtistKey = "artist"
+private const val QueueItemAlbumKey = "album"
+private const val QueueItemDurationMsKey = "durationMs"
+private const val QueueItemArtworkUriKey = "artworkUri"

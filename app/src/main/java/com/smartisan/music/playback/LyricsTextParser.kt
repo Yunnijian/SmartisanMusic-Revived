@@ -1,5 +1,7 @@
 package com.smartisan.music.playback
 
+import com.smartisan.music.data.online.OnlineLyrics
+import kotlin.math.abs
 import kotlin.math.max
 
 private val LrcTimestampRegex = Regex("""\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?]""")
@@ -12,11 +14,41 @@ private val LrcMetadataRegex = Regex(
 private val YrcLineRegex = Regex("""^\[(\d+),(\d+)](.*)$""")
 private val YrcTokenRegex = Regex("""\((\d+),(\d+)(?:,\d+)?\)([^()]*)""")
 
+/**
+ * 在线歌词（网易云 LRC/YRC 原文 + 译文）：优先取逐字/逐行原文与译文中质量最好的一份，
+ * 再按时间轴合并为带 translation 的行。
+ */
+internal fun parseOnlineLyrics(lyrics: OnlineLyrics): EmbeddedLyrics? {
+    val primary = chooseBestLyricsCandidate(
+        rawTexts = listOf(lyrics.wordLyric, lyrics.lyric),
+        hintedByKey = true,
+    )
+    val translation = chooseBestLyricsCandidate(
+        rawTexts = listOf(lyrics.translatedWordLyric, lyrics.translatedLyric),
+        hintedByKey = true,
+    )
+    return mergeTranslatedLyrics(primary, translation) ?: primary ?: translation
+}
+
 internal fun parseEmbeddedLyricsText(
     rawText: String?,
     hintedByKey: Boolean = false,
 ): EmbeddedLyrics? {
     return parseLyricsDocument(rawText = rawText, hintedByKey = hintedByKey)
+}
+
+private fun chooseBestLyricsCandidate(
+    rawTexts: List<String?>,
+    hintedByKey: Boolean,
+): EmbeddedLyrics? {
+    var bestLyrics: EmbeddedLyrics? = null
+    rawTexts.forEach { rawText ->
+        bestLyrics = chooseBetterLyrics(
+            current = bestLyrics,
+            candidate = parseLyricsDocument(rawText = rawText, hintedByKey = hintedByKey),
+        )
+    }
+    return bestLyrics
 }
 
 private fun parseLyricsDocument(
@@ -220,6 +252,40 @@ private fun stripInlineLyricTimestamps(rawLine: String): String {
     )
 }
 
+private fun mergeTranslatedLyrics(
+    primary: EmbeddedLyrics?,
+    translation: EmbeddedLyrics?,
+): EmbeddedLyrics? {
+    primary ?: return translation
+    translation ?: return primary
+    if (translation.lines.isEmpty()) {
+        return primary
+    }
+
+    val translatedLines = if (primary.isTimeSynced && translation.isTimeSynced) {
+        primary.lines.map { line ->
+            line.copy(translation = translation.findTimedTranslation(line)?.text)
+        }
+    } else if (primary.lines.size == translation.lines.size) {
+        primary.lines.mapIndexed { index, line ->
+            line.copy(translation = translation.lines[index].text.takeIf(String::isNotBlank))
+        }
+    } else {
+        primary.lines
+    }
+    return primary.copy(lines = normalizeEmbeddedLyricsLines(translatedLines))
+}
+
+private fun EmbeddedLyrics.findTimedTranslation(
+    primaryLine: EmbeddedLyricsLine,
+): EmbeddedLyricsLine? {
+    val timestampMs = primaryLine.timestampMs ?: return null
+    return lines
+        .filter { line -> line.timestampMs != null }
+        .minByOrNull { line -> abs((line.timestampMs ?: 0L) - timestampMs) }
+        ?.takeIf { line -> abs((line.timestampMs ?: 0L) - timestampMs) <= TranslationTimestampToleranceMs }
+}
+
 private fun normalizeEmbeddedLyricsLines(
     lines: List<EmbeddedLyricsLine>,
 ): List<EmbeddedLyricsLine> {
@@ -230,12 +296,13 @@ private fun normalizeEmbeddedLyricsLines(
     val normalizedLines = mutableListOf<EmbeddedLyricsLine>()
     lines.forEach { line ->
         val normalizedText = line.text.trim()
+        val normalizedTranslation = line.translation?.trim()?.takeIf(String::isNotEmpty)
         if (normalizedText.isEmpty()) {
             if (normalizedLines.isNotEmpty() && normalizedLines.last().text.isNotBlank()) {
-                normalizedLines += line.copy(text = "", tokens = emptyList())
+                normalizedLines += line.copy(text = "", translation = null, tokens = emptyList())
             }
         } else {
-            normalizedLines += line.copy(text = normalizedText)
+            normalizedLines += line.copy(text = normalizedText, translation = normalizedTranslation)
         }
     }
 
@@ -262,6 +329,12 @@ internal fun chooseBetterLyrics(
 
     if (candidate.isWordSynced != current.isWordSynced) {
         return if (candidate.isWordSynced) candidate else current
+    }
+
+    val candidateTranslationCount = candidate.lines.count { line -> !line.translation.isNullOrBlank() }
+    val currentTranslationCount = current.lines.count { line -> !line.translation.isNullOrBlank() }
+    if (candidateTranslationCount != currentTranslationCount) {
+        return if (candidateTranslationCount > currentTranslationCount) candidate else current
     }
 
     return if (candidate.lines.size > current.lines.size) candidate else current
@@ -301,3 +374,5 @@ private fun parseTimestampMatch(match: MatchResult): Long {
     }
     return (minutes * 60_000L) + (seconds * 1_000L) + fractionMs
 }
+
+private const val TranslationTimestampToleranceMs = 1_200L

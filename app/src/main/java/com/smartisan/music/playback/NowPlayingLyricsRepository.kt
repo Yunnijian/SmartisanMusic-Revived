@@ -4,6 +4,11 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.LruCache
 import androidx.media3.common.MediaItem
+import com.smartisan.music.data.online.OnlineLyricsExtraKey
+import com.smartisan.music.data.online.OnlineTranslatedLyricsExtraKey
+import com.smartisan.music.data.online.OnlineTranslatedWordLyricsExtraKey
+import com.smartisan.music.data.online.OnlineWordLyricsExtraKey
+import com.smartisan.music.data.online.onlineIdentityOrNull
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -78,13 +83,33 @@ internal object NowPlayingLyricsRepository {
 
 private data class LyricsRequestKey(
     val mediaId: String?,
+    val onlineSource: String?,
+    val onlineTrackId: String?,
     val mediaUri: String?,
+    val onlineLyricsHash: Int?,
+    val onlineTranslatedLyricsHash: Int?,
+    val onlineWordLyricsHash: Int?,
+    val onlineTranslatedWordLyricsHash: Int?,
 )
 
 private fun MediaItem.lyricsRequestKey(): LyricsRequestKey {
+    // 在线条目以 source/trackId 为主键（播放 URL 会过期轮换，不能作为歌词缓存键），
+    // 并把 extras 中歌词原文/译文的哈希纳入键中，重解析带回新歌词后能刷新缓存。
+    val extras = mediaMetadata.extras
+    val lyrics = extras?.getString(OnlineLyricsExtraKey)
+    val translatedLyrics = extras?.getString(OnlineTranslatedLyricsExtraKey)
+    val wordLyrics = extras?.getString(OnlineWordLyricsExtraKey)
+    val translatedWordLyrics = extras?.getString(OnlineTranslatedWordLyricsExtraKey)
+    val onlineIdentity = onlineIdentityOrNull()
     return LyricsRequestKey(
         mediaId = mediaId.trim().takeIf(String::isNotEmpty),
-        mediaUri = localConfiguration?.uri?.toString(),
+        onlineSource = onlineIdentity?.source,
+        onlineTrackId = onlineIdentity?.trackId,
+        mediaUri = if (onlineIdentity == null) localConfiguration?.uri?.toString() else null,
+        onlineLyricsHash = lyrics?.hashCode(),
+        onlineTranslatedLyricsHash = translatedLyrics?.hashCode(),
+        onlineWordLyricsHash = wordLyrics?.hashCode(),
+        onlineTranslatedWordLyricsHash = translatedWordLyrics?.hashCode(),
     )
 }
 

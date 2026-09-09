@@ -204,9 +204,19 @@ private fun Player.toPlaybackSessionSnapshot(): PlaybackSessionSnapshot {
 }
 
 private fun MediaItem.toPlaybackQueueSnapshotItem(mediaId: String): PlaybackQueueSnapshotItem {
+    val metadata = mediaMetadata
     return PlaybackQueueSnapshotItem(
         mediaId = mediaId,
         stableKey = stableKey.orEmpty(),
+        title = metadata.title?.toString()
+            ?: metadata.displayTitle?.toString()
+            ?: "",
+        artist = metadata.artist?.toString()
+            ?: metadata.subtitle?.toString()
+            ?: "",
+        album = metadata.albumTitle?.toString().orEmpty(),
+        durationMs = metadata.durationMs?.coerceAtLeast(0L) ?: 0L,
+        artworkUri = metadata.artworkUri?.toString().orEmpty(),
     )
 }
 

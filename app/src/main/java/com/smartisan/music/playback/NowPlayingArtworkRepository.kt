@@ -2,10 +2,20 @@ package com.smartisan.music.playback
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.SystemClock
 import android.util.LruCache
 import android.util.Size
 import androidx.media3.common.MediaItem
+import coil3.SingletonImageLoader
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.request.bitmapConfig
+import coil3.request.crossfade
+import coil3.size.Precision
+import coil3.toBitmap
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -88,7 +98,44 @@ internal object NowPlayingArtworkRepository {
     ): Bitmap? {
         val metadata = mediaItem.mediaMetadata
         return decodeArtworkData(metadata.artworkData, size)
+            ?: loadNetworkArtworkBitmap(context, metadata.artworkUri, size)
             ?: loadArtworkBitmapSync(context, mediaItem, size)
+    }
+
+    /**
+     * 在线歌曲的网络封面：走 Coil 的两级缓存（内存 + 磁盘），
+     * 命中后播放条/MediaSession/播放页共用同一份位图，避免重复下载。
+     */
+    private suspend fun loadNetworkArtworkBitmap(
+        context: Context,
+        uri: Uri?,
+        size: Size,
+    ): Bitmap? {
+        uri ?: return null
+        if (!uri.isNetworkUri()) {
+            return null
+        }
+        return runCatching {
+            val imageLoader = SingletonImageLoader.get(context)
+            val result = imageLoader.execute(
+                ImageRequest.Builder(context)
+                    .data(uri.toString())
+                    .size(size.width, size.height)
+                    .precision(Precision.INEXACT)
+                    .crossfade(false)
+                    .allowHardware(false)
+                    .bitmapConfig(Bitmap.Config.RGB_565)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .networkCachePolicy(CachePolicy.ENABLED)
+                    .build(),
+            )
+            val image = (result as? SuccessResult)?.image ?: return@runCatching null
+            image.toBitmap(
+                width = image.width.coerceAtLeast(1),
+                height = image.height.coerceAtLeast(1),
+            ).scaledToFit(size)
+        }.getOrNull()
     }
 
     private fun isRecentlyMissing(identity: ArtworkRequestKey): Boolean {
@@ -122,6 +169,22 @@ private data class ArtworkCacheKey(
     val width: Int,
     val height: Int,
 )
+
+private fun Uri.isNetworkUri(): Boolean {
+    return scheme == "http" || scheme == "https"
+}
+
+private fun Bitmap.scaledToFit(size: Size): Bitmap {
+    val maxWidth = size.width.coerceAtLeast(1)
+    val maxHeight = size.height.coerceAtLeast(1)
+    if (width <= maxWidth && height <= maxHeight) {
+        return this
+    }
+    val scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height)
+    val scaledWidth = (width * scale).toInt().coerceAtLeast(1)
+    val scaledHeight = (height * scale).toInt().coerceAtLeast(1)
+    return Bitmap.createScaledBitmap(this, scaledWidth, scaledHeight, true)
+}
 
 private fun artworkCacheSizeKb(): Int {
     val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()

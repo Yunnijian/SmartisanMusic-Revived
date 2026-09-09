@@ -14,6 +14,14 @@ import androidx.media3.extractor.metadata.id3.CommentFrame
 import androidx.media3.extractor.metadata.id3.InternalFrame
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.extractor.metadata.vorbis.VorbisComment
+import com.smartisan.music.data.online.OnlineLyrics
+import com.smartisan.music.data.online.OnlineLyricsExtraKey
+import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
+import com.smartisan.music.data.online.OnlineTranslatedLyricsExtraKey
+import com.smartisan.music.data.online.OnlineTranslatedWordLyricsExtraKey
+import com.smartisan.music.data.online.OnlineWordLyricsExtraKey
+import com.smartisan.music.data.online.hasContent
+import com.smartisan.music.data.online.onlineIdentityOrNull
 import kotlinx.coroutines.CancellationException
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
@@ -21,6 +29,7 @@ import java.nio.charset.StandardCharsets
 internal data class EmbeddedLyricsLine(
     val text: String,
     val timestampMs: Long? = null,
+    val translation: String? = null,
     val tokens: List<EmbeddedLyricsToken> = emptyList(),
 )
 
@@ -55,6 +64,22 @@ internal suspend fun loadEmbeddedLyrics(
     context: Context,
     mediaItem: MediaItem,
 ): EmbeddedLyrics? {
+    // 在线条目：优先使用 MediaItem extras 里随播放解析带回的歌词，其次经 Router 拉取（含磁盘缓存）。
+    mediaItem.onlineLyrics()?.let { onlineLyrics ->
+        parseOnlineLyrics(onlineLyrics)?.let { lyrics -> return lyrics }
+    }
+    val onlineIdentity = mediaItem.onlineIdentityOrNull()
+    onlineIdentity?.let { identity ->
+        runCatching {
+            OnlineMusicRepositoryRouter(context.applicationContext).lyrics(identity)
+        }.getOrNull()?.let { onlineLyrics ->
+            parseOnlineLyrics(onlineLyrics)?.let { lyrics -> return lyrics }
+        }
+    }
+    if (onlineIdentity != null) {
+        return null
+    }
+
     mediaItem.localConfiguration?.uri ?: return null
 
     return try {
@@ -77,6 +102,17 @@ internal suspend fun loadEmbeddedLyrics(
     } catch (_: Throwable) {
         null
     }
+}
+
+private fun MediaItem.onlineLyrics(): OnlineLyrics? {
+    val extras = mediaMetadata.extras ?: return null
+    val lyrics = OnlineLyrics(
+        lyric = extras.getString(OnlineLyricsExtraKey)?.takeIf(String::isNotBlank),
+        translatedLyric = extras.getString(OnlineTranslatedLyricsExtraKey)?.takeIf(String::isNotBlank),
+        wordLyric = extras.getString(OnlineWordLyricsExtraKey)?.takeIf(String::isNotBlank),
+        translatedWordLyric = extras.getString(OnlineTranslatedWordLyricsExtraKey)?.takeIf(String::isNotBlank),
+    )
+    return lyrics.takeIf(OnlineLyrics::hasContent)
 }
 
 internal fun extractEmbeddedLyrics(

@@ -8,8 +8,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Size
 import androidx.media3.common.MediaItem
+import com.smartisan.music.data.online.onlineIdentityOrNull
 import com.smartisan.music.platform.media.audioMediaItemUri
 import com.smartisan.music.platform.media.loadMediaThumbnailCompat
+import java.net.HttpURLConnection
+import java.net.URL
 
 internal data class ArtworkRequestKey(
     val mediaId: String?,
@@ -22,12 +25,15 @@ internal data class ArtworkRequestKey(
 
 internal fun MediaItem.artworkRequestKey(): ArtworkRequestKey {
     val artworkData = mediaMetadata.artworkData
+    val onlineIdentity = onlineIdentityOrNull()
     return artworkRequestKeyState(
         mediaId = mediaId,
         artworkUri = mediaMetadata.artworkUri?.toString(),
         albumId = mediaMetadata.extras.albumId(),
         mediaUri = localConfiguration?.uri?.toString(),
         artworkData = artworkData,
+        onlineSource = onlineIdentity?.source,
+        onlineTrackId = onlineIdentity?.trackId,
     )
 }
 
@@ -37,12 +43,20 @@ internal fun artworkRequestKeyState(
     albumId: Long?,
     mediaUri: String?,
     artworkData: ByteArray?,
+    onlineSource: String? = null,
+    onlineTrackId: String? = null,
 ): ArtworkRequestKey {
+    // 在线条目以 online:source:trackId 作为缓存主键，并排除会过期轮换的播放 URI。
+    val onlineArtworkMediaId = if (!onlineSource.isNullOrBlank() && !onlineTrackId.isNullOrBlank()) {
+        "online:$onlineSource:$onlineTrackId"
+    } else {
+        null
+    }
     return ArtworkRequestKey(
-        mediaId = mediaId,
+        mediaId = onlineArtworkMediaId ?: mediaId,
         artworkUri = artworkUri,
         albumId = albumId,
-        mediaUri = mediaUri,
+        mediaUri = if (onlineArtworkMediaId == null) mediaUri else null,
         artworkDataHash = artworkData?.contentHashCode(),
         artworkDataSize = artworkData?.size,
     )
@@ -75,8 +89,8 @@ internal fun loadArtworkUriBitmap(
     size: Size,
 ): Bitmap? {
     uri ?: return null
-    if (uri.scheme == "http" || uri.scheme == "https") {
-        return null
+    if (uri.isNetworkUri()) {
+        return loadNetworkArtworkBitmap(uri, size)
     }
     return context.contentResolver.loadMediaThumbnailCompat(uri, size)?.scaledToFit(size)
         ?: runCatching {
@@ -125,6 +139,32 @@ private fun loadMediaStoreAudioArtworkBitmap(
 internal fun localAudioMediaUri(mediaId: String): Uri? {
     val numericMediaId = mediaId.toLongOrNull() ?: return null
     return audioMediaItemUri(numericMediaId)
+}
+
+/**
+ * 网络封面地址的同步兜底加载（MediaSession 直接携带 http 封面 URI 时使用）：
+ * 走 HttpURLConnection 下载后按目标尺寸采样解码。常规路径优先走 Coil 异步加载。
+ */
+private fun loadNetworkArtworkBitmap(
+    uri: Uri,
+    size: Size,
+): Bitmap? {
+    return runCatching {
+        val connection = (URL(uri.toString()).openConnection() as HttpURLConnection).apply {
+            connectTimeout = NetworkArtworkTimeoutMs
+            readTimeout = NetworkArtworkTimeoutMs
+            setRequestProperty("User-Agent", NetworkArtworkUserAgent)
+        }
+        try {
+            if (connection.responseCode !in 200..299) {
+                return@runCatching null
+            }
+            val bytes = connection.inputStream.use { stream -> stream.readBytes() }
+            decodeByteArraySampled(bytes, size)?.scaledToFit(size)
+        } finally {
+            connection.disconnect()
+        }
+    }.getOrNull()
 }
 
 private fun loadMediaThumbnail(
@@ -229,3 +269,12 @@ private fun Bitmap.scaledToFit(size: Size): Bitmap {
     val scaledHeight = (height * scale).toInt().coerceAtLeast(1)
     return Bitmap.createScaledBitmap(this, scaledWidth, scaledHeight, true)
 }
+
+private fun Uri.isNetworkUri(): Boolean {
+    return scheme == "http" || scheme == "https"
+}
+
+private const val NetworkArtworkTimeoutMs = 12_000
+private const val NetworkArtworkUserAgent =
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
