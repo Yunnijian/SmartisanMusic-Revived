@@ -225,4 +225,36 @@
     <string name="cloud_music_retry">重试</string>
     <string name="cloud_music_login_prompt">登录后可搜索并播放在线歌曲</string>
     <string name="cloud_music_login_action">登录网易云音乐</string>
+
+    <!-- 云音乐首页 -->
+    <string name="cloud_music_home_loading">正在加载</string>
+    <string name="cloud_music_home_error">加载失败</string>
+    <string name="cloud_music_section_daily_tracks">每日推荐</string>
+    <string name="cloud_music_section_playlists">推荐歌单</string>
+    <string name="cloud_music_section_charts">排行榜</string>
+    <string name="cloud_music_section_albums">新碟上架</string>
+    <string name="cloud_music_section_artists">热门艺人</string>
+
+    <!-- 云音乐我的 -->
+    <string name="cloud_music_mine_title">我的音乐</string>
+    <string name="cloud_music_mine_loading">正在加载</string>
+    <string name="cloud_music_mine_error">加载失败</string>
+    <string name="cloud_music_mine_no_data">暂无数据</string>
+    <string name="cloud_music_mine_retry">重试</string>
+    <string name="cloud_music_mine_playlists">我的歌单</string>
+    <string name="cloud_music_mine_albums">我的专辑</string>
+    <string name="cloud_music_mine_radios">我的电台</string>
+    <string name="cloud_music_mine_daily">每日推荐</string>
+    <string name="cloud_music_mine_daily_subtitle">根据你的口味推荐</string>
+
+    <!-- 云音乐详情页 -->
+    <string name="cloud_music_detail_loading">正在加载</string>
+    <string name="cloud_music_detail_error">加载失败</string>
+    <string name="cloud_music_detail_empty">暂无歌曲</string>
+    <string name="cloud_music_detail_retry">重试</string>
+    <string name="cloud_music_detail_play_all">播放全部</string>
+    <string name="cloud_music_detail_shuffle">随机播放</string>
+    <string name="cloud_music_detail_login_required">请先登录网易云音乐</string>
+    <string name="cloud_music_detail_artist_albums">专辑</string>
+    <string name="cloud_music_detail_artist_intro">简介</string>
 </resources>

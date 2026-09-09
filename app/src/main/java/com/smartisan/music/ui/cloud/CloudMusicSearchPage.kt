@@ -73,6 +73,7 @@ internal sealed interface CloudSearchResultsState {
 /**
  * 云音乐搜索页：搜索框 + 歌曲结果列表（封面 / 歌名 / 艺人 - 专辑 / 时长）。
  * 点击歌曲时把整个结果列表作为在线队列交给播放控制器（占位 URI 由服务端解析）。
+ * query 由宿主持有（受控），与作者新版框架的 SearchOverlay 受控模式一致。
  */
 @Composable
 internal fun CloudMusicSearchPage(
