@@ -24,6 +24,7 @@ import com.smartisan.music.ui.album.AlbumPage
 import com.smartisan.music.ui.album.AlbumViewMode
 import com.smartisan.music.ui.artist.ArtistPage
 import com.smartisan.music.ui.artist.ArtistTarget
+import com.smartisan.music.ui.cloud.CloudMusicHost
 import com.smartisan.music.ui.folder.FolderPage
 import com.smartisan.music.ui.genre.GenrePage
 import com.smartisan.music.ui.loved.LovedSongsPage
@@ -219,6 +220,12 @@ internal fun MusicTabContent(
                     onMediaIdsHidden = onMediaIdsHidden,
                     onRequestDeleteMediaIds = onRequestDeleteMediaIds,
                     onTrackMoreClick = onLibraryTrackMoreClick,
+                    modifier = activePageModifier,
+                )
+            MusicDestination.Cloud ->
+                CloudMusicHost(
+                    active = true,
+                    playbackBarOverlayHeight = playbackBarOverlayHeight,
                     modifier = activePageModifier,
                 )
         }

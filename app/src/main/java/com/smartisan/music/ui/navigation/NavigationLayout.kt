@@ -120,6 +120,9 @@ internal val DefaultDestinationOrder =
         MusicDestination.Playlist,
         MusicDestination.Artist,
         MusicDestination.Album,
+        // 云音乐默认进底栏前缀（DefaultBottomDestinationCount = 4），保证新装用户直接可见；
+        // 已持久化布局里没有该目的地时，normalizedNavigationLayout 会把它补到顺序末尾（“更多”区）。
+        MusicDestination.Cloud,
         MusicDestination.Songs,
         MusicDestination.Genre,
         MusicDestination.LovedSongs,

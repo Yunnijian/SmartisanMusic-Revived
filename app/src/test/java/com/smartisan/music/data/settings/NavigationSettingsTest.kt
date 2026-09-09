@@ -20,7 +20,7 @@ import org.junit.Test
 class NavigationSettingsTest {
 
     @Test
-    fun defaultLayoutMatchesOriginalFivePlusThreeSplit() {
+    fun defaultLayoutPinsCloudMusicInBottomBar() {
         val layout = NavigationLayout()
 
         assertEquals(
@@ -28,13 +28,14 @@ class NavigationSettingsTest {
                 MusicDestination.Playlist,
                 MusicDestination.Artist,
                 MusicDestination.Album,
-                MusicDestination.Songs,
+                MusicDestination.Cloud,
                 MusicDestination.More,
             ),
             layout.bottomDestinations,
         )
         assertEquals(
             listOf(
+                MusicDestination.Songs,
                 MusicDestination.Genre,
                 MusicDestination.LovedSongs,
                 MusicDestination.Folder,
@@ -49,10 +50,10 @@ class NavigationSettingsTest {
             NavigationLayout()
                 .swap(
                     MusicDestination.Playlist,
-                    MusicDestination.Genre,
+                    MusicDestination.Songs,
                 )
 
-        assertEquals(MusicDestination.Genre, swapped.bottomDestinations.first())
+        assertEquals(MusicDestination.Songs, swapped.bottomDestinations.first())
         assertEquals(MusicDestination.Playlist, swapped.overflowDestinations.first())
         assertEquals(4, swapped.bottomCount)
     }
@@ -63,15 +64,15 @@ class NavigationSettingsTest {
             NavigationLayout()
                 .swap(
                     MusicDestination.Artist,
-                    MusicDestination.Songs,
+                    MusicDestination.Album,
                 )
 
         assertEquals(
             listOf(
                 MusicDestination.Playlist,
-                MusicDestination.Songs,
                 MusicDestination.Album,
                 MusicDestination.Artist,
+                MusicDestination.Cloud,
                 MusicDestination.More,
             ),
             swapped.bottomDestinations,
@@ -113,8 +114,8 @@ class NavigationSettingsTest {
     fun moveNeverCrossesBottomOverflowBoundary() {
         val layout = NavigationLayout()
 
-        val bottomMove = layout.move(MusicDestination.Songs, 1)
-        val overflowMove = layout.move(MusicDestination.Genre, -1)
+        val bottomMove = layout.move(MusicDestination.Cloud, 1)
+        val overflowMove = layout.move(MusicDestination.Songs, -1)
 
         assertEquals(layout, bottomMove)
         assertEquals(layout, overflowMove)
@@ -132,13 +133,14 @@ class NavigationSettingsTest {
                 MusicDestination.Playlist,
                 MusicDestination.Album,
                 MusicDestination.Artist,
-                MusicDestination.Songs,
+                MusicDestination.Cloud,
                 MusicDestination.More,
             ),
             bottomMove.bottomDestinations,
         )
         assertEquals(
             listOf(
+                MusicDestination.Songs,
                 MusicDestination.Genre,
                 MusicDestination.Folder,
                 MusicDestination.LovedSongs,
@@ -225,11 +227,11 @@ class NavigationSettingsTest {
         val settings =
             NavigationSettings(
                 layout = NavigationLayout(),
-                lastDestination = MusicDestination.Songs,
+                lastDestination = MusicDestination.Cloud,
                 lastPresentedFromMore = true,
             )
 
-        assertEquals(MusicDestination.Songs to false, settings.restoredDestination())
+        assertEquals(MusicDestination.Cloud to false, settings.restoredDestination())
     }
 
     @Test

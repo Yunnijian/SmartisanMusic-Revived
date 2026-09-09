@@ -53,6 +53,12 @@ enum class MusicDestination(
         bottomIconRes = R.drawable.tabbar_folder_selector,
         overflowIconRes = R.drawable.morepage_folder_selector,
     ),
+    Cloud(
+        route = "cloud_music",
+        labelRes = R.string.tab_cloud_music,
+        bottomIconRes = R.drawable.tabbar_cloud_music_selector,
+        overflowIconRes = R.drawable.morepage_cloud_music_selector,
+    ),
     More(
         route = "more",
         labelRes = R.string.tab_more,
