@@ -41,6 +41,10 @@ import com.smartisan.music.R
 import com.smartisan.music.data.favorite.FavoriteSongsRepository
 import com.smartisan.music.data.library.LibraryExclusions
 import com.smartisan.music.data.library.LibraryExclusionsStore
+import com.smartisan.music.data.online.NeteaseAuthStore
+import com.smartisan.music.data.online.OnlineMusicProvider
+import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
+import com.smartisan.music.data.online.onlineTrackIdentityOrNull
 import com.smartisan.music.data.playlist.PlaylistCreateResult
 import com.smartisan.music.data.playlist.PlaylistRepository
 import com.smartisan.music.data.settings.ArtistSettings
@@ -77,6 +81,7 @@ import com.smartisan.music.ui.components.TrackActionsOverlay
 import com.smartisan.music.ui.components.rememberMediaStoreDeleteCoordinator
 import com.smartisan.music.ui.components.withSelection
 import com.smartisan.music.ui.library.rememberLibraryMediaState
+import com.smartisan.music.ui.loved.missingOnlineLikedMediaIds
 import com.smartisan.music.ui.navigation.MusicDestination
 import com.smartisan.music.ui.playlist.PlaybackPlaylistPickerOverlay
 import com.smartisan.music.ui.playlist.PlaylistNameDialogOverlay
@@ -143,6 +148,15 @@ private fun MusicAppShellContent(
         remember(context.applicationContext) {
             FavoriteSongsRepository.getInstance(context.applicationContext)
         }
+    // 与 CloudMusicHost 共用同一 Router 实例，收藏变化才能让云音乐页面读到最新「我喜欢」。
+    val neteaseAuthStore =
+        remember(context.applicationContext) {
+            NeteaseAuthStore(context.applicationContext)
+        }
+    val onlineRepositoryRouter =
+        remember(context.applicationContext) {
+            OnlineMusicRepositoryRouter.getInstance(context.applicationContext)
+        }
     val playlistRepository =
         remember(context.applicationContext) {
             PlaylistRepository.getInstance(context.applicationContext)
@@ -188,6 +202,10 @@ private fun MusicAppShellContent(
     val unknownSongTitle = stringResource(R.string.unknown_song_title)
     val favoriteRecords by
         favoriteRepository.observeFavorites().collectAsState(initial = emptyList())
+    // 「我喜欢的歌曲」中来自网易云账号的部分，仅在进入该页时拉取。
+    var onlineLovedMediaItems by remember { mutableStateOf(emptyList<MediaItem>()) }
+    // 在线喜欢发生变化时自增，驱动上面的列表重新拉取。
+    var onlineLovedRefreshVersion by remember { mutableStateOf(0) }
     val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
     var playbackVisible by remember { mutableStateOf(false) }
     var searchVisible by remember { mutableStateOf(false) }
@@ -234,6 +252,25 @@ private fun MusicAppShellContent(
         if (navigationStateRestored) {
             navigationSettingsStore.setLastDestination(currentDestination, presentedFromMore)
         }
+    }
+
+    // 进入「我喜欢的歌曲」时与网易云账号收敛：只补不删地补入云端喜欢，并拉取在线可展示项。
+    // 未登录、拉取失败都退化为「在线部分为空，本地收藏照常展示」。
+    LaunchedEffect(currentDestination, onlineLovedRefreshVersion) {
+        if (currentDestination != MusicDestination.LovedSongs) {
+            onlineLovedMediaItems = emptyList()
+            return@LaunchedEffect
+        }
+        if (!neteaseAuthStore.load().isLoggedIn) {
+            onlineLovedMediaItems = emptyList()
+            return@LaunchedEffect
+        }
+        val cloudTrackIds = onlineRepositoryRouter.accountLikedTrackIds()
+        val missing = missingOnlineLikedMediaIds(cloudTrackIds, favoriteIds)
+        if (missing.isNotEmpty()) {
+            favoriteRepository.addMissing(missing)
+        }
+        onlineLovedMediaItems = onlineRepositoryRouter.accountLikedTrackMediaItems()
     }
     var songsEditMode by remember { mutableStateOf(false) }
     var selectedSongIds by remember { mutableStateOf(emptySet<String>()) }
@@ -408,13 +445,25 @@ private fun MusicAppShellContent(
         }
     }
 
+    /** 在线歌曲的喜欢状态回写网易云账号。本地收藏为准，同步失败不回滚本地。 */
+    suspend fun syncOnlineLikedState(mediaId: String, liked: Boolean) {
+        val identity = mediaId.onlineTrackIdentityOrNull() ?: return
+        if (identity.source != OnlineMusicProvider.Netease.sourceId) {
+            return
+        }
+        runCatching { onlineRepositoryRouter.setTrackLiked(identity, liked) }
+        // 在线喜欢变了就重拉一次；不在「我喜欢的歌曲」页时自增不会产生请求，仅清空已有快照。
+        onlineLovedRefreshVersion += 1
+    }
+
     fun toggleFavorite(mediaItem: MediaItem) {
         if (mediaItem.isExternalAudioLaunchItem()) {
             return
         }
         val mediaId = mediaItem.mediaId.takeIf(String::isNotBlank) ?: return
         scope.launch {
-            favoriteRepository.toggle(mediaId)
+            val likedNow = favoriteRepository.toggle(mediaId)
+            syncOnlineLikedState(mediaId, likedNow)
         }
     }
 
@@ -463,6 +512,7 @@ private fun MusicAppShellContent(
             } else {
                 favoriteRepository.removeAll(mediaIds)
             }
+            mediaIds.forEach { mediaId -> syncOnlineLikedState(mediaId, false) }
         }
     }
 
@@ -751,6 +801,7 @@ private fun MusicAppShellContent(
                             presentedFromMore = fromMore,
                             overflowDestinations = overflowDestinations,
                             mediaItems = libraryItems,
+                            onlineLovedMediaItems = onlineLovedMediaItems,
                             favoriteRecords = favoriteRecords,
                             libraryLoaded = library.loaded,
                             songsEditMode = destination == MusicDestination.Songs && songsEditMode,

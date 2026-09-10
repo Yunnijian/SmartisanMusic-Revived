@@ -62,7 +62,8 @@ internal fun CloudMusicHost(
     val context = LocalContext.current
     val appContext = context.applicationContext
     val authStore = remember(appContext) { NeteaseAuthStore(appContext) }
-    val repositoryRouter = remember(appContext) { OnlineMusicRepositoryRouter(appContext) }
+    val repositoryRouter =
+        remember(appContext) { OnlineMusicRepositoryRouter.getInstance(appContext) }
     val neteaseRepository =
         remember(repositoryRouter) {
             repositoryRouter.repositoryFor(OnlineMusicProvider.Netease)

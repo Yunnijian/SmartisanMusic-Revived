@@ -71,7 +71,7 @@ internal suspend fun loadEmbeddedLyrics(
     val onlineIdentity = mediaItem.onlineIdentityOrNull()
     onlineIdentity?.let { identity ->
         runCatching {
-            OnlineMusicRepositoryRouter(context.applicationContext).lyrics(identity)
+            OnlineMusicRepositoryRouter.getInstance(context.applicationContext).lyrics(identity)
         }.getOrNull()?.let { onlineLyrics ->
             parseOnlineLyrics(onlineLyrics)?.let { lyrics -> return lyrics }
         }

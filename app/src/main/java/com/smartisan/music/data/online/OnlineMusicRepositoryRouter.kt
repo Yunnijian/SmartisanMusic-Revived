@@ -114,6 +114,25 @@ internal class OnlineMusicRepositoryRouter(
         }
     }
 
+    /** 账号「我喜欢」的纯数字 trackId 集合；未登录或失败返回 null。 */
+    suspend fun accountLikedTrackIds(): Set<String>? {
+        return runCatching { neteaseRepository.accountLikedTrackIds() }.getOrNull()
+    }
+
+    /**
+     * 账号「我喜欢」的可展示媒体项。
+     *
+     * 与 [accountLikedTrackIds] 分别走不同端点：这里需要标题/艺人/封面等元数据，
+     * 因此复用整张「我喜欢」歌单，而不是用 id 集合再反查。
+     */
+    suspend fun accountLikedTrackMediaItems(): List<MediaItem> {
+        return runCatching {
+            neteaseRepository.currentUserLikedTracks()
+                .orEmpty()
+                .map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
+        }.getOrDefault(emptyList())
+    }
+
     suspend fun addTracksToAccountPlaylist(
         playlist: OnlineAccountPlaylist,
         identities: List<OnlineTrackIdentity>,
@@ -179,5 +198,23 @@ internal class OnlineMusicRepositoryRouter(
                 )
             }
         }.getOrDefault(emptyList())
+    }
+
+    companion object {
+        @Volatile
+        private var instance: OnlineMusicRepositoryRouter? = null
+
+        /**
+         * 进程级共享实例。
+         *
+         * Router 内部持有 OkHttp 客户端、内存页缓存与常驻 CoroutineScope，逐次 `new` 会重复创建这些资源；
+         * 更关键的是 [setTrackLiked] 成功后只失效自身实例的缓存，多实例并存会让「我喜欢」列表读到旧数据。
+         */
+        fun getInstance(context: Context): OnlineMusicRepositoryRouter {
+            return instance ?: synchronized(this) {
+                instance ?: OnlineMusicRepositoryRouter(context.applicationContext)
+                    .also { instance = it }
+            }
+        }
     }
 }

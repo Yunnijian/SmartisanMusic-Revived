@@ -28,6 +28,7 @@ import com.smartisan.music.ui.cloud.CloudMusicHost
 import com.smartisan.music.ui.folder.FolderPage
 import com.smartisan.music.ui.genre.GenrePage
 import com.smartisan.music.ui.loved.LovedSongsPage
+import com.smartisan.music.ui.loved.mergeLovedSongsMediaItems
 import com.smartisan.music.ui.more.MorePage
 import com.smartisan.music.ui.navigation.MusicDestination
 import com.smartisan.music.ui.playlist.PlaylistPage
@@ -39,6 +40,7 @@ internal fun MusicTabContent(
     presentedFromMore: Boolean,
     overflowDestinations: List<MusicDestination>,
     mediaItems: List<MediaItem>,
+    onlineLovedMediaItems: List<MediaItem> = emptyList(),
     favoriteRecords: List<FavoriteSongRecord>,
     libraryLoaded: Boolean,
     songsEditMode: Boolean,
@@ -201,7 +203,9 @@ internal fun MusicTabContent(
             MusicDestination.LovedSongs ->
                 LovedSongsPage(
                     active = true,
-                    mediaItems = mediaItems,
+                    // 在线喜欢的歌不在本地媒体库里，需并入可见集合，收藏交集才能命中；
+                    // 其余分支保持纯本地，避免在线歌曲污染歌曲/专辑/艺人列表。
+                    mediaItems = mergeLovedSongsMediaItems(mediaItems, onlineLovedMediaItems),
                     favoriteRecords = favoriteRecords,
                     hiddenMediaIds = hiddenMediaIds,
                     libraryLoaded = libraryLoaded,
