@@ -3,6 +3,7 @@
 .kotlin/
 /local.properties
 /.idea/
+/.trae/
 
 .DS_Store
 Thumbs.db
