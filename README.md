@@ -36,7 +36,6 @@ Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为
 - **现代数据架构**：使用 Room、DataStore、Coroutines 和 StateFlow 管理资料库、收藏、播放列表、设置及播放状态，不依赖 Smartisan OS 私有服务或系统签名能力。
 - **清理历史包袱**：业务源码全部使用 Kotlin，只保留当前实现需要的资源和公开 API，不携带原版后台服务、旧数据库或旧设置迁移代码。
 - **新增主题选择**：支持跟随系统、浅色模式和深色模式，主题页以 Compose 复现现有设置单选列表。视觉仍由 `values-night` 与 `drawable-night` 同名变体驱动；原版 8.1.0 没有深色模式，夜间视觉属于本项目的自创设计：炭灰色板取自同为复刻项目的锤子天气（页底 `#25282D`、标题栏 `#292C31`、卡片 `#34373C`），夜间位图由 `tools/generate_night_drawables.py` 从原版位图等比压暗或反白生成（保留 alpha 与 nine-patch 标记，可重复执行），红蓝品牌强调色深浅主题通用。
-- **重新接入网易云在线音乐**：将原作者早期版本中随后删去的网易云能力重新整合进纯 Compose 架构，作为本地播放之上的可选扩展——账号登录（凭据经 `EncryptedSharedPreferences` 加密存储）、在线搜索与播放（地址自动解析、定期刷新并落盘缓存音频流）、原文/逐字/译文歌词、首页推荐与账号每日推荐、歌单/专辑/艺人详情、电台收听、喜欢与歌单双向同步、歌单管理，以及向 SuperLyric 提供实时歌词；云音乐页面同样适配了深色模式。
 
 ## 当前功能
 
@@ -96,10 +95,14 @@ Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为
 | 播放 | Media3 `1.10.1`、ExoPlayer、MediaLibraryService、MediaSession |
 | 状态 | Lifecycle、StateFlow、Coroutines |
 | 存储 | Room `2.8.4`、DataStore `1.2.1`、MediaStore |
-| 在线 | OkHttp、Coil 3（封面加载）、SuperLyricApi（歌词发布，经 JitPack） |
+| 在线 | OkHttp、Coil 3（封面图加载） |
 | SDK | `minSdk 27` / `targetSdk 36` / `compileSdk 37` |
 
 页面按功能组织，公共 Smartisan 组件负责资源绘制和交互；包边界与状态归属见 [UI 架构](docs/ui-architecture.md)。
+
+## 第三方库
+
+在线歌词发布通过 [SuperLyricApi](https://github.com/HChenX/SuperLyricApi)（LGPL-2.1，经 JitPack 引入）实现。
 
 ## 构建
 
@@ -136,3 +139,4 @@ People-11 的工作让原版应用能够在非 Smartisan 设备上继续运行�
 - Smartisan OS、相关商标、视觉设计及原版素材的知识产权归原权利人所有。
 - 可选的黄色黑胶图标取自 realme UI 7.0 默认 UXIcon 资源，仅作视觉保存与致敬；相关图形、商标及素材权利归原权利人所有，不随本项目许可证重新授权。来源与文件摘要见 `THIRD_PARTY_NOTICES.md`。
 - 本项目不提供音乐内容；用户应确保设备中音频文件的来源与使用方式符合所在地法律及权利人要求。
+- 网易云在线功能为本项目独立开发的第三方接入，与网易及其关联方无关联；在线音乐内容的版权归网易云音乐及其权利人所有，仅限个人使用。

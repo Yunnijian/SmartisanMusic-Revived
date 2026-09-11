@@ -22,3 +22,14 @@ fd7c6f02a945d3dd45ad4c17c2032e8a6a7262f1ada31bc42ff40f56d5b42d62  monochrome.png
 ```
 
 No separate open-source license or license text accompanied these three firmware resources. They are not claimed as original project artwork and are not relicensed under the project's software license. The artwork, product names, and trademarks remain the property of their respective rights holders. Downstream redistributors are responsible for determining whether they have the permissions required for their intended use.
+
+## SuperLyricApi
+
+The online music features publish live lyrics to the [SuperLyric](https://github.com/HChenX/SuperLyric) ecosystem through [SuperLyricApi](https://github.com/HChenX/SuperLyricApi).
+
+- Project: SuperLyricApi, version `3.4` (via JitPack, `com.github.HChenX:SuperLyricApi:3.4`)
+- Author: HChenX
+- License: GNU Lesser General Public License **version 2.1** (LGPL-2.1)
+- Purpose in this project: registered as a lyric publisher so desktop/overlay lyric modules can display the currently playing line while music plays
+
+LGPL-2.1 requires that binary distributions accompanying the notices of the acquired work include the license text of this library. The library is consumed as an unmodified binary dependency through JitPack; its complete license text is available at <https://github.com/HChenX/SuperLyricApi>.

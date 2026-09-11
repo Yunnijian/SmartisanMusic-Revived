@@ -95,10 +95,14 @@ Album artwork, artist information, and music content visible in screenshots rema
 | Playback | Media3 `1.10.1`, ExoPlayer, MediaLibraryService, MediaSession |
 | State | Lifecycle, StateFlow, Coroutines |
 | Storage | Room `2.8.4`, DataStore `1.2.1`, MediaStore |
-| Online | OkHttp, Coil 3 (artwork loading), SuperLyricApi (lyrics publishing, via JitPack) |
+| Online | OkHttp, Coil 3 (artwork loading) |
 | SDK | `minSdk 27` / `targetSdk 36` / `compileSdk 37` |
 
 See [UI architecture](docs/ui-architecture.md) for package boundaries, shared components, and state ownership.
+
+## Third-party libraries
+
+Live lyrics publishing is powered by [SuperLyricApi](https://github.com/HChenX/SuperLyricApi) (LGPL-2.1, via JitPack).
 
 ## Build
 
@@ -135,3 +139,4 @@ This project is not affiliated with ByteDance, Smartisan Technology, realme, OPP
 - Smartisan OS, related trademarks, visual designs, and original assets remain the intellectual property of their respective rights holders.
 - The optional yellow vinyl icon is sourced from the default realme UI 7.0 UXIcon resources and is included solely for visual preservation and homage. Its artwork and related rights remain with their original rights holders and are not relicensed under this project's license. See `THIRD_PARTY_NOTICES.md` for provenance and file hashes.
 - This project provides no music content. Users are responsible for ensuring that audio stored on their devices is obtained and used in accordance with applicable law and rights-holder requirements.
+- The NetEase Cloud Music features are an independent third-party integration developed by this project and are not affiliated with NetEase or its affiliates. Online music content remains the property of NetEase Cloud Music and its rights holders and is for personal use only.
