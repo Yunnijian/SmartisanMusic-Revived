@@ -69,7 +69,7 @@ internal fun CloudMusicTrackActionsOverlay(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 480.dp)
-                        .background(Color.White)
+                        .background(CloudSurfaceColor)
                         .padding(vertical = 8.dp),
                 ) {
                     Text(

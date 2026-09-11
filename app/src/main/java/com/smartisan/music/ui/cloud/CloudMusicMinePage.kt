@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +49,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicSearchBarHeight
 import com.smartisan.music.ui.cloud.components.CloudSearchCoverArtworkSize
 import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
 import com.smartisan.music.ui.cloud.components.CloudSectionTitleHeight
+import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTrackRowHeight
 import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
@@ -219,7 +219,7 @@ private fun CloudMusicMineTopBar(
         modifier = modifier
             .fillMaxWidth()
             .height(CloudMusicSearchBarHeight)
-            .background(Color.White),
+            .background(CloudSurfaceColor),
     ) {
         Box(
             modifier = Modifier
@@ -239,7 +239,7 @@ private fun CloudMusicMineTopBar(
             style = TextStyle(
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xE6000000),
+                color = CloudTrackTitleColor,
             ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -260,7 +260,7 @@ private fun CloudMusicMineUserInfoRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(CloudSurfaceColor)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -295,7 +295,7 @@ private fun CloudMusicMineTabRow(
         modifier = modifier
             .fillMaxWidth()
             .height(CloudSectionTitleHeight)
-            .background(Color.White),
+            .background(CloudSurfaceColor),
     ) {
         MineTab.values().forEach { tab ->
             val selected = tab == selectedTab
@@ -338,7 +338,7 @@ private fun <T> CloudMusicMineList(
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier.background(Color.White),
+        modifier = modifier.background(CloudSurfaceColor),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
         itemsIndexed(

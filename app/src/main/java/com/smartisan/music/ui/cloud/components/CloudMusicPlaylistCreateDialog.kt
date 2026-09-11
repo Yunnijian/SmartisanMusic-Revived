@@ -25,6 +25,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.BasicTextField
+import com.smartisan.music.R
 
 /**
  * 创建歌单对话框：居中白色圆角卡片 + 半透明遮罩。
@@ -65,11 +67,11 @@ internal fun CloudMusicPlaylistCreateDialog(
             modifier = Modifier
                 .widthIn(min = 280.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color.White)
+                .background(CloudSurfaceColor)
                 .padding(horizontal = 20.dp, vertical = 18.dp),
         ) {
             Text(
-                text = "新建歌单",
+                text = stringResource(R.string.cloud_music_new_playlist),
                 style = TextStyle(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
@@ -94,13 +96,13 @@ internal fun CloudMusicPlaylistCreateDialog(
                             .fillMaxWidth()
                             .height(44.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFF2F2F2))
+                            .background(CloudSearchFieldBackgroundColor)
                             .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         if (name.isEmpty()) {
                             Text(
-                                text = "歌单名称",
+                                text = stringResource(R.string.cloud_music_playlist_name),
                                 style = TextStyle(
                                     fontSize = 15.sp,
                                     color = CloudSecondaryTextColor,
@@ -127,12 +129,12 @@ internal fun CloudMusicPlaylistCreateDialog(
                         .weight(1f)
                         .height(44.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color.White)
+                        .background(CloudSearchFieldBackgroundColor)
                         .cloudMusicPressable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "取消",
+                        text = stringResource(R.string.cloud_music_cancel),
                         style = TextStyle(
                             fontSize = 14.sp,
                             color = CloudTrackTitleColor,
@@ -157,7 +159,7 @@ internal fun CloudMusicPlaylistCreateDialog(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "确定",
+                        text = stringResource(R.string.cloud_music_confirm),
                         style = TextStyle(
                             fontSize = 14.sp,
                             color = Color.White,

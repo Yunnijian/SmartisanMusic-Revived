@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -53,7 +52,9 @@ import com.smartisan.music.ui.cloud.components.CloudMusicCoverCard
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverCardSection
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
+import com.smartisan.music.ui.cloud.components.CloudSearchFieldBackgroundColor
 import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
+import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -68,9 +69,6 @@ private val CloudMusicHomeSearchEntryHeight = 32.dp
 
 /** 顶部搜索入口圆角。 */
 private val CloudMusicHomeSearchEntryCornerRadius = 16.dp
-
-/** 搜索入口底色。 */
-private val CloudMusicHomeSearchEntryColor = Color(0xFFF0F0F0)
 
 /** “我的”按钮文字。 */
 private val CloudMusicMineButtonColor = CloudAccentColor
@@ -345,7 +343,7 @@ private fun CloudMusicHomeTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(CloudMusicHomeTopBarHeight)
-            .background(Color.White)
+            .background(CloudSurfaceColor)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -354,7 +352,7 @@ private fun CloudMusicHomeTopBar(
                 .weight(1f)
                 .height(CloudMusicHomeSearchEntryHeight)
                 .clip(RoundedCornerShape(CloudMusicHomeSearchEntryCornerRadius))
-                .background(CloudMusicHomeSearchEntryColor)
+                .background(CloudSearchFieldBackgroundColor)
                 .cloudMusicPressable(onClick = onOpenSearch)
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,

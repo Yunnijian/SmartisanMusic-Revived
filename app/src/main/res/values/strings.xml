@@ -257,4 +257,28 @@
     <string name="cloud_music_detail_login_required">请先登录网易云音乐</string>
     <string name="cloud_music_detail_artist_albums">专辑</string>
     <string name="cloud_music_detail_artist_intro">简介</string>
+
+    <!-- 云音乐详情页操作 Toast / 弹层 -->
+    <string name="cloud_music_added_to_playlist">已加入歌单</string>
+    <string name="cloud_music_action_failed">操作失败</string>
+    <string name="cloud_music_removed_from_playlist">已从歌单移除</string>
+    <string name="cloud_music_created_and_added">已创建并加入</string>
+    <string name="cloud_music_create_failed">创建失败</string>
+    <string name="cloud_music_deleted_playlist">已删除歌单</string>
+    <string name="cloud_music_add_to_playlist">加入歌单</string>
+    <string name="cloud_music_remove_from_playlist">从歌单移除</string>
+    <string name="cloud_music_detail_kind_playlist">歌单</string>
+    <string name="cloud_music_detail_kind_album">专辑</string>
+    <string name="cloud_music_detail_kind_artist">艺人</string>
+    <string name="cloud_music_detail_kind_radio">电台</string>
+
+    <!-- 云音乐歌单管理弹层 / 对话框 -->
+    <string name="cloud_music_new_playlist">新建歌单</string>
+    <string name="cloud_music_no_playlists">暂无歌单</string>
+    <string name="cloud_music_playlist_name">歌单名称</string>
+    <string name="cloud_music_cancel">取消</string>
+    <string name="cloud_music_confirm">确定</string>
+    <string name="cloud_music_delete_playlist">删除歌单</string>
+    <string name="cloud_music_delete_playlist_confirm">删除后不可恢复</string>
+    <string name="cloud_music_delete">删除</string>
 </resources>

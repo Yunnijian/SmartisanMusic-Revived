@@ -25,12 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineAccountPlaylist
 
 /**
@@ -72,12 +74,12 @@ internal fun CloudMusicPlaylistPickerOverlay(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 520.dp)
-                        .background(Color.White)
+                        .background(CloudSurfaceColor)
                         .padding(top = 6.dp),
                 ) {
                     // 「新建歌单」入口。
                     Text(
-                        text = "新建歌单",
+                        text = stringResource(R.string.cloud_music_new_playlist),
                         style = TextStyle(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
@@ -98,7 +100,7 @@ internal fun CloudMusicPlaylistPickerOverlay(
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = "暂无歌单",
+                                text = stringResource(R.string.cloud_music_no_playlists),
                                 style = TextStyle(
                                     fontSize = 14.sp,
                                     color = CloudSecondaryTextColor,

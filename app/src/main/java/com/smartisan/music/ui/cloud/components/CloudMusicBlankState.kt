@@ -51,7 +51,7 @@ internal fun CloudMusicBlankState(
             Image(
                 painter = painterResource(R.drawable.blank_search),
                 contentDescription = null,
-                colorFilter = ColorFilter.tint(Color(0xFFD0D0D0)),
+                colorFilter = ColorFilter.tint(CloudBlankIconTintColor),
                 modifier = Modifier
                     .width(80.dp)
                     .height(80.dp),

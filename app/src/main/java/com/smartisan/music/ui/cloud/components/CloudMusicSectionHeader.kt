@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,7 +46,7 @@ internal fun CloudMusicSectionTitle(
                 style = TextStyle(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xE6000000),
+                    color = CloudTrackTitleColor,
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -63,6 +62,6 @@ internal fun CloudMusicDivider(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(0.67.dp)
-            .background(Color(0xFFEBEBEB)),
+            .background(CloudDividerColor),
     )
 }

@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -57,6 +56,9 @@ import com.smartisan.music.ui.cloud.components.CloudMusicSearchBarHeight
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudAccentColor
 import com.smartisan.music.ui.cloud.components.CloudSearchDebounceMs
+import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
+import com.smartisan.music.ui.cloud.components.CloudTextHintColor
+import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
 import com.smartisan.music.ui.components.SmartisanDrawableBackground
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -177,7 +179,7 @@ private fun CloudMusicSearchResultList(
         tracks.map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
     }
     LazyColumn(
-        modifier = modifier.background(Color.White),
+        modifier = modifier.background(CloudSurfaceColor),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
         itemsIndexed(
@@ -223,7 +225,7 @@ internal fun CloudMusicSearchField(
     Row(
         modifier = modifier
             .height(CloudMusicSearchBarHeight)
-            .background(Color.White)
+            .background(CloudSurfaceColor)
             .padding(horizontal = 15.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start,
@@ -234,7 +236,7 @@ internal fun CloudMusicSearchField(
             singleLine = true,
             textStyle = TextStyle(
                 fontSize = 15.sp,
-                color = CloudSearchFieldTextColor,
+                color = CloudTrackTitleColor,
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(
@@ -278,7 +280,7 @@ internal fun CloudMusicSearchField(
                                 text = hint,
                                 style = TextStyle(
                                     fontSize = 15.sp,
-                                    color = CloudSearchHintColor,
+                                    color = CloudTextHintColor,
                                 ),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -331,9 +333,6 @@ internal fun CloudMusicSearchField(
         )
     }
 }
-
-private val CloudSearchFieldTextColor = Color(0xCC000000)
-private val CloudSearchHintColor = Color(0x66000000)
 
 /** 捕获非取消异常，避免网络错误直接把协程作用域打断。 */
 private suspend inline fun <T> runSuspendCatching(block: suspend () -> T): Result<T> {

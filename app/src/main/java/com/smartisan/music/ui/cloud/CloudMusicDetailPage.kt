@@ -71,7 +71,9 @@ import com.smartisan.music.ui.cloud.components.CloudMusicTrackAction
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackActionsOverlay
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
+import com.smartisan.music.ui.cloud.components.CloudSearchFieldBackgroundColor
 import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
+import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
@@ -245,10 +247,10 @@ internal fun CloudMusicDetailPage(
         scope.launch {
             val result = repository.addTracksToAccountPlaylist(playlist, listOf(track.trackId))
             val message = if (result.status == NeteaseAccountActionStatus.Success) {
-                "已加入歌单"
-            } else {
-                "操作失败"
-            }
+                    context.getString(R.string.cloud_music_added_to_playlist)
+                } else {
+                    context.getString(R.string.cloud_music_action_failed)
+                }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
@@ -262,9 +264,9 @@ internal fun CloudMusicDetailPage(
             )
             if (result.status == NeteaseAccountActionStatus.Success) {
                 removedTrackIds = removedTrackIds + track.trackId
-                Toast.makeText(context, "已从歌单移除", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.cloud_music_removed_from_playlist), Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "操作失败", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.cloud_music_action_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -280,9 +282,9 @@ internal fun CloudMusicDetailPage(
             val newPlaylist = result.playlist
             if (result.status == NeteaseAccountActionStatus.Success && newPlaylist != null) {
                 repository.addTracksToAccountPlaylist(newPlaylist, listOf(track.trackId))
-                Toast.makeText(context, "已创建并加入", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.cloud_music_created_and_added), Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "创建失败", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.cloud_music_create_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -293,10 +295,10 @@ internal fun CloudMusicDetailPage(
         scope.launch {
             val result = repository.deleteAccountPlaylist(accountPlaylistFor(playlistTarget))
             if (result.status == NeteaseAccountActionStatus.Success) {
-                Toast.makeText(context, "已删除歌单", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.cloud_music_deleted_playlist), Toast.LENGTH_SHORT).show()
                 onBack()
             } else {
-                Toast.makeText(context, "操作失败", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.cloud_music_action_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -401,7 +403,7 @@ internal fun CloudMusicDetailPage(
         val actions = buildList {
             add(
                 CloudMusicTrackAction(
-                    label = "加入歌单",
+                    label = stringResource(R.string.cloud_music_add_to_playlist),
                     destructive = false,
                     onClick = {
                         trackActionsVisible = false
@@ -412,7 +414,7 @@ internal fun CloudMusicDetailPage(
             if (target is CloudDetailTarget.Playlist && target.accountEditable) {
                 add(
                     CloudMusicTrackAction(
-                        label = "从歌单移除",
+                        label = stringResource(R.string.cloud_music_remove_from_playlist),
                         destructive = true,
                         onClick = {
                             val track = pendingTrack
@@ -487,10 +489,10 @@ private fun CloudMusicDetailHeader(
         is CloudDetailTarget.Radio -> target.title
     }
     val subtitle = when (target) {
-        is CloudDetailTarget.Playlist -> "歌单"
-        is CloudDetailTarget.Album -> "专辑"
-        is CloudDetailTarget.Artist -> "艺人"
-        is CloudDetailTarget.Radio -> "电台"
+        is CloudDetailTarget.Playlist -> stringResource(R.string.cloud_music_detail_kind_playlist)
+        is CloudDetailTarget.Album -> stringResource(R.string.cloud_music_detail_kind_album)
+        is CloudDetailTarget.Artist -> stringResource(R.string.cloud_music_detail_kind_artist)
+        is CloudDetailTarget.Radio -> stringResource(R.string.cloud_music_detail_kind_radio)
     }
     val artworkUrl = tracks.firstOrNull()?.artworkUrl
     val playEnabled = tracks.isNotEmpty()
@@ -588,7 +590,7 @@ private fun CloudMusicDetailHeader(
         // 账号可编辑歌单的「删除歌单」入口（浅色文字按钮）。
         if (onDeletePlaylist != null) {
             Text(
-                text = "删除歌单",
+                text = stringResource(R.string.cloud_music_delete_playlist),
                 style = TextStyle(
                     fontSize = 13.sp,
                     color = CloudSecondaryTextColor,
@@ -728,12 +730,12 @@ private fun CloudMusicDeletePlaylistConfirmDialog(
             modifier = Modifier
                 .width(280.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color.White)
+                .background(CloudSurfaceColor)
                 .padding(horizontal = 20.dp, vertical = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "删除歌单",
+                text = stringResource(R.string.cloud_music_delete_playlist),
                 style = TextStyle(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
@@ -741,7 +743,7 @@ private fun CloudMusicDeletePlaylistConfirmDialog(
                 ),
             )
             Text(
-                text = "删除后不可恢复",
+                text = stringResource(R.string.cloud_music_delete_playlist_confirm),
                 style = TextStyle(
                     fontSize = 13.sp,
                     color = CloudSecondaryTextColor,
@@ -757,12 +759,12 @@ private fun CloudMusicDeletePlaylistConfirmDialog(
                         .weight(1f)
                         .height(44.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFFF2F2F2))
+                        .background(CloudSearchFieldBackgroundColor)
                         .cloudMusicPressable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "取消",
+                        text = stringResource(R.string.cloud_music_cancel),
                         style = TextStyle(
                             fontSize = 14.sp,
                             color = CloudTrackTitleColor,
@@ -779,7 +781,7 @@ private fun CloudMusicDeletePlaylistConfirmDialog(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "删除",
+                        text = stringResource(R.string.cloud_music_delete),
                         style = TextStyle(
                             fontSize = 14.sp,
                             color = Color.White,
