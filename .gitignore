@@ -21,3 +21,7 @@ Thumbs.db
 
 # Reverse engineering workspace
 /reverse/*
+
+# Release signing (secret material, never commit)
+/keystore.properties
+/keystore/
