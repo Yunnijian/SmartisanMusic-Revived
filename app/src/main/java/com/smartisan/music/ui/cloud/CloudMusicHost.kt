@@ -38,9 +38,16 @@ internal enum class CloudSubPage {
 
 /** 详情页目标：歌单 / 专辑 / 艺人三种，由宿主持有、PageStackTransition 驱动列表↔详情转场。 */
 internal sealed interface CloudDetailTarget {
-    data class Playlist(val id: String, val title: String) : CloudDetailTarget
+    /** @param accountEditable 是否为当前账号可编辑的「我的歌单」（用于删除歌单/从歌单移除歌曲）。 */
+    data class Playlist(
+        val id: String,
+        val title: String,
+        val accountEditable: Boolean = false,
+    ) : CloudDetailTarget
+
     data class Album(val id: String, val title: String) : CloudDetailTarget
     data class Artist(val id: String, val name: String) : CloudDetailTarget
+    data class Radio(val id: String, val title: String) : CloudDetailTarget
 }
 
 /**
@@ -164,11 +171,14 @@ internal fun CloudMusicHost(
                             authStore = authStore,
                             active = active,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
-                            onOpenPlaylist = { id, title ->
-                                selectedDetail = CloudDetailTarget.Playlist(id, title)
+                            onOpenPlaylist = { id, title, accountEditable ->
+                                selectedDetail = CloudDetailTarget.Playlist(id, title, accountEditable)
                             },
                             onOpenAlbum = { id, title ->
                                 selectedDetail = CloudDetailTarget.Album(id, title)
+                            },
+                            onOpenRadio = { id, title ->
+                                selectedDetail = CloudDetailTarget.Radio(id, title)
                             },
                             onBack = { subPage = CloudSubPage.Home },
                             modifier = Modifier.fillMaxSize(),

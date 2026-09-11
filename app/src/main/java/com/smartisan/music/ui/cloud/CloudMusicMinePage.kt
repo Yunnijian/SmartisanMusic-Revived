@@ -92,8 +92,9 @@ internal fun CloudMusicMinePage(
     authStore: NeteaseAuthStore,
     active: Boolean,
     playbackBarOverlayHeight: Dp,
-    onOpenPlaylist: (id: String, title: String) -> Unit,
+    onOpenPlaylist: (id: String, title: String, accountEditable: Boolean) -> Unit,
     onOpenAlbum: (id: String, title: String) -> Unit,
+    onOpenRadio: (id: String, title: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -178,7 +179,7 @@ internal fun CloudMusicMinePage(
                     itemTitle = OnlineAccountPlaylist::title,
                     itemSubtitle = OnlineAccountPlaylist::mineSubtitle,
                     itemArtwork = OnlineAccountPlaylist::artworkUrl,
-                    itemOnClick = { item -> onOpenPlaylist(item.playlistId, item.title) },
+                    itemOnClick = { item -> onOpenPlaylist(item.playlistId, item.title, item.isEditable) },
                     playbackBarOverlayHeight = playbackBarOverlayHeight,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -198,7 +199,7 @@ internal fun CloudMusicMinePage(
                     itemTitle = OnlineRadio::title,
                     itemSubtitle = OnlineRadio::mineSubtitle,
                     itemArtwork = OnlineRadio::artworkUrl,
-                    itemOnClick = null,
+                    itemOnClick = { item -> onOpenRadio(item.radioId, item.title) },
                     playbackBarOverlayHeight = playbackBarOverlayHeight,
                     modifier = Modifier.fillMaxSize(),
                 )

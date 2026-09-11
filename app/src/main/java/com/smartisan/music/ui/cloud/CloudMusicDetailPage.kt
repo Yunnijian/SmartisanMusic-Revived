@@ -1,5 +1,6 @@
 package com.smartisan.music.ui.cloud
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,26 +28,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
+import com.smartisan.music.data.online.NeteaseAccountActionStatus
 import com.smartisan.music.data.online.NeteaseAuthStore
+import com.smartisan.music.data.online.OnlineAccountPlaylist
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlineArtistIntroduction
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlineMusicProviderRepository
 import com.smartisan.music.data.online.OnlinePlaylist
+import com.smartisan.music.data.online.OnlineRadio
 import com.smartisan.music.data.online.OnlineTrack
 import com.smartisan.music.data.online.toMediaItem
 import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
@@ -57,7 +64,11 @@ import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverImage
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudMusicDivider
+import com.smartisan.music.ui.cloud.components.CloudMusicPlaylistCreateDialog
+import com.smartisan.music.ui.cloud.components.CloudMusicPlaylistPickerOverlay
 import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
+import com.smartisan.music.ui.cloud.components.CloudMusicTrackAction
+import com.smartisan.music.ui.cloud.components.CloudMusicTrackActionsOverlay
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
 import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
@@ -65,6 +76,7 @@ import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /**
  * 云音乐详情页状态机：loading/error/empty/success 四态。
@@ -119,12 +131,23 @@ internal fun CloudMusicDetailPage(
         value = try {
             when (target) {
                 is CloudDetailTarget.Playlist -> {
-                    val playlist = OnlinePlaylist(
-                        provider = OnlineMusicProvider.Netease,
-                        playlistId = target.id,
-                        title = target.title,
-                    )
-                    val tracks = repository.playlistTracks(playlist)
+                    val tracks = if (target.accountEditable) {
+                        val playlist = OnlineAccountPlaylist(
+                            provider = OnlineMusicProvider.Netease,
+                            playlistId = target.id,
+                            title = target.title,
+                            trackCount = 0,
+                            isEditable = true,
+                        )
+                        repository.accountPlaylistTracks(playlist)
+                    } else {
+                        val playlist = OnlinePlaylist(
+                            provider = OnlineMusicProvider.Netease,
+                            playlistId = target.id,
+                            title = target.title,
+                        )
+                        repository.playlistTracks(playlist)
+                    }
                     if (tracks.isEmpty()) CloudDetailState.Empty(target)
                     else CloudDetailState.Success(target = target, tracks = tracks)
                 }
@@ -158,11 +181,123 @@ internal fun CloudMusicDetailPage(
                         )
                     }
                 }
+                is CloudDetailTarget.Radio -> {
+                    val radio = OnlineRadio(
+                        provider = OnlineMusicProvider.Netease,
+                        radioId = target.id,
+                        title = target.title,
+                    )
+                    val tracks = repository.radioTracks(radio)
+                    if (tracks.isEmpty()) CloudDetailState.Empty(target)
+                    else CloudDetailState.Success(target = target, tracks = tracks)
+                }
             }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
             CloudDetailState.Error(target)
+        }
+    }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // ── 歌单管理本地状态（全部本页内管理，不改宿主） ──
+    var pendingTrack by remember { mutableStateOf<OnlineTrack?>(null) }
+    var trackActionsVisible by remember { mutableStateOf(false) }
+    var pickerVisible by remember { mutableStateOf(false) }
+    var createDialogVisible by remember { mutableStateOf(false) }
+    var deleteConfirmVisible by remember { mutableStateOf(false) }
+    // 「从歌单移除」的曲目，渲染时从列表中过滤。
+    var removedTrackIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    // 歌单选择器数据：打开时拉取我的歌单，关闭时清空。
+    val pickerPlaylists by produceState<List<OnlineAccountPlaylist>>(
+        initialValue = emptyList(),
+        pickerVisible,
+    ) {
+        value = if (pickerVisible) {
+            try {
+                repository.accountPlaylists().orEmpty()
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (_: Throwable) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    fun accountPlaylistFor(target: CloudDetailTarget.Playlist): OnlineAccountPlaylist {
+        return OnlineAccountPlaylist(
+            provider = OnlineMusicProvider.Netease,
+            playlistId = target.id,
+            title = target.title,
+            trackCount = 0,
+            isEditable = true,
+        )
+    }
+
+    fun onAddToPlaylist(playlist: OnlineAccountPlaylist) {
+        val track = pendingTrack ?: return
+        pickerVisible = false
+        scope.launch {
+            val result = repository.addTracksToAccountPlaylist(playlist, listOf(track.trackId))
+            val message = if (result.status == NeteaseAccountActionStatus.Success) {
+                "已加入歌单"
+            } else {
+                "操作失败"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun onRemoveFromPlaylist(track: OnlineTrack) {
+        val playlistTarget = target as? CloudDetailTarget.Playlist ?: return
+        scope.launch {
+            val result = repository.removeTracksFromAccountPlaylist(
+                playlist = accountPlaylistFor(playlistTarget),
+                trackIds = listOf(track.trackId),
+            )
+            if (result.status == NeteaseAccountActionStatus.Success) {
+                removedTrackIds = removedTrackIds + track.trackId
+                Toast.makeText(context, "已从歌单移除", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "操作失败", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun onCreatePlaylist(name: String) {
+        val track = pendingTrack ?: run {
+            createDialogVisible = false
+            return
+        }
+        createDialogVisible = false
+        scope.launch {
+            val result = repository.createAccountPlaylist(name)
+            val newPlaylist = result.playlist
+            if (result.status == NeteaseAccountActionStatus.Success && newPlaylist != null) {
+                repository.addTracksToAccountPlaylist(newPlaylist, listOf(track.trackId))
+                Toast.makeText(context, "已创建并加入", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "创建失败", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun onDeletePlaylistConfirm() {
+        deleteConfirmVisible = false
+        val playlistTarget = target as? CloudDetailTarget.Playlist ?: return
+        scope.launch {
+            val result = repository.deleteAccountPlaylist(accountPlaylistFor(playlistTarget))
+            if (result.status == NeteaseAccountActionStatus.Success) {
+                Toast.makeText(context, "已删除歌单", Toast.LENGTH_SHORT).show()
+                onBack()
+            } else {
+                Toast.makeText(context, "操作失败", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -185,10 +320,14 @@ internal fun CloudMusicDetailPage(
                 modifier = Modifier.fillMaxSize(),
             )
             is CloudDetailState.Success -> {
+                // 「从歌单移除」的曲目在渲染时过滤掉，保持当前列表同步刷新。
+                val visibleTracks = current.tracks.filterNot { visibleTrack ->
+                    removedTrackIds.contains(visibleTrack.trackId)
+                }
                 // toMediaItem 携带在线身份 extras；withOnlinePlaybackPlaceholderUri 补上
                 // smartisan-online://netease/{trackId} 占位 URI，播放服务端负责解析真实地址。
-                val playableItems = remember(current.tracks) {
-                    current.tracks.map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
+                val playableItems = remember(visibleTracks) {
+                    visibleTracks.map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
                 }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -197,8 +336,15 @@ internal fun CloudMusicDetailPage(
                     item(key = "cloud-detail-header") {
                         CloudMusicDetailHeader(
                             target = current.target,
-                            tracks = current.tracks,
+                            tracks = visibleTracks,
                             onBack = onBack,
+                            onDeletePlaylist = if (current.target is CloudDetailTarget.Playlist &&
+                                current.target.accountEditable
+                            ) {
+                                { deleteConfirmVisible = true }
+                            } else {
+                                null
+                            },
                             onPlayAll = {
                                 playbackBrowser.replaceQueueAndPlay(
                                     mediaItems = playableItems,
@@ -214,7 +360,7 @@ internal fun CloudMusicDetailPage(
                         )
                     }
                     itemsIndexed(
-                        items = current.tracks,
+                        items = visibleTracks,
                         key = { index, track -> "${track.mediaId}:$index" },
                     ) { index, track ->
                         Column {
@@ -225,6 +371,10 @@ internal fun CloudMusicDetailPage(
                                         mediaItems = playableItems,
                                         startIndex = index,
                                     )
+                                },
+                                onMoreClick = {
+                                    pendingTrack = track
+                                    trackActionsVisible = true
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -246,6 +396,73 @@ internal fun CloudMusicDetailPage(
                 }
             }
         }
+
+        // ── 底部管理弹层 / 对话框（叠加在内容之上） ──
+        val actions = buildList {
+            add(
+                CloudMusicTrackAction(
+                    label = "加入歌单",
+                    destructive = false,
+                    onClick = {
+                        trackActionsVisible = false
+                        pickerVisible = true
+                    },
+                ),
+            )
+            if (target is CloudDetailTarget.Playlist && target.accountEditable) {
+                add(
+                    CloudMusicTrackAction(
+                        label = "从歌单移除",
+                        destructive = true,
+                        onClick = {
+                            val track = pendingTrack
+                            trackActionsVisible = false
+                            if (track != null) {
+                                onRemoveFromPlaylist(track)
+                            }
+                        },
+                    ),
+                )
+            }
+        }
+        CloudMusicTrackActionsOverlay(
+            visible = trackActionsVisible,
+            trackTitle = pendingTrack?.title.orEmpty(),
+            actions = actions,
+            onDismiss = { trackActionsVisible = false },
+            modifier = Modifier.fillMaxSize(),
+        )
+        val filterablePlaylists = pickerPlaylists.filter { playlist ->
+            playlist.provider == OnlineMusicProvider.Netease &&
+                !playlist.isLikedSongs &&
+                !(target is CloudDetailTarget.Playlist &&
+                    target.accountEditable &&
+                    playlist.playlistId == target.id)
+        }
+        CloudMusicPlaylistPickerOverlay(
+            visible = pickerVisible,
+            playlists = filterablePlaylists,
+            onPlaylistSelected = { onAddToPlaylist(it) },
+            onCreateNewPlaylist = {
+                pickerVisible = false
+                createDialogVisible = true
+            },
+            onDismiss = { pickerVisible = false },
+            modifier = Modifier.fillMaxSize(),
+        )
+        CloudMusicPlaylistCreateDialog(
+            visible = createDialogVisible,
+            onDismiss = { createDialogVisible = false },
+            onConfirm = { onCreatePlaylist(it) },
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (deleteConfirmVisible) {
+            CloudMusicDeletePlaylistConfirmDialog(
+                onDismiss = { deleteConfirmVisible = false },
+                onConfirm = { onDeletePlaylistConfirm() },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -261,16 +478,19 @@ private fun CloudMusicDetailHeader(
     onBack: () -> Unit,
     onPlayAll: () -> Unit,
     onShuffle: () -> Unit,
+    onDeletePlaylist: (() -> Unit)? = null,
 ) {
     val title = when (target) {
         is CloudDetailTarget.Playlist -> target.title
         is CloudDetailTarget.Album -> target.title
         is CloudDetailTarget.Artist -> target.name
+        is CloudDetailTarget.Radio -> target.title
     }
     val subtitle = when (target) {
         is CloudDetailTarget.Playlist -> "歌单"
         is CloudDetailTarget.Album -> "专辑"
         is CloudDetailTarget.Artist -> "艺人"
+        is CloudDetailTarget.Radio -> "电台"
     }
     val artworkUrl = tracks.firstOrNull()?.artworkUrl
     val playEnabled = tracks.isNotEmpty()
@@ -363,6 +583,21 @@ private fun CloudMusicDetailHeader(
                 enabled = playEnabled,
                 onClick = onShuffle,
                 modifier = Modifier.weight(1f),
+            )
+        }
+        // 账号可编辑歌单的「删除歌单」入口（浅色文字按钮）。
+        if (onDeletePlaylist != null) {
+            Text(
+                text = "删除歌单",
+                style = TextStyle(
+                    fontSize = 13.sp,
+                    color = CloudSecondaryTextColor,
+                ),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .cloudMusicPressable(onClick = onDeletePlaylist)
+                    .padding(vertical = 4.dp),
             )
         }
         CloudMusicDivider()
@@ -473,4 +708,85 @@ private fun CloudMusicArtistIntroSection(introduction: List<OnlineArtistIntroduc
         }
     }
     Spacer(modifier = Modifier.height(8.dp))
+}
+
+/** 删除歌单确认对话框：居中白色圆角卡片 + 半透明遮罩，取消/删除（红色）双按钮。 */
+@Composable
+private fun CloudMusicDeletePlaylistConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.40f))
+            .cloudMusicPressable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(280.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White)
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "删除歌单",
+                style = TextStyle(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = CloudTrackTitleColor,
+                ),
+            )
+            Text(
+                text = "删除后不可恢复",
+                style = TextStyle(
+                    fontSize = 13.sp,
+                    color = CloudSecondaryTextColor,
+                ),
+                modifier = Modifier.padding(top = 10.dp, bottom = 20.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFFF2F2F2))
+                        .cloudMusicPressable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "取消",
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            color = CloudTrackTitleColor,
+                        ),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(CloudAccentColor)
+                        .cloudMusicPressable(onClick = onConfirm),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "删除",
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            color = Color.White,
+                        ),
+                    )
+                }
+            }
+        }
+    }
 }

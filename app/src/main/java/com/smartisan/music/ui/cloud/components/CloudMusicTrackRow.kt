@@ -1,7 +1,9 @@
 package com.smartisan.music.ui.cloud.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,11 +19,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineTrack
+import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import java.util.Locale
 
 /**
@@ -33,6 +38,7 @@ internal fun CloudMusicTrackRow(
     track: OnlineTrack,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onMoreClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -83,6 +89,21 @@ internal fun CloudMusicTrackRow(
             ),
             maxLines = 1,
         )
+        if (onMoreClick != null) {
+            Box(
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .size(40.dp)
+                    .cloudMusicPressable(onClick = onMoreClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = rememberSmartisanDrawablePainter(R.drawable.btn_more_selector),
+                    contentDescription = stringResource(R.string.player_more_actions),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
     }
 }
 
