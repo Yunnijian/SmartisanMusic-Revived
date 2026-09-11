@@ -81,6 +81,7 @@ dependencies {
             because("Align the transitive transition runtime with the title-bar reference test")
         }
     }
+    implementation(libs.superlyric.api)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)

@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# SuperLyricApi 通过 AIDL/Binder 跨进程传输 Parcelable 数据，混淆会破坏类型名与字段结构。
+-keep class com.hchen.superlyricapi.** { *; }
