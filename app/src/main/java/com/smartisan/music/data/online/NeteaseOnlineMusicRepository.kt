@@ -872,7 +872,7 @@ internal class NeteaseOnlineMusicRepository(
         )
     }
 
-    suspend fun currentUserDailyRecommendedTracks(limit: Int = FeaturedLimit): List<OnlineTrack>? {
+    override suspend fun currentUserDailyRecommendedTracks(limit: Int): List<OnlineTrack>? {
         val state = authStore?.load() ?: return null
         if (!state.isLoggedIn) {
             return null

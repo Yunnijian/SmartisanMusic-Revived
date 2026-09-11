@@ -83,6 +83,7 @@ private sealed interface CloudMusicHomeState {
     data class Success(
         val banners: List<OnlineBanner>,
         val home: OnlineMusicHome,
+        val dailyTracks: List<OnlineTrack>,
     ) : CloudMusicHomeState
 }
 
@@ -121,8 +122,13 @@ internal fun CloudMusicHomePage(
             coroutineScope {
                 val homeAsync = async { repository.featuredHome() }
                 val bannersAsync = async { repository.featuredBanners() }
+                val dailyAsync = async {
+                    runSuspendCatching { repository.currentUserDailyRecommendedTracks() }
+                        .getOrNull().orEmpty()
+                }
                 val home = homeAsync.await()
                 val banners = bannersAsync.await()
+                val accountDaily = dailyAsync.await()
                 if (banners.isEmpty() &&
                     home.tracks.isEmpty() &&
                     home.playlists.isEmpty() &&
@@ -132,7 +138,11 @@ internal fun CloudMusicHomePage(
                 ) {
                     CloudMusicHomeState.Empty
                 } else {
-                    CloudMusicHomeState.Success(banners = banners, home = home)
+                    CloudMusicHomeState.Success(
+                        banners = banners,
+                        home = home,
+                        dailyTracks = accountDaily.ifEmpty { home.tracks },
+                    )
                 }
             }
         }.fold(
@@ -204,6 +214,7 @@ private fun CloudMusicHomeContent(
 ) {
     val home = state.home
     val banners = state.banners
+    val dailyTracks = state.dailyTracks
     val dailyTracksTitle = stringResource(R.string.cloud_music_section_daily_tracks)
     val playlistsTitle = stringResource(R.string.cloud_music_section_playlists)
     val chartsTitle = stringResource(R.string.cloud_music_section_charts)
@@ -225,9 +236,9 @@ private fun CloudMusicHomeContent(
                 )
             }
         }
-        if (home.tracks.isNotEmpty()) {
+        if (dailyTracks.isNotEmpty()) {
             item(key = "cloud-home-section-daily") {
-                val tracks = home.tracks
+                val tracks = dailyTracks
                 CloudMusicCoverCardSection(title = dailyTracksTitle) {
                     itemsIndexed(
                         items = tracks,

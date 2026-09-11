@@ -249,6 +249,9 @@ internal interface OnlineMusicProviderRepository {
         radios = featuredRadios(),
     )
 
+    /** 账号「每日推荐」歌曲；未登录或失败返回 null（调用方降级为通用推荐）。 */
+    suspend fun currentUserDailyRecommendedTracks(limit: Int = 30): List<OnlineTrack>? = null
+
     suspend fun accountPlaylists(): List<OnlineAccountPlaylist>? = null
 
     suspend fun accountAlbums(): List<OnlineAlbum>? = null
