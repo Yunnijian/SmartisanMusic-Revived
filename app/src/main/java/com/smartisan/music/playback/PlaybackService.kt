@@ -57,6 +57,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -94,6 +95,9 @@ class PlaybackService : MediaLibraryService() {
     private val playbackStartFadeController = PlaybackStartFadeController(serviceScope)
     @Volatile private var exclusionsSnapshot: LibraryExclusions = LibraryExclusions()
     private val exclusionsReady = CompletableDeferred<LibraryExclusions>()
+    private var superLyricPublisher: SuperLyricPublisher? = null
+    private var superLyricPublishJob: Job? = null
+    private var superLyricLyrics: EmbeddedLyrics? = null
     private val audioFxPlayerListener = object : Player.Listener {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             playbackAudioFxController?.setAudioSessionId(audioSessionId)
@@ -131,6 +135,42 @@ class PlaybackService : MediaLibraryService() {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             val playbackPlayer = player ?: return
             playbackStartFadeController.onIsPlayingChanged(playbackPlayer, isPlaying)
+        }
+    }
+    private val superLyricPlayerListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            superLyricLyrics = null
+            val item = mediaItem
+            if (item == null) {
+                superLyricPublisher?.publish(
+                    mediaItem = null,
+                    lyrics = null,
+                    positionMs = 0L,
+                    isPlaying = false,
+                )
+                return
+            }
+            // 歌词异步加载（含在线拉取/磁盘缓存），加载完成立即补发一帧。
+            serviceScope.launch {
+                superLyricLyrics = loadEmbeddedLyrics(this@PlaybackService, item)
+                publishSuperLyricNow()
+            }
+            publishSuperLyricNow()
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                startSuperLyricPublishLoop()
+            } else {
+                superLyricPublishJob?.cancel()
+                superLyricPublishJob = null
+                publishSuperLyricNow()
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // 就绪但 playWhenReady 为 false（如暂停后 seek）时也同步一次当前帧。
+            publishSuperLyricNow()
         }
     }
 
@@ -185,6 +225,11 @@ class PlaybackService : MediaLibraryService() {
         exoPlayer.addListener(audioFxPlayerListener)
         exoPlayer.addListener(onlineMediaRefreshListener)
         exoPlayer.addListener(playbackStartFadePlayerListener)
+        SuperLyricPublisher().also { publisher ->
+            publisher.tryRegister()
+            superLyricPublisher = publisher
+        }
+        exoPlayer.addListener(superLyricPlayerListener)
         playbackMetadataPreloader = PlaybackMetadataPreloader(
             context = this,
             player = exoPlayer,
@@ -280,6 +325,11 @@ class PlaybackService : MediaLibraryService() {
         player?.removeListener(audioFxPlayerListener)
         player?.removeListener(onlineMediaRefreshListener)
         player?.removeListener(playbackStartFadePlayerListener)
+        player?.removeListener(superLyricPlayerListener)
+        superLyricPublishJob?.cancel()
+        superLyricPublishJob = null
+        superLyricPublisher?.tryUnregister()
+        superLyricPublisher = null
         playbackStartFadeController.release(player)
         onlineMediaRefreshJob?.cancel()
         onlineMediaRefreshJob = null
@@ -296,6 +346,31 @@ class PlaybackService : MediaLibraryService() {
         libraryRefreshExecutor.shutdown()
 
         super.onDestroy()
+    }
+
+    /** 按当前播放器状态发布一帧歌词；publisher 内部做帧去重。 */
+    private fun publishSuperLyricNow() {
+        val publisher = superLyricPublisher ?: return
+        val exoPlayer = player ?: return
+        publisher.publish(
+            mediaItem = exoPlayer.currentMediaItem,
+            lyrics = superLyricLyrics,
+            positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
+            isPlaying = exoPlayer.isPlaying,
+        )
+    }
+
+    /** 播放时以固定间隔轮询发布，让桌面歌词随逐字/行进度刷新。 */
+    private fun startSuperLyricPublishLoop() {
+        if (superLyricPublishJob?.isActive == true) {
+            return
+        }
+        superLyricPublishJob = serviceScope.launch {
+            while (isActive) {
+                publishSuperLyricNow()
+                delay(SuperLyricPublishGranularityMs)
+            }
+        }
     }
 
     private fun hasAudioPermission(): Boolean {
