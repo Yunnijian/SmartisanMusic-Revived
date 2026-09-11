@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.4.0-7F52FF?logo=kotlin" alt="Kotlin 2.4.0" /></a>
-  <a href="https://developer.android.com/build"><img src="https://img.shields.io/badge/AGP-9.2.1-3DDC84?logo=android" alt="AGP 9.2.1" /></a>
+  <a href="https://developer.android.com/build"><img src="https://img.shields.io/badge/AGP-9.3.2-3DDC84?logo=android" alt="AGP 9.3.2" /></a>
   <a href="https://developer.android.com/about/versions/oreo/android-8.1"><img src="https://img.shields.io/badge/minSdk-27-3DDC84?logo=android" alt="minSdk 27" /></a>
   <a href="https://developer.android.com/media/media3"><img src="https://img.shields.io/badge/Media3-1.10.1-4285F4?logo=android" alt="Media3 1.10.1" /></a>
 </p>
@@ -19,7 +19,7 @@
 
 锤子音乐是这种理念很完整的一次表达。黑胶唱盘、唱针、搓碟和爆豆音让数字音乐重新变成可以触碰的东西，歌曲、专辑和资料库又始终保持清楚、克制。它有拟物的趣味，却不该为了表演牺牲播放和管理；真正值得保留的，正是质感、秩序与实用性之间的平衡。
 
-Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为视觉与交互基准，使用现代 Android 技术栈重新实现这款本地音乐播放器。界面全部采用 Jetpack Compose，通过自定义 Smartisan 组件延续原有的拟物质感、布局比例与动画节奏；媒体扫描、后台播放、队列、收藏、播放列表和数据持久化则全部基于公开 Android API 重写。应用只读取和播放设备上的音频文件，不内置内容曲库、账号体系或媒体分发服务。
+Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为视觉与交互基准，使用现代 Android 技术栈重新实现这款音乐播放器。界面全部采用 Jetpack Compose，通过自定义 Smartisan 组件延续原有的拟物质感、布局比例与动画节奏；媒体扫描、后台播放、队列、收藏、播放列表和数据持久化则全部基于公开 Android API 重写。在完整保留本地播放能力（读取并播放设备音频）的基础上，同时支持可选的网易云账号登录与在线音乐：搜索、在线播放、歌词、歌单与每日推荐均可登录后使用，登录是纯自愿的，凭据仅加密存储在设备本地。
 
 ## 相较原版的改进
 
@@ -36,6 +36,7 @@ Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为
 - **现代数据架构**：使用 Room、DataStore、Coroutines 和 StateFlow 管理资料库、收藏、播放列表、设置及播放状态，不依赖 Smartisan OS 私有服务或系统签名能力。
 - **清理历史包袱**：业务源码全部使用 Kotlin，只保留当前实现需要的资源和公开 API，不携带原版后台服务、旧数据库或旧设置迁移代码。
 - **新增主题选择**：支持跟随系统、浅色模式和深色模式，主题页以 Compose 复现现有设置单选列表。视觉仍由 `values-night` 与 `drawable-night` 同名变体驱动；原版 8.1.0 没有深色模式，夜间视觉属于本项目的自创设计：炭灰色板取自同为复刻项目的锤子天气（页底 `#25282D`、标题栏 `#292C31`、卡片 `#34373C`），夜间位图由 `tools/generate_night_drawables.py` 从原版位图等比压暗或反白生成（保留 alpha 与 nine-patch 标记，可重复执行），红蓝品牌强调色深浅主题通用。
+- **重新接入网易云在线音乐**：将原作者早期版本中随后删去的网易云能力重新整合进纯 Compose 架构，作为本地播放之上的可选扩展——账号登录（凭据经 `EncryptedSharedPreferences` 加密存储）、在线搜索与播放（地址自动解析、定期刷新并落盘缓存音频流）、原文/逐字/译文歌词、首页推荐与账号每日推荐、歌单/专辑/艺人详情、电台收听、喜欢与歌单双向同步、歌单管理，以及向 SuperLyric 提供实时歌词；云音乐页面同样适配了深色模式。
 
 ## 当前功能
 
@@ -54,9 +55,20 @@ Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为
 - 外部音频打开、音频文件分享和 MediaStore 媒体删除
 - 自定义艺术家分隔符、底部导航顺序与固定项，以及应用图标
 
-## 本地媒体与权限
+云音乐（需登录网易云账号，可选）：
 
-应用的最终 Manifest 不包含 `INTERNET` 权限，运行时不依赖网络，也不会上传歌曲、封面、歌词或资料库信息。
+- 网易云账号登录，凭据加密存储于设备本地
+- 在线搜索与播放，播放地址自动解析、定期刷新，音频流落盘缓存
+- 在线歌词（原文、逐字与译文）与音质选择
+- 首页推荐：Banner 轮播、每日推荐、推荐歌单、排行榜、新碟与热门艺人；每日推荐优先使用账号专属，未登录自动降级
+- 歌单、专辑、艺人详情页，支持播放全部与随机播放；电台收听
+- 喜欢与取消喜欢双向同步账号"我喜欢"，本地"我喜欢的歌曲"合并展示本地与在线歌曲
+- 歌单管理：加入歌单、从歌单移除、新建与删除歌单
+- 向 SuperLyric 提供实时歌词，支持桌面歌词等模块显示
+
+## 权限与隐私
+
+应用默认是本地播放器，`INTERNET` 权限仅在用户**主动登录网易云账号**后用于在线音乐请求（搜索、播放、歌词、歌单与收藏同步），登录凭据经 `EncryptedSharedPreferences` 加密后仅保存在设备本地，不会明文落盘，也不会上传设备上的歌曲、封面、歌词或资料库信息。
 
 - Android 13 及以上使用 `READ_MEDIA_AUDIO` 读取设备音频；Android 8.1 至 Android 12 使用受版本限制的 `READ_EXTERNAL_STORAGE`。
 - `FOREGROUND_SERVICE_MEDIA_PLAYBACK` 仅用于用户播放音乐时维持后台播放和媒体通知。
@@ -78,12 +90,13 @@ Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为
 
 | 类别 | 技术 |
 | --- | --- |
-| 构建 | Android Gradle Plugin `9.2.1`、Gradle `9.4.1`、JDK 21（Java 11 字节码） |
+| 构建 | Android Gradle Plugin `9.3.2`、Gradle `9.5.0`、JDK 21（Java 11 字节码） |
 | 语言 | Kotlin `2.4.0` |
 | UI | Jetpack Compose、自定义 Smartisan 组件、Drawable / NinePatch 资源绘制 |
 | 播放 | Media3 `1.10.1`、ExoPlayer、MediaLibraryService、MediaSession |
 | 状态 | Lifecycle、StateFlow、Coroutines |
 | 存储 | Room `2.8.4`、DataStore `1.2.1`、MediaStore |
+| 在线 | OkHttp、Coil 3（封面加载）、SuperLyricApi（歌词发布，经 JitPack） |
 | SDK | `minSdk 27` / `targetSdk 36` / `compileSdk 37` |
 
 页面按功能组织，公共 Smartisan 组件负责资源绘制和交互；包边界与状态归属见 [UI 架构](docs/ui-architecture.md)。
@@ -105,6 +118,8 @@ Debug APK 位于 `app/build/outputs/apk/debug/`。
 ```
 
 Release APK 位于 `app/build/outputs/apk/release/`，文件名为 `SmartisanMusic-Revived-<versionName>.apk`，版本由 [app/build.gradle.kts](app/build.gradle.kts) 定义。
+
+发布构建使用正式签名：签名信息从根目录的 `keystore.properties`（仓库根目录、不入库）读取，`keystore/` 与 `keystore.properties` 均已被 `.gitignore` 排除；缺少该文件时 release 构建自动退回未签名，便于本地与 CI 调试。
 
 Compose UI 测试可通过 `./gradlew assembleDebugAndroidTest` 构建；这条命令不执行设备测试。完整验证命令、测试结果及设备回归清单见 [开发与验证记录](docs/compose-migration.md)。
 

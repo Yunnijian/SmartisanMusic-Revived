@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.4.0-7F52FF?logo=kotlin" alt="Kotlin 2.4.0" /></a>
-  <a href="https://developer.android.com/build"><img src="https://img.shields.io/badge/AGP-9.2.1-3DDC84?logo=android" alt="AGP 9.2.1" /></a>
+  <a href="https://developer.android.com/build"><img src="https://img.shields.io/badge/AGP-9.3.2-3DDC84?logo=android" alt="AGP 9.3.2" /></a>
   <a href="https://developer.android.com/about/versions/oreo/android-8.1"><img src="https://img.shields.io/badge/minSdk-27-3DDC84?logo=android" alt="minSdk 27" /></a>
   <a href="https://developer.android.com/media/media3"><img src="https://img.shields.io/badge/Media3-1.10.1-4285F4?logo=android" alt="Media3 1.10.1" /></a>
 </p>
@@ -19,7 +19,7 @@ Smartisan never saw itself as a company concerned with visuals alone. A beautifu
 
 Smartisan Music is one of the clearest expressions of that idea. Its turntable, tonearm, scratching, and vinyl crackle make digital music feel tangible, while songs, albums, and the library remain calm and legible. The physical playfulness should never come at the expense of playback or organization; what deserves to be preserved is the balance between texture, order, and utility.
 
-Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as its visual and interaction reference and rebuilds it with a modern Android stack. The interface is built entirely with Jetpack Compose and custom Smartisan components, preserving the original drawables, NinePatch assets, selectors, visual language, and layout proportions. Media scanning, background playback, queues, favorites, playlists, and persistence are rebuilt entirely on public Android APIs. The app reads and plays audio stored on the device and contains no built-in content catalog, account system, or media distribution service.
+Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as its visual and interaction reference and rebuilds it with a modern Android stack. The interface is built entirely with Jetpack Compose and custom Smartisan components, preserving the original drawables, NinePatch assets, selectors, visual language, and layout proportions. Media scanning, background playback, queues, favorites, playlists, and persistence are rebuilt entirely on public Android APIs. Alongside the complete local playback experience, an optional NetEase Cloud Music account login adds online music: search, online playback, lyrics, and playlists once you sign in. Signing in is entirely voluntary, and the credentials are stored encrypted on the device only.
 
 ## Improvements over the original
 
@@ -54,9 +54,20 @@ Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as i
 - External audio opening, audio-file sharing, and MediaStore-backed media deletion
 - Custom artist separators, bottom-navigation order and pinned items, and switchable app icons
 
-## Local media and permissions
+Cloud Music (optional, requires a NetEase Cloud Music account):
 
-The final app manifest does not contain the `INTERNET` permission. The app does not depend on a network connection and does not upload songs, artwork, lyrics, or library metadata.
+- Account login with credentials encrypted and stored locally on the device
+- Online search and playback; playback URLs are resolved automatically, refreshed periodically, and the audio stream is cached to disk
+- Online lyrics (original, word-timed, and translations) and quality selection
+- Home recommendations: banner carousel, daily picks, recommended playlists, charts, new releases, and popular artists; daily picks prefer the account feed and fall back when signed out
+- Playlist, album, and artist detail pages with play-all and shuffle; radio listening
+- Two-way synchronization of likes with the account's "favorites", with the local loved-songs list merging local and online tracks
+- Playlist management: add tracks to a playlist, remove them, and create or delete playlists
+- Publishes live lyrics to SuperLyric for desktop and overlay lyric modules
+
+## Permissions and privacy
+
+The app is a local player by default. The `INTERNET` permission is used only for online music requests once you voluntarily sign in to a NetEase Cloud Music account (search, playback, lyrics, playlists, and favorites sync). Login credentials are stored encrypted via `EncryptedSharedPreferences` on the device only, and the app never uploads your songs, artwork, lyrics, or library metadata.
 
 - Android 13 and later use `READ_MEDIA_AUDIO` to read device audio. Android 8.1 through Android 12 use the version-limited `READ_EXTERNAL_STORAGE` permission.
 - `FOREGROUND_SERVICE_MEDIA_PLAYBACK` is used only to keep user-initiated playback and its media notification active in the background.
@@ -78,12 +89,13 @@ Album artwork, artist information, and music content visible in screenshots rema
 
 | Category | Technology |
 | --- | --- |
-| Build | Android Gradle Plugin `9.2.1`, Gradle `9.4.1`, JDK 21 (Java 11 bytecode) |
+| Build | Android Gradle Plugin `9.3.2`, Gradle `9.5.0`, JDK 21 (Java 11 bytecode) |
 | Language | Kotlin `2.4.0` |
 | UI | Jetpack Compose, custom Smartisan components, Drawable / NinePatch rendering |
 | Playback | Media3 `1.10.1`, ExoPlayer, MediaLibraryService, MediaSession |
 | State | Lifecycle, StateFlow, Coroutines |
 | Storage | Room `2.8.4`, DataStore `1.2.1`, MediaStore |
+| Online | OkHttp, Coil 3 (artwork loading), SuperLyricApi (lyrics publishing, via JitPack) |
 | SDK | `minSdk 27` / `targetSdk 36` / `compileSdk 37` |
 
 See [UI architecture](docs/ui-architecture.md) for package boundaries, shared components, and state ownership.
@@ -105,6 +117,8 @@ To verify the minified release build, run:
 ```
 
 The release APK is written to `app/build/outputs/apk/release/` as `SmartisanMusic-Revived-<versionName>.apk`. The version is defined in [app/build.gradle.kts](app/build.gradle.kts).
+
+Release builds use the production signing configuration: signing settings are read from `keystore.properties` at the repository root (both `keystore/` and `keystore.properties` are git-ignored). When that file is absent, the release build falls back to unsigned so local and CI debugging still work.
 
 Build Compose UI tests with `./gradlew assembleDebugAndroidTest`; this does not run them on a device. See the [development and validation record](docs/compose-migration.md) for the complete validation commands and device regression checklist.
 
