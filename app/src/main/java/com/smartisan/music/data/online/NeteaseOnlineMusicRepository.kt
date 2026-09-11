@@ -535,7 +535,13 @@ internal class NeteaseOnlineMusicRepository(
         if (normalizedQuery.isEmpty()) {
             return emptyList()
         }
-        return client.searchSongs(normalizedQuery, limit = SearchLimit)
+        return cachedPage(
+            key = cacheKey("search:songs", normalizedQuery),
+            ttlMs = NeteaseSearchCacheTtlMs,
+            codec = OnlinePageCacheCodecs.Tracks,
+        ) {
+            client.searchSongs(normalizedQuery, limit = SearchLimit)
+        }
     }
 
     override suspend fun searchAll(query: String): OnlineSearchResults {
