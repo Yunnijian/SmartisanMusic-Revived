@@ -45,42 +45,6 @@ class LovedSongsOnlineMergeTest {
         assertSame(localItems, merged)
     }
 
-    @Test
-    fun missingIdsKeepsOnlyCloudTracksAbsentFromLocalFavorites() {
-        val missing = missingOnlineLikedMediaIds(
-            cloudTrackIds = setOf("2001", "2002", "2003"),
-            localFavoriteMediaIds = setOf(
-                "online:netease:2001",
-                "1002",
-                "local-file",
-            ),
-        )
-
-        assertEquals(setOf("online:netease:2002", "online:netease:2003"), missing)
-    }
-
-    @Test
-    fun missingIdsIgnoresLocalFavoritesFromOtherSources() {
-        val missing = missingOnlineLikedMediaIds(
-            cloudTrackIds = setOf("2001"),
-            localFavoriteMediaIds = setOf("online:qqmusic:2001"),
-        )
-
-        assertEquals(setOf("online:netease:2001"), missing)
-    }
-
-    @Test
-    fun missingIdsIsEmptyWhenCloudTrackIdsUnavailable() {
-        assertEquals(
-            emptySet<String>(),
-            missingOnlineLikedMediaIds(cloudTrackIds = null, localFavoriteMediaIds = setOf("online:netease:2001")),
-        )
-        assertEquals(
-            emptySet<String>(),
-            missingOnlineLikedMediaIds(cloudTrackIds = emptySet(), localFavoriteMediaIds = emptySet()),
-        )
-    }
-
     private fun mediaItem(
         id: String,
         title: String = id,

@@ -4,18 +4,12 @@ import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,7 +20,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
@@ -36,16 +29,16 @@ import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.SessionResult
+import com.smartisan.music.AppDispatchers
 import com.smartisan.music.ExternalAudioLaunchRequest
 import com.smartisan.music.R
 import com.smartisan.music.data.favorite.FavoriteSongsRepository
+import com.smartisan.music.data.favorite.LovedSongsCloudSync
 import com.smartisan.music.data.library.LibraryExclusions
 import com.smartisan.music.data.library.LibraryExclusionsStore
-import com.smartisan.music.data.online.NeteaseAuthStore
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
 import com.smartisan.music.data.online.onlineTrackIdentityOrNull
-import com.smartisan.music.data.playlist.PlaylistCreateResult
 import com.smartisan.music.data.playlist.PlaylistRepository
 import com.smartisan.music.data.settings.ArtistSettings
 import com.smartisan.music.data.settings.ArtistSettingsStore
@@ -72,44 +65,22 @@ import com.smartisan.music.playback.withPlaybackRating
 import com.smartisan.music.resolveExternalAudioArtist
 import com.smartisan.music.resolveExternalAudioMediaStoreIds
 import com.smartisan.music.ui.album.AlbumViewMode
-import com.smartisan.music.ui.artist.ArtistTarget
-import com.smartisan.music.ui.artist.ArtistTitleStack
 import com.smartisan.music.ui.artist.parentTarget
 import com.smartisan.music.ui.components.MediaStoreDeleteItem
-import com.smartisan.music.ui.components.TrackActionItem
-import com.smartisan.music.ui.components.TrackActionsOverlay
 import com.smartisan.music.ui.components.rememberMediaStoreDeleteCoordinator
-import com.smartisan.music.ui.components.withSelection
 import com.smartisan.music.ui.library.rememberLibraryMediaState
-import com.smartisan.music.ui.loved.missingOnlineLikedMediaIds
 import com.smartisan.music.ui.navigation.MusicDestination
-import com.smartisan.music.ui.playlist.PlaybackPlaylistPickerOverlay
-import com.smartisan.music.ui.playlist.PlaylistNameDialogOverlay
-import com.smartisan.music.ui.playlist.PlaylistNameDialogRequest
-import com.smartisan.music.ui.search.SearchDrilldownTarget
-import com.smartisan.music.ui.search.SearchOverlay
 import com.smartisan.music.ui.shell.dialogs.SongDeleteConfirmOverlay
-import com.smartisan.music.ui.shell.playback.PlaybackBar
-import com.smartisan.music.ui.shell.playback.PlaybackBarSnapshot
+import com.smartisan.music.ui.shell.playback.rememberPlaybackBarHost
 import com.smartisan.music.ui.shell.playback.loadArtworkBitmap
 import com.smartisan.music.ui.shell.playback.peekArtworkBitmap
-import com.smartisan.music.ui.shell.playback.playbackBarSnapshot
 import com.smartisan.music.ui.shell.playback.toExternalAudioMediaItem
-import com.smartisan.music.ui.shell.tabs.MusicBottomBar
-import com.smartisan.music.ui.shell.tabs.MusicTabContent
+import com.smartisan.music.ui.shell.tabs.MusicBottomChrome
+import com.smartisan.music.ui.shell.tabs.MusicDestinationSurface
 import com.smartisan.music.ui.shell.tabs.NavigationEditorOverlay
-import com.smartisan.music.ui.shell.titlebar.MainTitleBar
-import com.smartisan.music.ui.shell.titlebar.TitleBarShadow
-import com.smartisan.music.ui.shell.titlebar.TitleBarTransition
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private enum class TrackActionSource {
-    Library,
-    Loved,
-    Playlist,
-}
 
 @Composable
 fun MusicAppShell(
@@ -142,49 +113,33 @@ private fun MusicAppShellContent(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
     val controller = LocalPlaybackController.current
     val scope = rememberCoroutineScope()
+    // 目的地、编辑态与待确认操作这些临时界面状态的唯一来源，见 MusicShellUiState。
+    val uiState = remember { MusicShellUiState() }
     val favoriteRepository =
-        remember(context.applicationContext) {
-            FavoriteSongsRepository.getInstance(context.applicationContext)
-        }
+        remember(appContext) { FavoriteSongsRepository.getInstance(appContext) }
     // 与 CloudMusicHost 共用同一 Router 实例，收藏变化才能让云音乐页面读到最新「我喜欢」。
-    val neteaseAuthStore =
-        remember(context.applicationContext) {
-            NeteaseAuthStore(context.applicationContext)
-        }
     val onlineRepositoryRouter =
-        remember(context.applicationContext) {
-            OnlineMusicRepositoryRouter.getInstance(context.applicationContext)
-        }
+        remember(appContext) { OnlineMusicRepositoryRouter.getInstance(appContext) }
+    // 「我喜欢」与网易云账号的收敛策略在数据层，主壳只在进入该页时发起一次。
+    val lovedSongsCloudSync =
+        remember(appContext) { LovedSongsCloudSync.getInstance(appContext) }
     val playlistRepository =
-        remember(context.applicationContext) {
-            PlaylistRepository.getInstance(context.applicationContext)
-        }
+        remember(appContext) { PlaylistRepository.getInstance(appContext) }
     val libraryExclusionsStore =
-        remember(context.applicationContext) {
-            LibraryExclusionsStore(context.applicationContext)
-        }
+        remember(appContext) { LibraryExclusionsStore(appContext) }
     val playbackSettingsStore =
-        remember(context.applicationContext) {
-            PlaybackSettingsStore(context.applicationContext)
-        }
+        remember(appContext) { PlaybackSettingsStore(appContext) }
     val artistSettingsStore =
-        remember(context.applicationContext) {
-            ArtistSettingsStore(context.applicationContext)
-        }
+        remember(appContext) { ArtistSettingsStore(appContext) }
     val libraryDisplaySettingsStore =
-        remember(context.applicationContext) {
-            LibraryDisplaySettingsStore(context.applicationContext)
-        }
+        remember(appContext) { LibraryDisplaySettingsStore(appContext) }
     val navigationSettingsStore =
-        remember(context.applicationContext) {
-            NavigationSettingsStore(context.applicationContext)
-        }
+        remember(appContext) { NavigationSettingsStore(appContext) }
     val themeSettingsStore =
-        remember(context.applicationContext) {
-            ThemeSettingsStore(context.applicationContext)
-        }
+        remember(appContext) { ThemeSettingsStore(appContext) }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val libraryExclusions by
         libraryExclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
@@ -207,102 +162,65 @@ private fun MusicAppShellContent(
     // 在线喜欢发生变化时自增，驱动上面的列表重新拉取。
     var onlineLovedRefreshVersion by remember { mutableStateOf(0) }
     val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
-    var playbackVisible by remember { mutableStateOf(false) }
-    var searchVisible by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    var searchDrilldownTarget by remember { mutableStateOf<SearchDrilldownTarget?>(null) }
-    var currentDestination by remember { mutableStateOf(MusicDestination.Playlist) }
-    var presentedFromMore by remember { mutableStateOf(false) }
-    var playlistAddModeActive by remember { mutableStateOf(false) }
-    var moreSettingsPageActive by remember { mutableStateOf(false) }
-    var navigationEditorVisible by remember { mutableStateOf(false) }
     var navigationLayoutInitialized by remember { mutableStateOf(false) }
     var navigationStateRestored by remember { mutableStateOf(false) }
 
     val navigationLayout = navigationSettings.layout
     // 加歌模式只临时替换底栏末位，不污染用户保存的导航布局。
     val bottomDestinations =
-        remember(navigationLayout, playlistAddModeActive) {
+        remember(navigationLayout, uiState.playlistAddModeActive) {
             navigationLayout.bottomDestinationsEnsuring(
-                MusicDestination.Songs.takeIf { playlistAddModeActive }
+                MusicDestination.Songs.takeIf { uiState.playlistAddModeActive }
             )
         }
     val overflowDestinations = navigationLayout.overflowDestinations
 
     // 冷启动恢复上次一级板块；详情页和弹窗状态不进入持久化恢复范围。
-    LaunchedEffect(persistedNavigationSettings, currentDestination) {
+    LaunchedEffect(persistedNavigationSettings, uiState.currentDestination) {
         val persistedLayout = persistedNavigationSettings?.layout ?: return@LaunchedEffect
         if (!navigationLayoutInitialized) {
             navigationLayoutInitialized = true
             val (restoredDestination, restoredFromMore) =
                 persistedNavigationSettings?.restoredDestination()
                     ?: (persistedLayout.bottomDestinations.first() to false)
-            currentDestination = restoredDestination
-            presentedFromMore = restoredFromMore
+            uiState.currentDestination = restoredDestination
+            uiState.presentedFromMore = restoredFromMore
             navigationStateRestored = true
         } else if (
-            currentDestination != MusicDestination.More &&
-                !persistedLayout.isPinned(currentDestination)
+            uiState.currentDestination != MusicDestination.More &&
+                !persistedLayout.isPinned(uiState.currentDestination)
         ) {
-            presentedFromMore = true
+            uiState.presentedFromMore = true
         }
     }
 
-    LaunchedEffect(currentDestination, presentedFromMore, navigationStateRestored) {
+    LaunchedEffect(
+        uiState.currentDestination,
+        uiState.presentedFromMore,
+        navigationStateRestored,
+    ) {
         if (navigationStateRestored) {
-            navigationSettingsStore.setLastDestination(currentDestination, presentedFromMore)
+            navigationSettingsStore.setLastDestination(
+                uiState.currentDestination,
+                uiState.presentedFromMore,
+            )
         }
     }
 
-    // 进入「我喜欢的歌曲」时与网易云账号收敛：只补不删地补入云端喜欢，并拉取在线可展示项。
-    // 未登录、拉取失败都退化为「在线部分为空，本地收藏照常展示」。
-    LaunchedEffect(currentDestination, onlineLovedRefreshVersion) {
-        if (currentDestination != MusicDestination.LovedSongs) {
-            onlineLovedMediaItems = emptyList()
-            return@LaunchedEffect
-        }
-        if (!neteaseAuthStore.load().isLoggedIn) {
-            onlineLovedMediaItems = emptyList()
-            return@LaunchedEffect
-        }
-        val cloudTrackIds = onlineRepositoryRouter.accountLikedTrackIds()
-        val missing = missingOnlineLikedMediaIds(cloudTrackIds, favoriteIds)
-        if (missing.isNotEmpty()) {
-            favoriteRepository.addMissing(missing)
-        }
-        onlineLovedMediaItems = onlineRepositoryRouter.accountLikedTrackMediaItems()
+    // 进入「我喜欢的歌曲」时与网易云账号收敛一次：策略（登录判定、差集、只补不删、失败降级）在数据层。
+    LaunchedEffect(uiState.currentDestination, onlineLovedRefreshVersion) {
+        onlineLovedMediaItems = lovedSongsCloudSync.mediaItemsForLovedSongsPage(
+            lovedSongsPageActive = uiState.currentDestination == MusicDestination.LovedSongs,
+            localFavoriteMediaIds = favoriteIds,
+        )
     }
-    var songsEditMode by remember { mutableStateOf(false) }
-    var selectedSongIds by remember { mutableStateOf(emptySet<String>()) }
-    var albumEditMode by remember { mutableStateOf(false) }
-    var selectedAlbumIds by remember { mutableStateOf(emptySet<String>()) }
-    var selectedAlbumId by remember { mutableStateOf<String?>(null) }
-    var selectedAlbumTitle by remember { mutableStateOf<String?>(null) }
-    var selectedArtistTarget by remember { mutableStateOf<ArtistTarget?>(null) }
     var libraryRefreshVersion by remember { mutableStateOf(0) }
     var libraryRefreshing by remember { mutableStateOf(false) }
-    var showSongDeleteConfirm by remember { mutableStateOf(false) }
-    var pendingSongDeleteMediaIds by remember { mutableStateOf(emptySet<String>()) }
-    var pendingSongDeleteDismissAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var pendingPlaylistPickerMediaItems by remember { mutableStateOf<List<MediaItem>?>(null) }
-    var pendingTrackActionItem by remember { mutableStateOf<MediaItem?>(null) }
-    var pendingTrackActionSource by remember { mutableStateOf(TrackActionSource.Library) }
-    var playbackPlaylistCreateRequest by remember {
-        mutableStateOf<PlaylistNameDialogRequest.Create?>(null)
-    }
-    var ratingOverrides by remember { mutableStateOf(emptyMap<String, Int>()) }
-    var snapshot by
-        remember(controller) {
-            mutableStateOf(controller.playbackBarSnapshot())
-        }
-    var playbackBarContentSnapshot by
-        remember(controller) {
-            mutableStateOf(snapshot)
-        }
+    val playbackBar = rememberPlaybackBarHost(controller)
     val library = rememberLibraryMediaState(libraryRefreshVersion = libraryRefreshVersion)
     val libraryItems =
-        remember(library.items, ratingOverrides) {
-            library.items.withRatingOverrides(ratingOverrides)
+        remember(library.items, uiState.ratingOverrides) {
+            library.items.withRatingOverrides(uiState.ratingOverrides)
         }
     val currentOnStartupReady by rememberUpdatedState(onStartupReady)
     LaunchedEffect(navigationStateRestored, library.loaded, controller) {
@@ -314,83 +232,23 @@ private fun MusicAppShellContent(
         withFrameNanos {}
         currentOnStartupReady()
     }
-    val playbackBarMediaItem = playbackBarContentSnapshot.mediaItem
+    val playbackBarMediaItem = playbackBar.contentSnapshot.mediaItem
     val artworkRequestKey = playbackBarMediaItem?.artworkRequestKey()
     val artworkBitmap by
         produceState<Bitmap?>(
             initialValue = playbackBarMediaItem?.let(::peekArtworkBitmap),
             artworkRequestKey,
         ) {
-            val mediaItem = playbackBarContentSnapshot.mediaItem
+            val mediaItem = playbackBar.contentSnapshot.mediaItem
             if (mediaItem == null) {
                 value = null
                 return@produceState
             }
             value = peekArtworkBitmap(mediaItem) ?: value
-            value = loadArtworkBitmap(context.applicationContext, mediaItem)
+            value = loadArtworkBitmap(appContext, mediaItem)
         }
-    val playbackBarRequestedVisible = snapshot.mediaItem != null
+    val playbackBarComposed = playbackBar.composed
     val playbackBarHeight = 67.dp
-    var playbackBarComposed by remember { mutableStateOf(false) }
-    val openSearchOverlay = {
-        searchQuery = ""
-        searchDrilldownTarget = null
-        searchVisible = true
-    }
-    fun openCurrentSearch() {
-        openSearchOverlay()
-    }
-    val closeSearchOverlay = {
-        searchVisible = false
-        searchDrilldownTarget = null
-    }
-
-    fun closeAlbumDetail() {
-        selectedAlbumId = null
-        selectedAlbumTitle = null
-    }
-
-    fun closeArtistDetail() {
-        selectedArtistTarget = selectedArtistTarget?.parentTarget()
-    }
-
-    fun returnToMore() {
-        presentedFromMore = false
-        currentDestination = MusicDestination.More
-    }
-
-    DisposableEffect(controller) {
-        if (controller == null) {
-            snapshot = PlaybackBarSnapshot()
-            return@DisposableEffect onDispose {}
-        }
-        val listener =
-            object : Player.Listener {
-                override fun onEvents(player: Player, events: Player.Events) {
-                    val nextSnapshot = player.playbackBarSnapshot()
-                    snapshot = nextSnapshot
-                    if (nextSnapshot.mediaItem != null) {
-                        playbackBarContentSnapshot = nextSnapshot
-                    }
-                }
-            }
-        controller.addListener(listener)
-        val initialSnapshot = controller.playbackBarSnapshot()
-        snapshot = initialSnapshot
-        if (initialSnapshot.mediaItem != null) {
-            playbackBarContentSnapshot = initialSnapshot
-        }
-        onDispose {
-            controller.removeListener(listener)
-        }
-    }
-
-    LaunchedEffect(playbackBarRequestedVisible) {
-        if (playbackBarRequestedVisible) {
-            playbackBarComposed = true
-        }
-    }
-
     fun cleanupDeletedSongs(mediaIds: Set<String>, hideFromLibrary: Boolean) {
         if (mediaIds.isEmpty()) {
             return
@@ -436,15 +294,6 @@ private fun MusicAppShellContent(
         enqueueResolvedMediaItems(items)
     }
 
-    fun requestAddToPlaylist(items: List<MediaItem>) {
-        val candidates = items.filter { item ->
-            item.mediaId.isNotBlank() && !item.isExternalAudioLaunchItem()
-        }
-        if (candidates.isNotEmpty()) {
-            pendingPlaylistPickerMediaItems = candidates
-        }
-    }
-
     /** 在线歌曲的喜欢状态回写网易云账号。本地收藏为准，同步失败不回滚本地。 */
     suspend fun syncOnlineLikedState(mediaId: String, liked: Boolean) {
         val identity = mediaId.onlineTrackIdentityOrNull() ?: return
@@ -467,39 +316,19 @@ private fun MusicAppShellContent(
         }
     }
 
-    fun showTrackActions(
-        item: MediaItem,
-        source: TrackActionSource,
-    ) {
-        if (item.mediaId.isBlank()) {
-            return
+    val showLibraryTrackActions: (MediaItem) -> Unit = { item ->
+        uiState.showTrackActions(item, TrackActionSource.Library)
+    }
+    val toggleArtistAlbumViewMode: () -> Unit = {
+        val nextMode =
+            if (artistAlbumViewMode == AlbumViewMode.List) {
+                AlbumViewMode.Tile
+            } else {
+                AlbumViewMode.List
+            }
+        scope.launch {
+            libraryDisplaySettingsStore.setArtistAlbumViewMode(nextMode)
         }
-        pendingTrackActionItem = item
-        pendingTrackActionSource = source
-    }
-
-    fun dismissTrackActions() {
-        pendingTrackActionItem = null
-    }
-
-    fun dismissSongDeleteConfirmation() {
-        val dismissAction = pendingSongDeleteDismissAction
-        showSongDeleteConfirm = false
-        pendingSongDeleteMediaIds = emptySet()
-        pendingSongDeleteDismissAction = null
-        dismissAction?.invoke()
-    }
-
-    fun requestSongDeleteConfirmation(
-        mediaIds: Set<String>,
-        onDismiss: (() -> Unit)? = null,
-    ) {
-        if (mediaIds.isEmpty()) {
-            return
-        }
-        pendingSongDeleteMediaIds = mediaIds
-        pendingSongDeleteDismissAction = onDismiss
-        showSongDeleteConfirm = true
     }
 
     fun removeFavoriteMediaIds(mediaIds: Set<String>) {
@@ -575,75 +404,67 @@ private fun MusicAppShellContent(
 
     LaunchedEffect(playbackLaunchRequest) {
         if (playbackLaunchRequest > 0) {
-            playbackVisible = true
+            uiState.playbackVisible = true
         }
     }
 
-    LaunchedEffect(currentDestination) {
-        if (currentDestination != MusicDestination.Songs) {
-            songsEditMode = false
-            selectedSongIds = emptySet()
-            showSongDeleteConfirm = false
-            pendingSongDeleteMediaIds = emptySet()
+    LaunchedEffect(uiState.currentDestination) {
+        if (uiState.currentDestination != MusicDestination.Songs) {
+            uiState.songsEditMode = false
+            uiState.selectedSongIds = emptySet()
+            uiState.showSongDeleteConfirm = false
+            uiState.pendingSongDeleteMediaIds = emptySet()
         }
-        if (currentDestination != MusicDestination.Album) {
-            albumEditMode = false
-            selectedAlbumIds = emptySet()
-            selectedAlbumId = null
-            selectedAlbumTitle = null
+        if (uiState.currentDestination != MusicDestination.Album) {
+            uiState.albumEditMode = false
+            uiState.selectedAlbumIds = emptySet()
+            uiState.selectedAlbumId = null
+            uiState.selectedAlbumTitle = null
         }
-        if (currentDestination != MusicDestination.Artist) {
-            selectedArtistTarget = null
+        if (uiState.currentDestination != MusicDestination.Artist) {
+            uiState.selectedArtistTarget = null
         }
-        if (currentDestination != MusicDestination.Playlist) {
-            playlistAddModeActive = false
+        if (uiState.currentDestination != MusicDestination.Playlist) {
+            uiState.playlistAddModeActive = false
         }
-        dismissTrackActions()
+        uiState.dismissTrackActions()
     }
 
-    BackHandler(enabled = currentDestination == MusicDestination.Album && selectedAlbumId != null) {
-        closeAlbumDetail()
-    }
-
-    val selectedArtistParentTarget = selectedArtistTarget?.parentTarget()
-    BackHandler(
-        enabled =
-            currentDestination == MusicDestination.Artist &&
-                selectedArtistTarget != null &&
-                selectedArtistParentTarget == null
-    ) {
-        closeArtistDetail()
-    }
-
-    BackHandler(
-        enabled =
-            presentedFromMore &&
-                when (currentDestination) {
-                    MusicDestination.Songs -> !songsEditMode
-                    MusicDestination.Album -> selectedAlbumId == null && !albumEditMode
-                    MusicDestination.Artist -> selectedArtistTarget == null
-                    else -> false
-                }
-    ) {
-        returnToMore()
-    }
-    BackHandler(
-        enabled =
-            currentDestination == MusicDestination.Artist &&
-                selectedArtistTarget != null &&
-                selectedArtistParentTarget != null
-    ) {
-        closeArtistDetail()
+    // 返回键的落点交给纯状态机仲裁（见 ShellBackNavigation），这里只做一次委托。
+    val backOwner =
+        ShellBackNavigationState(
+            destination = uiState.currentDestination,
+            presentedFromMore = uiState.presentedFromMore,
+            songsEditMode = uiState.songsEditMode,
+            albumEditMode = uiState.albumEditMode,
+            albumDetailOpen = uiState.selectedAlbumId != null,
+            artistDetailOpen = uiState.selectedArtistTarget != null,
+            artistDetailHasParent = uiState.selectedArtistTarget?.parentTarget() != null,
+            visibleOverlay =
+                shellBackOverlay(
+                    playbackVisible = uiState.playbackVisible,
+                    searchVisible = uiState.searchVisible,
+                    playlistPickerVisible = uiState.playlistPickerVisible,
+                    navigationEditorVisible = uiState.navigationEditorVisible,
+                ),
+        ).resolveOwner()
+    BackHandler(enabled = backOwner.consumedByShell) {
+        when (backOwner) {
+            ShellBackOwner.CloseAlbumDetail -> uiState.closeAlbumDetail()
+            ShellBackOwner.CloseArtistDetail -> uiState.closeArtistDetail()
+            ShellBackOwner.ReturnToMore -> uiState.returnToMore()
+            else -> Unit
+        }
     }
 
     LaunchedEffect(externalAudioLaunchRequest, controller) {
         val request = externalAudioLaunchRequest ?: return@LaunchedEffect
-        playbackVisible = true
+        uiState.playbackVisible = true
         val playbackController = controller ?: return@LaunchedEffect
         val (artist, mediaStoreIds) =
-            withContext(Dispatchers.IO) {
-                request.resolveExternalAudioArtist(context.applicationContext) to
-                    request.resolveExternalAudioMediaStoreIds(context.applicationContext)
+            withContext(AppDispatchers.IO) {
+                request.resolveExternalAudioArtist(appContext) to
+                    request.resolveExternalAudioMediaStoreIds(appContext)
             }
         val mediaItem =
             request.toExternalAudioMediaItem(
@@ -668,11 +489,12 @@ private fun MusicAppShellContent(
             bottomNavigationHeight
         }
     val playbackBarOverlayHeight = if (playbackBarComposed) playbackBarHeight else 0.dp
-    val hideBottomChrome = currentDestination == MusicDestination.More && moreSettingsPageActive
+    val hideBottomChrome =
+        uiState.currentDestination == MusicDestination.More && uiState.moreSettingsPageActive
 
-    LaunchedEffect(currentDestination) {
-        if (currentDestination != MusicDestination.More) {
-            moreSettingsPageActive = false
+    LaunchedEffect(uiState.currentDestination) {
+        if (uiState.currentDestination != MusicDestination.More) {
+            uiState.moreSettingsPageActive = false
         }
     }
 
@@ -687,576 +509,149 @@ private fun MusicAppShellContent(
             WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + titleContentHeight
         val destinationSurface: @Composable (MusicDestination, Boolean) -> Unit =
             { destination, fromMore ->
-                Box(
-                    modifier =
-                        Modifier.fillMaxSize()
-                            .padding(
-                                bottom = if (hideBottomChrome) 0.dp else realTabContentBottomMargin
-                            )
-                ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        val titleBarContent:
-                            @Composable
-                            (String?, ArtistTarget?, Modifier) -> Unit =
-                            { albumDetailTitle, artistTarget, titleModifier ->
-                                MainTitleBar(
-                                    destination = destination,
-                                    songsEditMode =
-                                        destination == MusicDestination.Songs && songsEditMode,
-                                    selectedSongCount = selectedSongIds.size,
-                                    albumEditMode =
-                                        destination == MusicDestination.Album && albumEditMode,
-                                    selectedAlbumCount = selectedAlbumIds.size,
-                                    albumDetailTitle = albumDetailTitle,
-                                    albumViewMode = albumViewMode,
-                                    artistTarget = artistTarget,
-                                    artistAlbumViewMode = artistAlbumViewMode,
-                                    onEnterSongsEditMode = {
-                                        songsEditMode = true
-                                        selectedSongIds = emptySet()
-                                    },
-                                    onExitSongsEditMode = {
-                                        songsEditMode = false
-                                        selectedSongIds = emptySet()
-                                        showSongDeleteConfirm = false
-                                    },
-                                    onRequestDeleteSelected = {
-                                        if (selectedSongIds.isNotEmpty()) {
-                                            requestSongDeleteConfirmation(selectedSongIds)
-                                        }
-                                    },
-                                    onEnterAlbumEditMode = {
-                                        albumEditMode = true
-                                        selectedAlbumIds = emptySet()
-                                    },
-                                    onExitAlbumEditMode = {
-                                        albumEditMode = false
-                                        selectedAlbumIds = emptySet()
-                                    },
-                                    onToggleAlbumViewMode = {
-                                        val nextMode =
-                                            if (albumViewMode == AlbumViewMode.List) {
-                                                AlbumViewMode.Tile
-                                            } else {
-                                                AlbumViewMode.List
-                                            }
-                                        scope.launch {
-                                            libraryDisplaySettingsStore.setAlbumViewMode(nextMode)
-                                        }
-                                    },
-                                    onAlbumDetailBack = {
-                                        closeAlbumDetail()
-                                    },
-                                    onArtistBack = {
-                                        closeArtistDetail()
-                                    },
-                                    onToggleArtistAlbumViewMode = {
-                                        val nextMode =
-                                            if (artistAlbumViewMode == AlbumViewMode.List) {
-                                                AlbumViewMode.Tile
-                                            } else {
-                                                AlbumViewMode.List
-                                            }
-                                        scope.launch {
-                                            libraryDisplaySettingsStore.setArtistAlbumViewMode(
-                                                nextMode
-                                            )
-                                        }
-                                    },
-                                    onRootBack = ::returnToMore.takeIf { fromMore },
-                                    onSearchClick = ::openCurrentSearch,
-                                    modifier = titleModifier,
-                                )
+                MusicDestinationSurface(
+                    destination = destination,
+                    fromMore = fromMore,
+                    realTabContentBottomMargin = realTabContentBottomMargin,
+                    hideBottomChrome = hideBottomChrome,
+                    playbackBarOverlayHeight = playbackBarOverlayHeight,
+                    titleAreaHeight = titleAreaHeight,
+                    titleShadowHeight = titleShadowHeight,
+                    overflowDestinations = overflowDestinations,
+                    mediaItems = libraryItems,
+                    onlineLovedMediaItems = onlineLovedMediaItems,
+                    favoriteRecords = favoriteRecords,
+                    libraryLoaded = library.loaded,
+                    uiState = uiState,
+                    albumViewMode = albumViewMode,
+                    artistAlbumViewMode = artistAlbumViewMode,
+                    hiddenMediaIds = libraryExclusions.hiddenMediaIds,
+                    libraryRefreshVersion = libraryRefreshVersion,
+                    libraryRefreshing = libraryRefreshing,
+                    playbackSettings = playbackSettings,
+                    artistSettings = artistSettings,
+                    navigationSettings = navigationSettings,
+                    themeMode = themeMode,
+                    onToggleAlbumViewMode = {
+                        val nextMode =
+                            if (albumViewMode == AlbumViewMode.List) {
+                                AlbumViewMode.Tile
+                            } else {
+                                AlbumViewMode.List
                             }
-                        if (destination !in DestinationsWithOwnedTitleBar) {
-                            when (destination) {
-                                MusicDestination.Album ->
-                                    TitleBarTransition(
-                                        secondaryKey = selectedAlbumTitle,
-                                        modifier = Modifier.fillMaxWidth().height(titleAreaHeight),
-                                        label = "album title transition",
-                                        primaryContent = {
-                                            titleBarContent(null, null, Modifier.fillMaxSize())
-                                        },
-                                        secondaryContent = { detailTitle ->
-                                            titleBarContent(
-                                                detailTitle,
-                                                null,
-                                                Modifier.fillMaxSize(),
-                                            )
-                                        },
-                                    )
-                                MusicDestination.Artist ->
-                                    ArtistTitleStack(
-                                        selectedTarget = selectedArtistTarget,
-                                        modifier = Modifier.fillMaxWidth().height(titleAreaHeight),
-                                    ) { artistTarget, titleModifier ->
-                                        titleBarContent(null, artistTarget, titleModifier)
-                                    }
-                                else -> titleBarContent(null, null, Modifier.fillMaxWidth())
-                            }
+                        scope.launch { libraryDisplaySettingsStore.setAlbumViewMode(nextMode) }
+                    },
+                    onToggleArtistAlbumViewMode = toggleArtistAlbumViewMode,
+                    onRefreshLibrary = ::refreshLibrary,
+                    onRequestAddToQueue = ::enqueueMediaItems,
+                    onScratchEnabledChange =
+                        settingWriter(scope, playbackSettingsStore::setScratchEnabled),
+                    onHidePlayerAxisEnabledChange =
+                        settingWriter(scope, playbackSettingsStore::setHidePlayerAxisEnabled),
+                    onPopcornSoundEnabledChange =
+                        settingWriter(scope, playbackSettingsStore::setPopcornSoundEnabled),
+                    onAudioFxEnabledChange =
+                        settingWriter(scope, playbackSettingsStore::setAudioFxEnabled),
+                    onAudioFxPresetChange =
+                        settingWriter(scope, playbackSettingsStore::setAudioFxPreset),
+                    onAudioFxCustomGainDbPointsChange =
+                        settingWriter(
+                            scope,
+                            playbackSettingsStore::setAudioFxCustomGainDbPoints,
+                        ),
+                    onArtistSeparatorsChange = { separators ->
+                        scope.launch {
+                            artistSettingsStore.setSeparators(separators)
                         }
-                        MusicTabContent(
-                            destination = destination,
-                            presentedFromMore = fromMore,
-                            overflowDestinations = overflowDestinations,
-                            mediaItems = libraryItems,
-                            onlineLovedMediaItems = onlineLovedMediaItems,
-                            favoriteRecords = favoriteRecords,
-                            libraryLoaded = library.loaded,
-                            songsEditMode = destination == MusicDestination.Songs && songsEditMode,
-                            selectedSongIds = selectedSongIds,
-                            albumViewMode = albumViewMode,
-                            albumEditMode = destination == MusicDestination.Album && albumEditMode,
-                            selectedAlbumId = selectedAlbumId,
-                            selectedAlbumIds = selectedAlbumIds,
-                            artistAlbumViewMode = artistAlbumViewMode,
-                            selectedArtistTarget = selectedArtistTarget,
-                            playbackBarOverlayHeight =
-                                if (hideBottomChrome) 0.dp else playbackBarOverlayHeight,
-                            hiddenMediaIds = libraryExclusions.hiddenMediaIds,
-                            libraryRefreshVersion = libraryRefreshVersion,
-                            libraryRefreshing = libraryRefreshing,
-                            playbackSettings = playbackSettings,
-                            artistSettings = artistSettings,
-                            onRefreshLibrary = ::refreshLibrary,
-                            onRequestAddToPlaylist = ::requestAddToPlaylist,
-                            onRequestAddToQueue = ::enqueueMediaItems,
-                            onScratchEnabledChange = { enabled ->
-                                scope.launch {
-                                    playbackSettingsStore.setScratchEnabled(enabled)
-                                }
-                            },
-                            onHidePlayerAxisEnabledChange = { enabled ->
-                                scope.launch {
-                                    playbackSettingsStore.setHidePlayerAxisEnabled(enabled)
-                                }
-                            },
-                            onPopcornSoundEnabledChange = { enabled ->
-                                scope.launch {
-                                    playbackSettingsStore.setPopcornSoundEnabled(enabled)
-                                }
-                            },
-                            onAudioFxEnabledChange = { enabled ->
-                                scope.launch {
-                                    playbackSettingsStore.setAudioFxEnabled(enabled)
-                                }
-                            },
-                            onAudioFxPresetChange = { preset ->
-                                scope.launch {
-                                    playbackSettingsStore.setAudioFxPreset(preset)
-                                }
-                            },
-                            onAudioFxCustomGainDbPointsChange = { gains ->
-                                scope.launch {
-                                    playbackSettingsStore.setAudioFxCustomGainDbPoints(gains)
-                                }
-                            },
-                            onArtistSeparatorsChange = { separators ->
-                                scope.launch {
-                                    artistSettingsStore.setSeparators(separators)
-                                }
-                                selectedArtistTarget = null
-                                searchDrilldownTarget = null
-                            },
-                            navigationSettings = navigationSettings,
-                            themeMode = themeMode,
-                            onTabPinnedChange = { route, pinned ->
-                                scope.launch {
-                                    navigationSettingsStore.setTabPinned(route, pinned)
-                                }
-                            },
-                            onThemeModeChange = onThemeModeChange,
-                            onOverflowDestinationSelected = { destination ->
-                                presentedFromMore = true
-                                currentDestination = destination
-                            },
-                            onReturnToMore = ::returnToMore,
-                            onMediaIdsHidden = ::reclaimHiddenMediaIds,
-                            onRequestDeleteMediaIds = ::requestSystemDeleteMediaIds,
-                            onRequestSongDeleteConfirmation = { mediaIds, onDismiss ->
-                                requestSongDeleteConfirmation(mediaIds, onDismiss)
-                            },
-                            onLibraryTrackMoreClick = { item ->
-                                showTrackActions(item, TrackActionSource.Library)
-                            },
-                            onLovedSongsTrackMoreClick = { item ->
-                                showTrackActions(item, TrackActionSource.Loved)
-                            },
-                            onPlaylistTrackMoreClick = { item ->
-                                showTrackActions(item, TrackActionSource.Playlist)
-                            },
-                            onRemoveFavoriteMediaIds = ::removeFavoriteMediaIds,
-                            onMoreSettingsPageActiveChanged = { active ->
-                                moreSettingsPageActive = active
-                            },
-                            onSongSelectionChange = { mediaId, selected ->
-                                selectedSongIds = selectedSongIds.withSelection(mediaId, selected)
-                            },
-                            onAlbumSelectionChange = { albumId, selected ->
-                                selectedAlbumIds = selectedAlbumIds.withSelection(albumId, selected)
-                            },
-                            onAlbumSelected = { albumId, albumTitle ->
-                                albumEditMode = false
-                                selectedAlbumIds = emptySet()
-                                selectedAlbumId = albumId
-                                selectedAlbumTitle = albumTitle
-                            },
-                            onArtistTargetChanged = { target ->
-                                selectedArtistTarget = target
-                            },
-                            onPlaylistAddModeActiveChanged = { active ->
-                                playlistAddModeActive = active
-                            },
-                            onSearchClick = ::openCurrentSearch,
-                            modifier = Modifier.fillMaxWidth().weight(1f),
-                        )
-                    }
-                    if (
-                        destination == MusicDestination.Artist ||
-                            destination == MusicDestination.Album
-                    ) {
-                        TitleBarShadow(
-                            modifier =
-                                Modifier.align(Alignment.TopCenter)
-                                    .offset(y = titleAreaHeight)
-                                    .fillMaxWidth()
-                                    .height(titleShadowHeight)
-                                    .zIndex(1f)
-                        )
-                    }
-                }
+                        uiState.clearArtistAndSearchDetail()
+                    },
+                    onTabPinnedChange = { route, pinned ->
+                        scope.launch {
+                            navigationSettingsStore.setTabPinned(route, pinned)
+                        }
+                    },
+                    onThemeModeChange = onThemeModeChange,
+                    onMediaIdsHidden = ::reclaimHiddenMediaIds,
+                    onRequestDeleteMediaIds = ::requestSystemDeleteMediaIds,
+                    onRemoveFavoriteMediaIds = ::removeFavoriteMediaIds,
+                )
             }
         PageStackTransition(
-            secondaryKey = currentDestination.takeIf { presentedFromMore },
+            secondaryKey = uiState.currentDestination.takeIf { uiState.presentedFromMore },
             modifier = Modifier.fillMaxSize(),
             label = "more destination stack",
-            projectTitles = !playlistAddModeActive,
-            titleProjectionEnabled = !moreSettingsPageActive,
+            projectTitles = !uiState.playlistAddModeActive,
+            titleProjectionEnabled = !uiState.moreSettingsPageActive,
             primaryContent = {
-                destinationSurface(
-                    if (presentedFromMore) MusicDestination.More else currentDestination,
-                    false,
-                )
+                destinationSurface(uiState.stackDestination, false)
             },
             secondaryContent = { destination ->
                 destinationSurface(destination, true)
             },
         )
-        Column(
-            modifier =
-                Modifier.fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .retainedChromeVisibility(!hideBottomChrome)
-        ) {
-            if (playbackBarComposed) {
-                PlaybackBar(
-                    snapshot = playbackBarContentSnapshot,
-                    shown = playbackBarRequestedVisible,
-                    favoriteIds = favoriteIds,
-                    artworkBitmap = artworkBitmap,
-                    onHidden = {
-                        if (!playbackBarRequestedVisible) {
-                            playbackBarComposed = false
-                        }
-                    },
-                    onOpenPlayback = {
-                        playbackVisible = true
-                    },
-                    onToggleFavorite = { mediaItem ->
-                        toggleFavorite(mediaItem)
-                    },
-                    onPrevious = {
-                        controller?.seekToPrevious()
-                    },
-                    onPlayPause = {
-                        if (snapshot.isPlaybackActive) {
-                            controller?.pause()
-                        } else {
-                            controller?.play()
-                        }
-                    },
-                    onNext = {
-                        controller?.seekToNext()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(playbackBarHeight),
-                    bottomDividerVisible = true,
-                )
-            }
-            MusicBottomBar(
-                currentDestination =
-                    when {
-                        playlistAddModeActive -> MusicDestination.Songs
-                        presentedFromMore -> MusicDestination.More
-                        else -> currentDestination
-                    },
-                destinations = bottomDestinations,
-                onDestinationSelected = { destination ->
-                    presentedFromMore = false
-                    currentDestination = destination
-                },
-                onEditRequested = {
-                    if (!playlistAddModeActive) {
-                        navigationEditorVisible = true
-                    }
-                },
-                topChromeVisible = !playbackBarComposed,
-            )
-        }
-        val trackActionItems =
-            pendingTrackActionItem
-                ?.let { actionItem ->
-                    val mediaId = actionItem.mediaId
-                    val isFavorite = mediaId in favoriteIds
-                    val canAddToPlaylist =
-                        mediaId.isNotBlank() && !actionItem.isExternalAudioLaunchItem()
-                    val canFavorite =
-                        mediaId.isNotBlank() && !actionItem.isExternalAudioLaunchItem()
-                    val actions =
-                        mutableListOf(
-                            TrackActionItem(
-                                labelRes = R.string.add_to_playlist,
-                                iconRes = R.drawable.more_select_icon_addlist,
-                                pressedIconRes = R.drawable.more_select_icon_addlist_down,
-                                enabled = canAddToPlaylist,
-                                onClick = {
-                                    dismissTrackActions()
-                                    requestAddToPlaylist(listOf(actionItem))
-                                },
-                            ),
-                            TrackActionItem(
-                                labelRes = R.string.add_to_queue,
-                                iconRes = R.drawable.more_select_icon_addplay,
-                                pressedIconRes = R.drawable.more_select_icon_addplay_down,
-                                onClick = {
-                                    dismissTrackActions()
-                                    enqueueMediaItems(listOf(actionItem))
-                                },
-                            ),
-                            TrackActionItem(
-                                labelRes = if (isFavorite) R.string.cancel_love else R.string.love,
-                                iconRes =
-                                    if (isFavorite) {
-                                        R.drawable.more_select_icon_favorite_cancel
-                                    } else {
-                                        R.drawable.more_select_icon_favorite_add
-                                    },
-                                pressedIconRes =
-                                    if (isFavorite) {
-                                        R.drawable.more_select_icon_favorite_cancel_down
-                                    } else {
-                                        R.drawable.more_select_icon_favorite_add_down
-                                    },
-                                enabled = canFavorite,
-                                selected = isFavorite,
-                                onClick = {
-                                    dismissTrackActions()
-                                    if (canFavorite) {
-                                        toggleFavorite(actionItem)
-                                    }
-                                },
-                            ),
-                        )
-                    if (pendingTrackActionSource == TrackActionSource.Library) {
-                        actions +=
-                            TrackActionItem(
-                                labelRes = R.string.delete,
-                                iconRes = R.drawable.more_select_icon_delete,
-                                onClick = {
-                                    dismissTrackActions()
-                                    requestSongDeleteConfirmation(setOf(mediaId))
-                                },
-                            )
-                    }
-                    actions
+        MusicBottomChrome(
+            uiState = uiState,
+            playbackBar = playbackBar,
+            favoriteIds = favoriteIds,
+            artworkBitmap = artworkBitmap,
+            playbackBarHeight = playbackBarHeight,
+            destinations = bottomDestinations,
+            hideBottomChrome = hideBottomChrome,
+            onToggleFavorite = ::toggleFavorite,
+            onPrevious = {
+                controller?.seekToPrevious()
+            },
+            onPlayPause = {
+                if (playbackBar.snapshot.isPlaybackActive) {
+                    controller?.pause()
+                } else {
+                    controller?.play()
                 }
-                .orEmpty()
-        TrackActionsOverlay(
-            visible = pendingTrackActionItem != null,
-            actions = trackActionItems,
-            onDismissRequest = ::dismissTrackActions,
+            },
+            onNext = {
+                controller?.seekToNext()
+            },
+        )
+        ShellTrackActionsOverlay(
+            uiState = uiState,
+            favoriteIds = favoriteIds,
+            onAddToQueue = ::enqueueMediaItems,
+            onToggleFavorite = ::toggleFavorite,
+            onRequestDelete = uiState::requestSongDeleteConfirmation,
             modifier = Modifier.fillMaxSize().zIndex(2.4f),
         )
-        PlaybackOverlay(
-            visible = playbackVisible,
+        ShellOverlayLayer(
+            uiState = uiState,
+            scope = scope,
+            playlistRepository = playlistRepository,
             playbackSettings = playbackSettings,
-            ratingOverrides = ratingOverrides,
-            onRequestAddToPlaylist = ::requestAddToPlaylist,
-            onRequestAddToQueue = ::enqueueMediaItems,
-            onScratchEnabledChange = { enabled ->
-                scope.launch {
-                    playbackSettingsStore.setScratchEnabled(enabled)
-                }
-            },
-            onTrackRatingChanged = { mediaId, score ->
-                ratingOverrides = ratingOverrides + (mediaId to score.coerceIn(0, 5))
-            },
-            onFavoriteToggle = ::toggleFavorite,
-            onCollapse = {
-                playbackVisible = false
-            },
-            modifier = Modifier.zIndex(3f),
-        )
-        SearchOverlay(
-            visible = searchVisible,
-            query = searchQuery,
-            mediaItems = libraryItems,
+            searchMediaItems = libraryItems,
             hiddenMediaIds = libraryExclusions.hiddenMediaIds,
-            drilldownTarget = searchDrilldownTarget,
             libraryRefreshVersion = libraryRefreshVersion,
             artistAlbumViewMode = artistAlbumViewMode,
             artistSettings = artistSettings,
-            onQueryChange = { value ->
-                searchQuery = value
-            },
-            onDismiss = closeSearchOverlay,
-            onOpenPlayback = {
-                playbackVisible = true
-            },
-            onRequestAddToPlaylist = ::requestAddToPlaylist,
-            onRequestAddToQueue = ::enqueueMediaItems,
-            onTrackMoreClick = { item ->
-                showTrackActions(item, TrackActionSource.Library)
-            },
-            onDrilldownTargetChanged = { target ->
-                searchDrilldownTarget = target
-            },
-            onAlbumClick = { albumId, albumTitle ->
-                searchDrilldownTarget =
-                    SearchDrilldownTarget.Album(
-                        albumId = albumId,
-                        albumTitle = albumTitle,
-                    )
-            },
-            onArtistClick = { artistId, artistName ->
-                searchDrilldownTarget =
-                    SearchDrilldownTarget.Artist(
-                        target =
-                            ArtistTarget.Albums(
-                                artistId = artistId,
-                                artistName = artistName,
-                            )
-                    )
-            },
-            onToggleArtistAlbumViewMode = {
-                val nextMode =
-                    if (artistAlbumViewMode == AlbumViewMode.List) {
-                        AlbumViewMode.Tile
-                    } else {
-                        AlbumViewMode.List
-                    }
-                scope.launch {
-                    libraryDisplaySettingsStore.setArtistAlbumViewMode(nextMode)
-                }
-            },
-            modifier = Modifier.fillMaxSize().zIndex(2f),
-        )
-        PlaybackPlaylistPickerOverlay(
-            visible =
-                pendingPlaylistPickerMediaItems != null && playbackPlaylistCreateRequest == null,
             playlists = playlists,
-            onDismiss = {
-                pendingPlaylistPickerMediaItems = null
-            },
-            onCreateNewPlaylist = {
-                scope.launch {
-                    playbackPlaylistCreateRequest =
-                        PlaylistNameDialogRequest.Create(
-                            initialName = playlistRepository.suggestNextUntitledName()
-                        )
-                }
-            },
-            onPlaylistSelected = { playlistId ->
-                val mediaIds = pendingPlaylistPickerMediaItems?.map(MediaItem::mediaId).orEmpty()
-                scope.launch {
-                    val result = playlistRepository.addMediaIds(playlistId, mediaIds)
-                    when {
-                        result.addedCount > 0 -> {
-                            Toast.makeText(context, R.string.playlist_added, Toast.LENGTH_SHORT)
-                                .show()
-                        }
-                        result.duplicateCount > 0 -> {
-                            Toast.makeText(
-                                    context,
-                                    R.string.playlist_song_exists,
-                                    Toast.LENGTH_SHORT,
-                                )
-                                .show()
-                        }
-                    }
-                    pendingPlaylistPickerMediaItems = null
-                }
-            },
-            modifier = Modifier.fillMaxSize().zIndex(4f),
+            onRequestAddToQueue = ::enqueueMediaItems,
+            onScratchEnabledChange =
+                settingWriter(scope, playbackSettingsStore::setScratchEnabled),
+            onFavoriteToggle = ::toggleFavorite,
+            onLibraryTrackMoreClick = showLibraryTrackActions,
+            onToggleArtistAlbumViewMode = toggleArtistAlbumViewMode,
         )
-        PlaylistNameDialogOverlay(
-            request = playbackPlaylistCreateRequest,
-            onDismiss = {
-                playbackPlaylistCreateRequest = null
-            },
-            onConfirm = { _, input ->
-                val mediaIds = pendingPlaylistPickerMediaItems?.map(MediaItem::mediaId).orEmpty()
-                scope.launch {
-                    when (playlistRepository.createPlaylist(input, mediaIds)) {
-                        PlaylistCreateResult.EmptyName -> {
-                            Toast.makeText(
-                                    context,
-                                    R.string.playlist_create_failed,
-                                    Toast.LENGTH_SHORT,
-                                )
-                                .show()
-                        }
-                        PlaylistCreateResult.DuplicateName -> {
-                            Toast.makeText(
-                                    context,
-                                    R.string.playlist_duplicate_name,
-                                    Toast.LENGTH_SHORT,
-                                )
-                                .show()
-                        }
-                        is PlaylistCreateResult.Success -> {
-                            playbackPlaylistCreateRequest = null
-                            pendingPlaylistPickerMediaItems = null
-                            Toast.makeText(context, R.string.playlist_added, Toast.LENGTH_SHORT)
-                                .show()
-                        }
-                    }
-                }
-            },
-        )
-        if (showSongDeleteConfirm) {
+        if (uiState.showSongDeleteConfirm) {
             SongDeleteConfirmOverlay(
-                onDismiss = {
-                    dismissSongDeleteConfirmation()
-                },
-                onConfirm = {
-                    val mediaIds = pendingSongDeleteMediaIds
-                    val dismissAction = pendingSongDeleteDismissAction
-                    if (mediaIds.isEmpty()) {
-                        dismissSongDeleteConfirmation()
-                        return@SongDeleteConfirmOverlay
-                    }
-                    showSongDeleteConfirm = false
-                    pendingSongDeleteMediaIds = emptySet()
-                    pendingSongDeleteDismissAction = null
-                    songsEditMode = false
-                    selectedSongIds = emptySet()
-                    requestSystemDeleteMediaIds(mediaIds)
-                    dismissAction?.invoke()
-                },
+                onDismiss = uiState::dismissSongDeleteConfirmation,
+                onConfirm = { uiState.confirmSongDelete(::requestSystemDeleteMediaIds) },
                 modifier = Modifier.fillMaxSize().zIndex(2f),
             )
         }
         NavigationEditorOverlay(
-            visible = navigationEditorVisible,
+            visible = uiState.navigationEditorVisible,
             layout = navigationLayout,
-            selectedDestination =
-                if (presentedFromMore) MusicDestination.More else currentDestination,
-            onDismissRequest = {
-                navigationEditorVisible = false
-            },
+            selectedDestination = uiState.stackDestination,
+            onDismissRequest = uiState::hideNavigationEditor,
             onCommit = { layout ->
-                navigationEditorVisible = false
+                uiState.hideNavigationEditor()
                 scope.launch {
                     navigationSettingsStore.commitLayout(layout)
                 }
@@ -1266,23 +661,23 @@ private fun MusicAppShellContent(
     }
 }
 
-private val DestinationsWithOwnedTitleBar =
-    setOf(
-        MusicDestination.Playlist,
-        MusicDestination.More,
-        MusicDestination.Genre,
-        MusicDestination.LovedSongs,
-        MusicDestination.Folder,
-    )
-
 private fun List<MediaItem>.withRatingOverrides(
-    ratingOverrides: Map<String, Int>
+    overrides: Map<String, Int>
 ): List<MediaItem> {
-    if (isEmpty() || ratingOverrides.isEmpty()) {
+    if (isEmpty() || overrides.isEmpty()) {
         return this
     }
     return map { item ->
-        val score = ratingOverrides[item.mediaId] ?: return@map item
+        val score = overrides[item.mediaId] ?: return@map item
         item.withPlaybackRating(score)
     }
 }
+
+/**
+ * 设置写回的统一形态：仍在调用方的 [CoroutineScope] 里 launch，
+ * 与逐个手写 `scope.launch { store.setX(value) }` 等价，只是少掉重复。
+ */
+private fun <V> settingWriter(
+    scope: CoroutineScope,
+    write: suspend (V) -> Unit,
+): (V) -> Unit = { value -> scope.launch { write(value) } }
