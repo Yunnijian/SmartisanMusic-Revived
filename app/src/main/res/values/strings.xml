@@ -42,6 +42,9 @@
     <string name="s_edit_track_list">编辑列表</string>
     <string name="no_song">暂无歌曲</string>
     <string name="show_song">本地歌曲将显示在这里</string>
+    <string name="audio_permission_required_title">未开启音频读取权限</string>
+    <string name="audio_permission_required_subtitle">授权后本地歌曲将显示在这里</string>
+    <string name="audio_permission_open_settings">去系统设置开启</string>
     <string name="no_saved_song">暂无收藏的歌曲</string>
     <string name="no_folder">暂无文件夹</string>
     <string name="show_folder">本地歌曲所在的文件夹将显示在这里</string>

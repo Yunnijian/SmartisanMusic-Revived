@@ -30,6 +30,8 @@ import com.smartisan.music.R
 import com.smartisan.music.playback.LocalPlaybackBrowser
 import com.smartisan.music.playback.replaceQueueAndPlay
 import com.smartisan.music.playback.replaceQueueAndPlayShuffled
+import com.smartisan.music.ui.components.SmartisanEmptyHint
+import com.smartisan.music.ui.components.rememberAudioPermissionState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanCheckboxHit
 import com.smartisan.music.ui.components.smartisanPainterBackground
@@ -56,6 +58,7 @@ internal fun SongsPage(
     playbackBarOverlayHeight: Dp = 0.dp,
 ) {
     val browser = LocalPlaybackBrowser.current
+    val audioPermission = rememberAudioPermissionState()
     val playback = rememberSongPlaybackState()
     var selectedSortIndex by remember { mutableIntStateOf(0) }
     val sortedSongs =
@@ -252,11 +255,21 @@ internal fun SongsPage(
                 }
             }
         } else if (libraryLoaded) {
-            com.smartisan.music.ui.components.SmartisanEmptyHint(
-                R.drawable.blank_song,
-                stringResource(R.string.no_song),
-                subtitle = stringResource(R.string.show_song),
-            )
+            if (!audioPermission.granted) {
+                SmartisanEmptyHint(
+                    R.drawable.blank_song,
+                    stringResource(R.string.audio_permission_required_title),
+                    subtitle = stringResource(R.string.audio_permission_required_subtitle),
+                    actionLabel = stringResource(R.string.audio_permission_open_settings),
+                    onAction = audioPermission.openPermissionSettings,
+                )
+            } else {
+                SmartisanEmptyHint(
+                    R.drawable.blank_song,
+                    stringResource(R.string.no_song),
+                    subtitle = stringResource(R.string.show_song),
+                )
+            }
         }
     }
 }

@@ -43,6 +43,9 @@
     <string name="s_edit_track_list">Edit list</string>
     <string name="no_song">No songs</string>
     <string name="show_song">Local songs appear here</string>
+    <string name="audio_permission_required_title">Audio access isn\'t allowed</string>
+    <string name="audio_permission_required_subtitle">Local songs appear here after you allow access</string>
+    <string name="audio_permission_open_settings">Open system settings</string>
     <string name="no_saved_song">No liked songs</string>
     <string name="no_folder">No folders</string>
     <string name="show_folder">Folders containing local songs appear here</string>

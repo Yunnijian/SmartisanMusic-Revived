@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.smartisan.music.AppDispatchers
 import com.smartisan.music.R
 import com.smartisan.music.data.library.LibraryExclusions
 import com.smartisan.music.data.library.LibraryExclusionsStore
@@ -71,7 +72,6 @@ import com.smartisan.music.ui.songs.SmartisanSongRow
 import com.smartisan.music.ui.songs.rememberSongPlaybackState
 import java.text.Normalizer
 import java.util.Locale
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -109,10 +109,8 @@ internal fun FolderPage(
         }
     val directoryTitle = stringResource(R.string.tab_directory)
     val exclusions by exclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
-    val hasPermission =
-        remember(context) {
-            hasAudioPermission(context)
-        }
+    val audioPermission = rememberAudioPermissionState()
+    val hasPermission = audioPermission.granted
     var mediaItems by remember(audioLibrary) { mutableStateOf(emptyList<MediaItem>()) }
     var target by remember { mutableStateOf<FolderTarget?>(null) }
     var editMode by remember { mutableStateOf(false) }
@@ -125,7 +123,7 @@ internal fun FolderPage(
             return@LaunchedEffect
         }
         mediaItems =
-            withContext(Dispatchers.IO) {
+            withContext(AppDispatchers.IO) {
                 audioLibrary.getAudioItems(forceRefresh = libraryRefreshVersion > 0)
             }
     }
@@ -222,6 +220,8 @@ internal fun FolderPage(
                         FolderRootPage(
                             active = active,
                             directories = allDirectories,
+                            audioPermissionGranted = hasPermission,
+                            onOpenPermissionSettings = audioPermission.openPermissionSettings,
                             editMode = editMode,
                             selectedDirectoryKeys = selectedDirectoryKeys,
                             onDirectoryClick = { entry ->
@@ -429,6 +429,8 @@ private fun FolderTitleBar(
 private fun FolderRootPage(
     active: Boolean,
     directories: List<DirectoryEntry>,
+    audioPermissionGranted: Boolean,
+    onOpenPermissionSettings: () -> Unit,
     editMode: Boolean,
     selectedDirectoryKeys: Set<String>,
     onDirectoryClick: (DirectoryEntry) -> Unit,
@@ -447,11 +449,21 @@ private fun FolderRootPage(
     Box(modifier.fillMaxSize().libraryTexture()) {
         if (!active) return@Box
         if (visibleCount == 0) {
-            LibraryBlank(
-                R.drawable.blank_folder,
-                stringResource(R.string.no_folder),
-                stringResource(R.string.show_folder),
-            )
+            if (!audioPermissionGranted) {
+                SmartisanEmptyHint(
+                    R.drawable.blank_folder,
+                    stringResource(R.string.audio_permission_required_title),
+                    subtitle = stringResource(R.string.audio_permission_required_subtitle),
+                    actionLabel = stringResource(R.string.audio_permission_open_settings),
+                    onAction = onOpenPermissionSettings,
+                )
+            } else {
+                LibraryBlank(
+                    R.drawable.blank_folder,
+                    stringResource(R.string.no_folder),
+                    stringResource(R.string.show_folder),
+                )
+            }
         } else {
             LazyColumn(
                 state = list,

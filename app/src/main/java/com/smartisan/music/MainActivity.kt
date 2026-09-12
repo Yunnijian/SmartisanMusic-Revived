@@ -1,9 +1,7 @@
 package com.smartisan.music
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
@@ -22,11 +20,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.smartisan.music.data.settings.ThemeSettingsStore
 import com.smartisan.music.ui.artwork.AlbumArtworkBrowserHost
+import com.smartisan.music.ui.components.audioPermission
+import com.smartisan.music.ui.components.hasAudioPermission
 import com.smartisan.music.ui.shell.MusicAppShell
 import com.smartisan.music.ui.theme.MusicTheme
 import kotlinx.coroutines.delay
@@ -56,7 +55,7 @@ class MainActivity : AppCompatActivity() {
             window.isNavigationBarContrastEnforced = false
         }
         setContent {
-            MusicTheme(dynamicColor = false) {
+            MusicTheme {
                 RequestAudioPermissionOnLaunch()
                 AlbumArtworkBrowserHost {
                     MusicAppShell(
@@ -191,20 +190,14 @@ class MainActivity : AppCompatActivity() {
 @Composable
 private fun RequestAudioPermissionOnLaunch() {
     val context = LocalContext.current
-    val permission =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_AUDIO
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
+    val permission = audioPermission()
+    // 结果回调不在这里同步任何状态：被拒绝后由资料库空状态按 checkSelfPermission 展示引导入口，
+    // 用户从系统弹窗或系统详情页授权返回后，由 rememberAudioPermissionState 统一触发资料库刷新。
     val permissionLauncher =
         rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) {}
 
     LaunchedEffect(permission) {
-        if (
-            ContextCompat.checkSelfPermission(context, permission) !=
-                PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!hasAudioPermission(context)) {
             permissionLauncher.launch(permission)
         }
     }
