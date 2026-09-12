@@ -6,8 +6,8 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
 import androidx.media3.common.MediaItem
+import com.smartisan.music.AppDispatchers
 import com.smartisan.music.platform.media.audioMediaCollectionUri
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class GenreTagRepository(
@@ -31,7 +31,7 @@ class GenreTagRepository(
     )
 
     suspend fun loadGenres(mediaItems: List<MediaItem>): Map<String, String?> =
-        withContext(Dispatchers.IO) {
+        withContext(AppDispatchers.IO) {
             val mediaStoreVersion = mediaStoreVersionProvider()
             ensureCacheVersion(mediaStoreVersion)
             primeCacheFromMediaStore(mediaStoreVersion)

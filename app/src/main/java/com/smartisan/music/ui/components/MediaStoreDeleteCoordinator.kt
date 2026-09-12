@@ -23,7 +23,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.Dispatchers
+import com.smartisan.music.AppDispatchers
 import kotlinx.coroutines.withContext
 
 internal data class MediaStoreDeleteItem(
@@ -93,7 +93,7 @@ internal fun rememberMediaStoreDeleteCoordinator(
 
     LaunchedEffect(retryToken) {
         val request = pendingRequest ?: return@LaunchedEffect
-        when (val step = withContext(Dispatchers.IO) { context.nextDeleteStep(request) }) {
+        when (val step = withContext(AppDispatchers.IO) { context.nextDeleteStep(request) }) {
             is DeleteStep.Completed -> {
                 pendingRequest = null
                 confirmationMode = null

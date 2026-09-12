@@ -8,6 +8,7 @@ import android.net.Uri
 import android.util.LruCache
 import android.util.Size
 import androidx.media3.common.MediaItem
+import com.smartisan.music.AppDispatchers
 import com.smartisan.music.playback.LocalAudioLibrary
 import com.smartisan.music.playback.loadArtworkUriBitmap
 import com.smartisan.music.ui.album.AlbumSummary
@@ -54,7 +55,7 @@ internal class AlbumArtworkLoader(context: Context) {
                 bitmapRequests.getOrPut(request.jobKey) {
                     ensureScope()
                         .async(start = CoroutineStart.LAZY) {
-                            val bitmap = withContext(Dispatchers.IO) { loadBitmap(request) }
+                            val bitmap = withContext(AppDispatchers.IO) { loadBitmap(request) }
                             if (bitmap != null) {
                                 bitmap.prepareToDraw()
                                 val cached = cache.get(request.cacheKey)
