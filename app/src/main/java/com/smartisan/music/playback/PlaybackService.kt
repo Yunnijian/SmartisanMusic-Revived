@@ -34,10 +34,13 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.ListeningExecutorService
 import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.SettableFuture
+import com.smartisan.music.AppDispatchers
 import com.smartisan.music.MainActivity
 import com.smartisan.music.data.library.LibraryExclusions
 import com.smartisan.music.data.library.LibraryExclusionsStore
 import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
+import com.smartisan.music.data.online.OnlinePlaybackFailureReason
+import com.smartisan.music.data.online.OnlinePlaybackResolutionException
 import com.smartisan.music.data.online.OnlineTrackIdentity
 import com.smartisan.music.data.online.isOnlineMediaItem
 import com.smartisan.music.data.online.isNeteasePreviewDuration
@@ -61,6 +64,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
@@ -269,7 +273,7 @@ class PlaybackService : MediaLibraryService() {
             coordinator.start()
         }
 
-        serviceScope.launch(Dispatchers.IO) {
+        serviceScope.launch(AppDispatchers.IO) {
             libraryExclusionsStore.exclusions.collect { exclusions ->
                 exclusionsSnapshot = exclusions
                 if (!exclusionsReady.isCompleted) {
@@ -300,17 +304,16 @@ class PlaybackService : MediaLibraryService() {
         if (!exclusionsReady.isCompleted) {
             exclusionsReady.complete(exclusionsSnapshot)
         }
+        // 收尾落盘故意保持同步且不加超时：onDestroy 返回后进程随时可能被杀，异步写会丢队列快照与播放计数；
+        // 而任何超时都可能在写请求真正提交进 DataStore 之前取消协程，把「必落盘」变成静默丢失。
+        // 主线程在这几毫秒到几十毫秒的阻塞上换来的是杀进程后播放位置不丢。
         playbackSessionStateCoordinator?.let { coordinator ->
-            runBlocking {
-                coordinator.saveNow()
-            }
+            runBlocking { coordinator.saveNow() }
             coordinator.stop()
         }
         playbackSessionStateCoordinator = null
         playbackPlayCountTracker?.let { tracker ->
-            runBlocking {
-                tracker.stopAndFlush()
-            }
+            runBlocking { tracker.stopAndFlush() }
         }
         playbackPlayCountTracker = null
         pendingStatsLibraryRefreshJob?.cancel()
@@ -382,15 +385,24 @@ class PlaybackService : MediaLibraryService() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
+    /**
+     * 首帧 DataStore 读数完成前会占住调用线程（libraryExecutor / libraryRefreshExecutor 各为单线程）。
+     * 无死锁依据：[exclusionsReady] 由 exclusions 收集协程（IO 线程）在切主线程**之前**完成，
+     * 其完成链不经过任何播放层 executor，也不反向等待 executor 的 Future；
+     * onDestroy 另有 `complete(exclusionsSnapshot)` 兜底，读数缺失时最坏只等到首帧到达。
+     */
+    private fun awaitExclusionsSnapshot(): LibraryExclusions {
+        if (exclusionsReady.isCompleted) {
+            return exclusionsSnapshot
+        }
+        return runBlocking { exclusionsReady.await() }
+    }
+
     private fun getAudioItems(forceRefresh: Boolean = false): List<MediaItem> {
         if (!hasAudioPermission()) {
             return emptyList()
         }
-        val exclusions = if (exclusionsReady.isCompleted) {
-            exclusionsSnapshot
-        } else {
-            runBlocking { exclusionsReady.await() }
-        }
+        val exclusions = awaitExclusionsSnapshot()
         return localAudioLibrary.getAudioItems(forceRefresh = forceRefresh)
             .asSequence()
             .filter { item ->
@@ -405,11 +417,7 @@ class PlaybackService : MediaLibraryService() {
         if (!hasAudioPermission() || mediaIds.isEmpty()) {
             return emptyList()
         }
-        val exclusions = if (exclusionsReady.isCompleted) {
-            exclusionsSnapshot
-        } else {
-            runBlocking { exclusionsReady.await() }
-        }
+        val exclusions = awaitExclusionsSnapshot()
         return localAudioLibrary.getAudioItemsByIds(mediaIds)
             .asSequence()
             .filter { item ->
@@ -418,6 +426,41 @@ class PlaybackService : MediaLibraryService() {
                 !exclusions.isMediaHidden(item.mediaId, relativePath)
             }
             .toList()
+    }
+
+    /**
+     * 在线歌曲详情异步取：一次网络调用不该占用 libraryExecutor，也不新建线程池。
+     * 结果映射与原先在 executor 任务里返回的一致（缺失 = ERROR_BAD_VALUE，异常 = Future 失败）。
+     */
+    private fun getOnlineLibraryItemFuture(
+        identity: OnlineTrackIdentity,
+    ): ListenableFuture<LibraryResult<MediaItem>> {
+        val resultFuture = SettableFuture.create<LibraryResult<MediaItem>>()
+        val fetchJob = serviceScope.launch {
+            try {
+                val item = withContext(AppDispatchers.IO) {
+                    onlineMusicRepository.getMediaItem(identity)
+                }
+                resultFuture.set(
+                    if (item == null) {
+                        LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                    } else {
+                        LibraryResult.ofItem(item, null)
+                    },
+                )
+            } catch (error: CancellationException) {
+                resultFuture.cancel(false)
+            } catch (error: Exception) {
+                resultFuture.setException(error)
+            }
+        }
+        // serviceScope 已取消时协程体根本不会执行，兜底完成，避免浏览端的 getItem 永久悬挂。
+        fetchJob.invokeOnCompletion {
+            if (!resultFuture.isDone) {
+                resultFuture.cancel(false)
+            }
+        }
+        return resultFuture
     }
 
     private fun resolveSessionPlaybackMediaItems(mediaItems: List<MediaItem>): MutableList<MediaItem> {
@@ -491,7 +534,7 @@ class PlaybackService : MediaLibraryService() {
         lateinit var startJob: Job
         startJob = serviceScope.launch {
             val result = try {
-                val resolvedItems = withContext(Dispatchers.IO) {
+                val resolvedItems = withContext(AppDispatchers.IO) {
                     resolveSessionPlaybackMediaItemsForPlaybackStart(
                         mediaItems = mediaItems,
                         startIndex = safeStartIndex,
@@ -924,23 +967,19 @@ class PlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             mediaId: String,
         ): ListenableFuture<LibraryResult<MediaItem>> {
+            // 在线条目不依赖本地媒体库权限，直接经 Router 拉取。
+            // 它是一次网络调用，不能进 libraryExecutor：该 executor 只有一条线程，
+            // 同步取详情会把排在后面的 onGetChildren/onAddMediaItems 全部堵住。
+            mediaId.onlineTrackIdentityOrNull()?.let { identity ->
+                return getOnlineLibraryItemFuture(identity)
+            }
             return libraryExecutor.submit<LibraryResult<MediaItem>> {
-                // 在线条目不依赖本地媒体库权限，直接经 Router 拉取。
-                if (
-                    !hasAudioPermission() &&
-                    mediaId != LocalAudioLibrary.ROOT_ID &&
-                    mediaId.onlineTrackIdentityOrNull() == null
-                ) {
+                if (!hasAudioPermission() && mediaId != LocalAudioLibrary.ROOT_ID) {
                     return@submit LibraryResult.ofError(SessionError.ERROR_PERMISSION_DENIED)
                 }
 
                 val item = if (mediaId == LocalAudioLibrary.ROOT_ID) {
                     localAudioLibrary.getRootItem()
-                } else if (mediaId.onlineTrackIdentityOrNull() != null) {
-                    val identity = mediaId.onlineTrackIdentityOrNull()
-                    runBlocking {
-                        identity?.let { onlineMusicRepository.getMediaItem(it) }
-                    }
                 } else {
                     getAudioItemsByIds(listOf(mediaId)).firstOrNull()
                 }
@@ -1045,19 +1084,51 @@ class PlaybackService : MediaLibraryService() {
                 if (mediaId.isBlank() || score !in TrackRatingMinScore..TrackRatingMaxScore) {
                     return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                 }
-                return libraryRefreshExecutor.submit<SessionResult> {
-                    val savedScore = runBlocking {
-                        playbackStatsRepository.setScore(mediaId, score)
-                    } ?: return@submit SessionResult(SessionError.ERROR_UNKNOWN)
-                    runBlocking(Dispatchers.Main.immediate) {
-                        updateQueuedTrackRating(mediaId, savedScore)
-                        scheduleRatingLibraryRefresh()
-                    }
-                    SessionResult(SessionResult.RESULT_SUCCESS)
-                }
+                return setTrackRatingFromSessionCommand(mediaId, score)
             }
             return super.onCustomCommand(session, controller, customCommand, args)
         }
+    }
+
+    /**
+     * 评分写入仍在 `libraryRefreshExecutor` 上排队，保持迁移前的 FIFO 串行：连点评分时后一次的意图
+     * 一定覆盖前一次。若把 Room 写丢给共享 IO 调度器，两条命令的提交顺序不确定，DB 终值可能停在
+     * 上一次点击，而 UI 侧 `ratingOverrides` 只是乐观覆盖，进程重启后就再也兜不住。
+     *
+     * 这里去掉的只有「工作线程 `runBlocking(Dispatchers.Main.immediate)` 等主线程」这一跳：主线程在
+     * onDestroy 里同步落盘、在 media3 的 OnHandler 上逐个执行 session 回调，两边交错会让整条刷新链
+     * 停摆。改成把主线程那一跳交给 serviceScope，用 Future 的完成时机取代线程 park。
+     */
+    private fun setTrackRatingFromSessionCommand(
+        mediaId: String,
+        score: Int,
+    ): ListenableFuture<SessionResult> {
+        val submitted = libraryRefreshExecutor.submit<ListenableFuture<SessionResult>> {
+            val savedScore = runBlocking { playbackStatsRepository.setScore(mediaId, score) }
+            if (savedScore == null) {
+                Futures.immediateFuture(SessionResult(SessionError.ERROR_UNKNOWN))
+            } else {
+                val resultFuture = SettableFuture.create<SessionResult>()
+                serviceScope
+                    .launch {
+                        // 改队列 MediaItem 与去抖刷新都要碰 ExoPlayer，只能在主线程做。
+                        val sessionResult = runCatching {
+                            updateQueuedTrackRating(mediaId, savedScore)
+                            scheduleRatingLibraryRefresh()
+                            SessionResult(SessionResult.RESULT_SUCCESS)
+                        }.getOrElse { SessionResult(SessionError.ERROR_UNKNOWN) }
+                        resultFuture.set(sessionResult)
+                    }
+                    .invokeOnCompletion { cause ->
+                        // 作用域已取消导致协程体根本没跑时，给出确定结果码而不是取消 Future。
+                        if (cause != null) {
+                            resultFuture.set(SessionResult(SessionError.ERROR_UNKNOWN))
+                        }
+                    }
+                resultFuture
+            }
+        }
+        return Futures.transformAsync(submitted, { it }, MoreExecutors.directExecutor())
     }
 
     private fun scheduleStatsLibraryRefresh() {
@@ -1277,8 +1348,26 @@ private class OnlinePlaybackDataSpecResolver(
     }
 
     private fun resolvePlaybackUri(identity: OnlineTrackIdentity): Uri {
-        return runBlocking(Dispatchers.IO) {
-            onlineMusicRepository.resolvePlaybackUri(identity)
-        }
+        // resolveDataSpec 的 API 契约本身就是同步的（ExoPlayer 取数据前同步等结果），只能就地阻塞。
+        // 超时只是兜底：正常慢路径由 OkHttp 自己的 15s connect/read 逐次封顶，
+        // 只有协程/合并加载彻底挂死时才会走到这里。超时只放弃本次等待，
+        // 不会取消按 key 合并的在途加载（那是 loadScope 的 Deferred，await 取消不影响其他等待者），
+        // 解析结果仍会照常写入内存缓存供下次起播命中。
+        return runBlocking(AppDispatchers.IO) {
+            withTimeoutOrNull(OnlinePlaybackUriResolveTimeoutMs) {
+                onlineMusicRepository.resolvePlaybackUri(identity)
+            }
+        } ?: throw OnlinePlaybackResolutionException(
+            reason = OnlinePlaybackFailureReason.Unavailable,
+            message = "Timed out resolving online playback uri for " +
+                "${identity.source}/${identity.trackId}",
+        )
     }
 }
+
+/**
+ * 正常路径靠 15 分钟 URL 新鲜度直接内存命中、零网络，45s 只用于截断真正挂死的解析链。
+ * 慢网下走满「9 档音质回退 × 每档会话重试 × 单请求 15s」会超过这个预算，此时沿用既有的
+ * 「无法播放该在线音乐」提示与跳曲行为，与 HEAD 的无上限阻塞相比是更早放弃而非新增失败模式。
+ */
+private const val OnlinePlaybackUriResolveTimeoutMs = 45_000L

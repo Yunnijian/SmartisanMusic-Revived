@@ -3,8 +3,8 @@ package com.smartisan.music.playback
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.smartisan.music.AppDispatchers
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -77,7 +77,7 @@ internal class PlaybackSessionStateCoordinator(
         if (shouldSkipEmptyQueueSave(snapshot)) {
             return
         }
-        withContext(Dispatchers.IO) {
+        withContext(AppDispatchers.IO) {
             stateStore.save(snapshot)
         }
         lastQueuedSnapshot = snapshot
@@ -91,7 +91,7 @@ internal class PlaybackSessionStateCoordinator(
         scope.launch {
             var shouldPersistAfterRestore = true
             try {
-                val snapshot = withContext(Dispatchers.IO) {
+                val snapshot = withContext(AppDispatchers.IO) {
                     stateStore.load()
                 }
                 lastQueuedSnapshot = snapshot
@@ -123,7 +123,7 @@ internal class PlaybackSessionStateCoordinator(
     }
 
     private suspend fun restoreItems(snapshot: PlaybackSessionSnapshot): List<MediaItem> {
-        val items = withContext(Dispatchers.IO) {
+        val items = withContext(AppDispatchers.IO) {
             loadLibraryItemsByQueueKeys(snapshot.queueItems)
         }
         return restoreQueueItemOccurrences(snapshot.queueItems, items)
@@ -152,7 +152,7 @@ internal class PlaybackSessionStateCoordinator(
             if (snapshot == lastQueuedSnapshot) {
                 return@launch
             }
-            withContext(Dispatchers.IO) {
+            withContext(AppDispatchers.IO) {
                 stateStore.save(snapshot)
             }
             lastQueuedSnapshot = snapshot

@@ -3,8 +3,8 @@ package com.smartisan.music.playback
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.smartisan.music.AppDispatchers
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -47,7 +47,7 @@ internal class PlaybackMetadataPreloader(
             preloadJob = null
             return
         }
-        preloadJob = scope.launch(Dispatchers.IO) {
+        preloadJob = scope.launch(AppDispatchers.IO) {
             delay(MetadataPreloadDebounceMs)
             for (mediaItem in mediaItems) {
                 NowPlayingArtworkRepository.preload(appContext, mediaItem)

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.LruCache
 import androidx.media3.common.MediaItem
+import com.smartisan.music.AppDispatchers
 import com.smartisan.music.data.online.OnlineLyricsExtraKey
 import com.smartisan.music.data.online.OnlineTranslatedLyricsExtraKey
 import com.smartisan.music.data.online.OnlineTranslatedWordLyricsExtraKey
@@ -13,7 +14,6 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 
@@ -25,7 +25,7 @@ internal object NowPlayingLyricsRepository {
     }
     private val missingKeys = LruCache<LyricsRequestKey, Long>(MissingLyricsCacheSize)
     private val inFlightLoads = ConcurrentHashMap<LyricsRequestKey, Deferred<EmbeddedLyrics?>>()
-    private val loadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val loadScope = CoroutineScope(SupervisorJob() + AppDispatchers.IO)
 
     fun peek(mediaItem: MediaItem): EmbeddedLyrics? {
         return cache.get(mediaItem.lyricsRequestKey())

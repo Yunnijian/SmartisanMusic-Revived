@@ -16,6 +16,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import java.io.IOException
 import java.util.concurrent.Executors
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal class MediaSessionArtworkBitmapLoader(
     context: Context,
@@ -62,12 +63,16 @@ internal class MediaSessionArtworkBitmapLoader(
                         ?.let(::setUri)
                 }
                 .build()
+            // 该 executor 只有一条线程：无上限挂住会让之后所有通知栏/锁屏封面永久取不到。
+            // 封面是纯装饰，超时后沿下面的 metadata 兜底与 IOException 路径降级成「没有封面」即可。
             runBlocking {
-                NowPlayingArtworkRepository.load(
-                    context = appContext,
-                    mediaItem = mediaItem,
-                    size = NotificationArtworkSize,
-                )
+                withTimeoutOrNull(NotificationArtworkTimeoutMs) {
+                    NowPlayingArtworkRepository.load(
+                        context = appContext,
+                        mediaItem = mediaItem,
+                        size = NotificationArtworkSize,
+                    )
+                }
             } ?: loadAlbumArtworkFromMetadata(metadata.extras)
                 ?: throw IOException("Unable to load notification artwork.")
         }
@@ -108,3 +113,6 @@ private fun Bundle?.albumArtworkUri(): Uri? {
 }
 
 private val NotificationArtworkSize = Size(512, 512)
+
+/** 通知栏封面单次解析上限；超时只降级成没有封面，不值得让单线程 loader 陪葬。 */
+private const val NotificationArtworkTimeoutMs = 2_000L

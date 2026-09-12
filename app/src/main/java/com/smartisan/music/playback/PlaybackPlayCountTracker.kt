@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.smartisan.music.AppDispatchers
 import com.smartisan.music.data.playback.PlaybackStatsRepository
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
@@ -116,7 +117,7 @@ internal class PlaybackPlayCountTracker(
             return
         }
         playback.counted = true
-        val countJob = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+        val countJob = scope.launch(AppDispatchers.IO, start = CoroutineStart.LAZY) {
             repository.incrementPlayCount(playback.mediaId) ?: return@launch
             if (notifyAfterWrite) {
                 scope.launch(Dispatchers.Main.immediate) {

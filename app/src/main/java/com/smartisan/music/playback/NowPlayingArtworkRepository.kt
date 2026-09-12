@@ -16,11 +16,11 @@ import coil3.request.bitmapConfig
 import coil3.request.crossfade
 import coil3.size.Precision
 import coil3.toBitmap
+import com.smartisan.music.AppDispatchers
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 
@@ -32,7 +32,7 @@ internal object NowPlayingArtworkRepository {
     }
     private val missingIdentities = LruCache<ArtworkRequestKey, Long>(MissingArtworkIdentityCacheSize)
     private val inFlightLoads = ConcurrentHashMap<ArtworkCacheKey, Deferred<Bitmap?>>()
-    private val loadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val loadScope = CoroutineScope(SupervisorJob() + AppDispatchers.IO)
 
     fun peek(
         mediaItem: MediaItem,
