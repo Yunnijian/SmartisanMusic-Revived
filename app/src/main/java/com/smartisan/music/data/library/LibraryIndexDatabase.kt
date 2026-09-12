@@ -97,7 +97,7 @@ internal interface LibraryIndexDao {
 @Database(
     entities = [LibraryIndexEntity::class, LibraryIndexSnapshotEntity::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 internal abstract class LibraryIndexDatabase : RoomDatabase() {
     abstract fun libraryIndexDao(): LibraryIndexDao

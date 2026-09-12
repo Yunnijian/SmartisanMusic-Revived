@@ -46,7 +46,7 @@ interface FavoriteSongDao {
 @Database(
     entities = [FavoriteSongEntity::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class FavoriteSongsDatabase : RoomDatabase() {
     abstract fun favoriteSongDao(): FavoriteSongDao

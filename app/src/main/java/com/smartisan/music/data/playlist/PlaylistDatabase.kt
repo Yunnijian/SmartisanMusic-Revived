@@ -164,7 +164,7 @@ internal interface PlaylistDao {
 @Database(
     entities = [PlaylistEntity::class, PlaylistEntryEntity::class],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 internal abstract class PlaylistDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao

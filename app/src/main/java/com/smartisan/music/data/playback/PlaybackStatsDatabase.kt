@@ -69,7 +69,7 @@ internal interface PlaybackStatsDao {
 @Database(
     entities = [PlaybackStatsEntity::class],
     version = 2,
-    exportSchema = false,
+    exportSchema = true,
 )
 internal abstract class PlaybackStatsDatabase : RoomDatabase() {
     abstract fun playbackStatsDao(): PlaybackStatsDao

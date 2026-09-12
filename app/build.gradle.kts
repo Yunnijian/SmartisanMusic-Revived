@@ -62,6 +62,12 @@ android {
     }
 }
 
+// Room 将每个 @Database 的 schema 导出为 app/schemas/<数据库类全名>/<版本>.json，
+// 作为迁移与 schema 漂移校验的基线，该目录需要纳入版本控制。
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
         variant.outputs.forEach { output ->
