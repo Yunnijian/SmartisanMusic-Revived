@@ -3,12 +3,30 @@ package com.smartisan.music.data.online
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
+import kotlinx.coroutines.CancellationException
 
 internal class OnlineMusicRepositoryRouter(
     context: Context,
     private val neteaseRepository: NeteaseOnlineMusicRepository =
         NeteaseOnlineMusicRepository(context.applicationContext),
 ) {
+
+    /**
+     * 执行一次在线拉取：失败时返回 [fallback]。
+     * [CancellationException] 必须原样上抛，否则协程取消信号会丢失。
+     */
+    private suspend fun <T> runOnlineFetch(
+        fallback: T,
+        block: suspend () -> T,
+    ): T {
+        return try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            fallback
+        }
+    }
 
     fun repositoryFor(provider: OnlineMusicProvider): OnlineMusicProviderRepository {
         return when (provider) {
@@ -89,9 +107,9 @@ internal class OnlineMusicRepositoryRouter(
         if (neteaseTrackIds.isEmpty()) {
             return emptyList()
         }
-        return runCatching {
+        return runOnlineFetch(emptyList()) {
             neteaseRepository.getTracks(neteaseTrackIds).map(OnlineTrack::toMediaItem)
-        }.getOrDefault(emptyList())
+        }
     }
 
     suspend fun lyrics(identity: OnlineTrackIdentity): OnlineLyrics? {
@@ -114,9 +132,11 @@ internal class OnlineMusicRepositoryRouter(
         }
     }
 
-    /** 账号「我喜欢」的纯数字 trackId 集合；未登录或失败返回 null。 */
+    /**
+     * 账号「我喜欢」的纯数字 trackId 集合；未登录、无内容或失败返回 null。
+     */
     suspend fun accountLikedTrackIds(): Set<String>? {
-        return runCatching { neteaseRepository.accountLikedTrackIds() }.getOrNull()
+        return runOnlineFetch(null) { neteaseRepository.accountLikedTrackIds() }
     }
 
     /**
@@ -124,13 +144,15 @@ internal class OnlineMusicRepositoryRouter(
      *
      * 与 [accountLikedTrackIds] 分别走不同端点：这里需要标题/艺人/封面等元数据，
      * 因此复用整张「我喜欢」歌单，而不是用 id 集合再反查。
+     *
+     * 拉取失败时返回空列表，与「确实没有内容」不可区分。
      */
     suspend fun accountLikedTrackMediaItems(): List<MediaItem> {
-        return runCatching {
+        return runOnlineFetch(emptyList()) {
             neteaseRepository.currentUserLikedTracks()
                 .orEmpty()
                 .map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
-        }.getOrDefault(emptyList())
+        }
     }
 
     suspend fun addTracksToAccountPlaylist(
@@ -190,14 +212,14 @@ internal class OnlineMusicRepositoryRouter(
         if (normalizedTrackIds.isEmpty()) {
             return emptyList()
         }
-        return runCatching {
+        return runOnlineFetch(emptyList()) {
             neteaseRepository.getTracks(normalizedTrackIds).mapNotNull { track ->
                 neteaseRepository.resolvePlayableTrack(
                     track = track,
                     includeLyrics = includeLyrics,
                 )
             }
-        }.getOrDefault(emptyList())
+        }
     }
 
     companion object {

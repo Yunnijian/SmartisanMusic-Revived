@@ -407,14 +407,6 @@ private fun JSONObject.optCacheString(name: String): String? {
         ?.takeUnless { value -> value.equals("null", ignoreCase = true) }
 }
 
-private fun JSONArray.toJsonObjects(): List<JSONObject> {
-    return buildList {
-        for (index in 0 until length()) {
-            optJSONObject(index)?.let(::add)
-        }
-    }
-}
-
 private fun JSONArray.toStringSet(): Set<String> {
     return buildSet {
         for (index in 0 until length()) {

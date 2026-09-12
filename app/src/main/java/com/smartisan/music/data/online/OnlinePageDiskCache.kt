@@ -1,7 +1,7 @@
 package com.smartisan.music.data.online
 
 import android.content.Context
-import kotlinx.coroutines.Dispatchers
+import com.smartisan.music.AppDispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -38,7 +38,7 @@ internal class OnlinePageDiskCache(
     suspend fun <T> get(
         key: String,
         codec: OnlinePageCacheCodec<T>,
-    ): OnlinePageCacheEntry<T>? = withContext(Dispatchers.IO) {
+    ): OnlinePageCacheEntry<T>? = withContext(AppDispatchers.IO) {
         synchronized(lock) {
             val file = key.cacheFile()
             if (!file.isFile) {
@@ -71,7 +71,7 @@ internal class OnlinePageDiskCache(
         codec: OnlinePageCacheCodec<T>,
         cachedAtMs: Long = System.currentTimeMillis(),
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(AppDispatchers.IO) {
             synchronized(lock) {
                 if (!directory.exists() && !directory.mkdirs()) {
                     return@synchronized
@@ -103,7 +103,7 @@ internal class OnlinePageDiskCache(
     }
 
     suspend fun removePrefix(prefix: String) {
-        withContext(Dispatchers.IO) {
+        withContext(AppDispatchers.IO) {
             synchronized(lock) {
                 directory
                     .listFiles { file -> file.isFile && file.extension == CacheFileExtension }

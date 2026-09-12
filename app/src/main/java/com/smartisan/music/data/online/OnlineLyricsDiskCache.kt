@@ -1,7 +1,7 @@
 package com.smartisan.music.data.online
 
 import android.content.Context
-import kotlinx.coroutines.Dispatchers
+import com.smartisan.music.AppDispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -25,7 +25,7 @@ internal class OnlineLyricsDiskCache(
         ttlMs = ttlMs,
     )
 
-    suspend fun get(identity: OnlineTrackIdentity): OnlineLyrics? = withContext(Dispatchers.IO) {
+    suspend fun get(identity: OnlineTrackIdentity): OnlineLyrics? = withContext(AppDispatchers.IO) {
         synchronized(lock) {
             val file = identity.cacheFile()
             if (!file.isFile) {
@@ -52,7 +52,7 @@ internal class OnlineLyricsDiskCache(
         identity: OnlineTrackIdentity,
         lyrics: OnlineLyrics,
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(AppDispatchers.IO) {
             synchronized(lock) {
                 if (!lyrics.hasContent()) {
                     identity.cacheFile().delete()
