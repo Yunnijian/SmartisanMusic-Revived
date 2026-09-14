@@ -18,7 +18,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudMusicDivider
 import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
+import com.smartisan.music.ui.cloud.components.CloudPullRefresh
 import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
 import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTrackRowHeight
@@ -112,7 +117,31 @@ internal fun CloudMusicMinePage(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
+    // 下拉刷新：请求发出后等槽位离开 Loading 即视为完成。
+    var refreshRequested by remember { mutableStateOf(false) }
+    var libraryRefreshVersion by remember { mutableIntStateOf(-1) }
+    val libraryState = librarySlot.state(Unit)
+    val librarySlotVersion = librarySlot.version
+    LaunchedEffect(librarySlotVersion) {
+        if (refreshRequested && librarySlotVersion != libraryRefreshVersion) {
+            refreshRequested = false
+        }
+    }
+
+    CloudPullRefresh(
+        refreshing = refreshRequested,
+        onRefresh = {
+            refreshRequested = true
+            libraryRefreshVersion = librarySlot.version
+            data.refreshAccountLibrary(libraryRevision)
+        },
+        canChildScrollUp = {
+            scrollStates.mine.firstVisibleItemIndex > 0 ||
+                scrollStates.mine.firstVisibleItemScrollOffset > 0
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Column(Modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
         CloudMusicSectionTitle(
             title = stringResource(R.string.cloud_music_mine_title),
             modifier = Modifier.fillMaxWidth(),
@@ -177,6 +206,7 @@ internal fun CloudMusicMinePage(
                     }
                 }
             }
+        }
         }
     }
 }

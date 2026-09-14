@@ -58,7 +58,7 @@ internal fun CloudMusicBanner(
     active: Boolean,
     onOpenPlaylist: (id: String, title: String) -> Unit,
     onOpenAlbum: (id: String, title: String) -> Unit,
-    onPlayTrack: (trackId: String) -> Unit,
+    onTrackClick: (banner: OnlineBanner) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (banners.isEmpty()) return
@@ -92,7 +92,7 @@ internal fun CloudMusicBanner(
                             banner.dispatchClick(
                                 onOpenPlaylist = onOpenPlaylist,
                                 onOpenAlbum = onOpenAlbum,
-                                onPlayTrack = onPlayTrack,
+                                onTrackClick = onTrackClick,
                             )
                         },
                     ),
@@ -178,11 +178,11 @@ internal fun CloudMusicBanner(
 private fun OnlineBanner.dispatchClick(
     onOpenPlaylist: (id: String, title: String) -> Unit,
     onOpenAlbum: (id: String, title: String) -> Unit,
-    onPlayTrack: (trackId: String) -> Unit,
+    onTrackClick: (banner: OnlineBanner) -> Unit,
 ) {
     when {
         !targetPlaylistId.isNullOrBlank() -> onOpenPlaylist(targetPlaylistId, title)
         !targetAlbumId.isNullOrBlank() -> onOpenAlbum(targetAlbumId, title)
-        !targetTrackId.isNullOrBlank() -> onPlayTrack(targetTrackId)
+        !targetTrackId.isNullOrBlank() -> onTrackClick(this)
     }
 }

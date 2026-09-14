@@ -15,6 +15,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 
 internal val NeteaseSourceId = OnlineMusicProvider.Netease.sourceId
@@ -161,6 +162,23 @@ internal class NeteaseOnlineMusicRepository(
     private fun invalidatePlaylistTrackCaches(playlistId: String) {
         invalidatePageCache(cacheKey("playlist:tracks", playlistId))
         invalidatePageCache(cacheKey("account:playlist-tracks", playlistId))
+    }
+
+    /**
+     * 下拉刷新入口：同步作废给定命名空间的内存与磁盘页缓存，使随后的加载必定联网。
+     *
+     * 不能复用 [invalidatePageCache]：它的磁盘删除是异步的，紧跟其后的 reload 仍可能
+     * 读到旧磁盘条目并把它回填内存，刷新就成了空转。这里在 IO 上等删除完成再返回。
+     */
+    override suspend fun invalidatePageCaches(vararg namespaces: String) {
+        withContext(AppDispatchers.IO) {
+            namespaces.forEach { namespace ->
+                val prefix = cachePrefix(namespace)
+                cancelPendingPageCacheRefreshes(prefix)
+                NeteaseOnlineMemoryCache.invalidate(prefix)
+                pageDiskCache?.removePrefix(prefix)
+            }
+        }
     }
 
     private suspend fun <T : Any> cachedPage(
@@ -671,12 +689,9 @@ internal class NeteaseOnlineMusicRepository(
     }
 
     override suspend fun track(trackId: String): OnlineTrack? {
-        return NeteaseOnlineMemoryCache.getOrLoad(
-            key = cacheKey("track", trackId.trim()),
-            ttlMs = NeteaseDetailCacheTtlMs,
-        ) {
-            getTrack(trackId)
-        }
+        // 不能再套一层同 key 的 getOrLoad：getTrack 内部已按同 key 合并缓存，
+        // 嵌套会让内层加载 join 外层在途任务并 await 自己，永久挂起。
+        return getTrack(trackId)
     }
 
     suspend fun featuredSongs(): List<OnlineTrack> {

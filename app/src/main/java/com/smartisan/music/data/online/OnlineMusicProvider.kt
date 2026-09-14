@@ -220,6 +220,9 @@ internal interface OnlineMusicProviderRepository {
 
     suspend fun track(trackId: String): OnlineTrack? = null
 
+    /** 下拉刷新入口：作废给定命名空间的页缓存，使随后的加载联网重拉；无缓存的提供方空实现。 */
+    suspend fun invalidatePageCaches(vararg namespaces: String) {}
+
     suspend fun featuredTracks(): List<OnlineTrack>
 
     suspend fun featuredHome(): OnlineMusicHome = OnlineMusicHome(

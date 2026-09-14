@@ -3,8 +3,11 @@ package com.smartisan.music.ui.cloud
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.smartisan.music.data.online.OnlineAccountPlaylist
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
@@ -50,6 +53,17 @@ internal class CloudDataSlot<K, T>(
 ) {
     private val entries = mutableStateMapOf<K, Entry<T>>()
 
+    /** 在途加载的 key：reload 用它去重，避免刷新连点打出并发重复请求。 */
+    private val inFlight = mutableSetOf<K>()
+
+    /**
+     * 完成代数：每次加载结束递增。
+     * 调用方不能靠观察 Loading 判断刷新结束——仓库自身带缓存时 reload 可能在一帧内
+     * 完成，Loading 根本不会被读到；完成代数一定会被观察到。
+     */
+    var version by mutableStateOf(0)
+        private set
+
     fun state(key: K): CloudSlotState<T> = entries[key]?.state ?: CloudSlotState.Loading
 
     /**
@@ -59,6 +73,31 @@ internal class CloudDataSlot<K, T>(
     fun ensureLoaded(key: K, revision: Int = 0) {
         if (entries[key]?.revision == revision) return
         entries[key] = Entry(revision, CloudSlotState.Loading)
+        launchLoad(key, revision)
+    }
+
+    /**
+     * 用户下拉刷新 / 点重试：重新加载但不清空已有结果。
+     *
+     * 刷新期间页面继续渲染旧内容（头部转圈即可），新数据落地后整体替换；
+     * 若清掉条目，槽位会掉回 Loading 让整屏闪成「正在加载」。
+     * 仅无成功结果时（首载、错误重试）才显示 Loading。
+     */
+    fun reload(key: K, revision: Int = 0) {
+        if (key in inFlight) return
+        if (entries[key]?.state !is CloudSlotState.Success) {
+            entries[key] = Entry(revision, CloudSlotState.Loading)
+        }
+        launchLoad(key, revision)
+    }
+
+    /** 整体作废：写操作影响面无法定位到单个 key 时使用，下次读取重新加载。 */
+    fun invalidateAll() {
+        entries.clear()
+    }
+
+    private fun launchLoad(key: K, revision: Int) {
+        inFlight += key
         scope.launch {
             val state = try {
                 CloudSlotState.Success(load(key))
@@ -67,21 +106,12 @@ internal class CloudDataSlot<K, T>(
             } catch (error: Throwable) {
                 CloudSlotState.Error
             }
+            inFlight -= key
             if (entries[key]?.revision == revision) {
                 entries[key] = Entry(revision, state)
             }
+            version += 1
         }
-    }
-
-    /** 用户点重试：清掉本 key 的结果再加载，绕开 [ensureLoaded] 的同 revision 短路。 */
-    fun reload(key: K, revision: Int = 0) {
-        entries.remove(key)
-        ensureLoaded(key, revision)
-    }
-
-    /** 整体作废：写操作影响面无法定位到单个 key 时使用，下次读取重新加载。 */
-    fun invalidateAll() {
-        entries.clear()
     }
 
     private class Entry<T>(val revision: Int, val state: CloudSlotState<T>)
@@ -130,7 +160,7 @@ internal data class CloudDetailBundle(
 @Stable
 internal class CloudMusicDataStore(
     val repository: OnlineMusicProviderRepository,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     /** 首页区块入场动画：随仓库存活且只播一次，页面重建时保持展开。 */
     val homeSectionAnimation = CloudHomeSectionAnimation(scope)
@@ -246,6 +276,54 @@ internal class CloudMusicDataStore(
                     ),
                 ),
             )
+            is CloudDetailTarget.BannerTrack -> CloudDetailBundle(
+                tracks = listOfNotNull(repository.track(target.id)),
+            )
+        }
+    }
+
+    /**
+     * 下拉刷新：先作废该页读取的缓存命名空间再 reload。
+     *
+     * 仓库自带 TTL 内存缓存与磁盘页缓存，直接 reload 会在毫秒级返回旧数据，
+     * 刷新动画播完内容纹丝不动；作废后 reload 才真正联网。
+     */
+    fun refreshHome() {
+        scope.launch {
+            repository.invalidatePageCaches("featured")
+            home.reload(Unit)
+        }
+    }
+
+    fun refreshRadio() {
+        scope.launch {
+            repository.invalidatePageCaches(
+                "radio:home",
+                "radio:tracks:featured",
+                "radio:list:featured",
+            )
+            radio.reload(Unit)
+        }
+    }
+
+    fun refreshArtists() {
+        scope.launch {
+            repository.invalidatePageCaches("featured:artists")
+            artists.reload(Unit)
+        }
+    }
+
+    fun refreshAccountLibrary(revision: Int = 0) {
+        scope.launch {
+            repository.invalidatePageCaches("account")
+            accountLibrary.reload(Unit, revision)
+        }
+    }
+
+    fun refreshArtistAlbums(artist: CloudDetailTarget.Artist) {
+        scope.launch {
+            repository.invalidatePageCaches("artist:albums:${artist.id}")
+            artistAlbums.reload(artist)
         }
     }
 }

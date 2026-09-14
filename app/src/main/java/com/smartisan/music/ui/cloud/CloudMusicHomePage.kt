@@ -10,13 +10,19 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineAlbum
+import com.smartisan.music.data.online.OnlineBanner
 import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlinePlaylist
@@ -33,6 +39,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicCoverCard
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverCardSection
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
+import com.smartisan.music.ui.cloud.components.CloudPullRefresh
 import kotlinx.coroutines.launch
 
 /**
@@ -55,14 +62,25 @@ internal fun CloudMusicHomePage(
     onOpenAlbum: (OnlineAlbum) -> Unit,
     onOpenArtist: (OnlineArtist) -> Unit,
     onOpenFeatured: (CloudFeaturedPage) -> Unit,
+    onOpenBannerTrack: (OnlineBanner) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
     val scope = rememberCoroutineScope()
     val homeSlot = data.home
-    val repository = data.repository
     val sectionAnimation = data.homeSectionAnimation
     val homeLoaded = homeSlot.state(Unit) is CloudSlotState.Success
+
+    // 下拉刷新：请求发出后等槽位离开 Loading 即视为完成，收尾动画由组件播放。
+    var refreshRequested by remember { mutableStateOf(false) }
+    var homeRefreshVersion by remember { mutableIntStateOf(-1) }
+    val homeState = homeSlot.state(Unit)
+    val homeSlotVersion = homeSlot.version
+    LaunchedEffect(homeSlotVersion) {
+        if (refreshRequested && homeSlotVersion != homeRefreshVersion) {
+            refreshRequested = false
+        }
+    }
 
     // 切到非活跃 tab 时不发起请求；active 恢复后重新触发（已加载则直接复用缓存）。
     LaunchedEffect(homeSlot, active) {
@@ -78,7 +96,20 @@ internal fun CloudMusicHomePage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        when (val current = homeSlot.state(Unit)) {
+        CloudPullRefresh(
+            refreshing = refreshRequested,
+            onRefresh = {
+                refreshRequested = true
+                homeRefreshVersion = homeSlot.version
+                data.refreshHome()
+            },
+            canChildScrollUp = {
+                scrollStates.home.firstVisibleItemIndex > 0 ||
+                    scrollStates.home.firstVisibleItemScrollOffset > 0
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when (val current = homeState) {
             CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
                 title = stringResource(R.string.cloud_music_home_loading),
                 modifier = Modifier.fillMaxSize(),
@@ -107,19 +138,7 @@ internal fun CloudMusicHomePage(
                     onOpenAlbum = onOpenAlbum,
                     onOpenArtist = onOpenArtist,
                     onOpenFeatured = onOpenFeatured,
-                    onPlayBannerTrack = { trackId ->
-                        scope.launch {
-                            val track = cloudRunSuspendCatching { repository.track(trackId) }
-                                .getOrNull()
-                                ?: return@launch
-                            playbackBrowser?.replaceQueueAndPlay(
-                                mediaItems = listOf(
-                                    track.toMediaItem().withOnlinePlaybackPlaceholderUri(),
-                                ),
-                                startIndex = 0,
-                            )
-                        }
-                    },
+                    onOpenBannerTrack = onOpenBannerTrack,
                     onPlayDailyTracks = { tracks, index ->
                         val items = tracks.map {
                             it.toMediaItem().withOnlinePlaybackPlaceholderUri()
@@ -130,6 +149,7 @@ internal fun CloudMusicHomePage(
                         )
                     },
                 )
+            }
             }
         }
     }
@@ -147,7 +167,7 @@ private fun CloudMusicHomeContent(
     onOpenAlbum: (OnlineAlbum) -> Unit,
     onOpenArtist: (OnlineArtist) -> Unit,
     onOpenFeatured: (CloudFeaturedPage) -> Unit,
-    onPlayBannerTrack: (trackId: String) -> Unit,
+    onOpenBannerTrack: (OnlineBanner) -> Unit,
     onPlayDailyTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
 ) {
     val home = bundle.home
@@ -190,7 +210,7 @@ private fun CloudMusicHomeContent(
                             ),
                         )
                     },
-                    onPlayTrack = onPlayBannerTrack,
+                    onTrackClick = onOpenBannerTrack,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

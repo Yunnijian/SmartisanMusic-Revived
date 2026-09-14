@@ -32,6 +32,7 @@ import com.smartisan.music.R
 import com.smartisan.music.data.online.NeteaseAuthStore
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
+import com.smartisan.music.data.online.OnlineBanner
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
 import com.smartisan.music.data.online.OnlinePlaylist
@@ -90,6 +91,14 @@ internal sealed interface CloudDetailTarget {
         val creator: String? = null,
         val programCount: Int = 0,
         val playCount: Long = 0L,
+    ) : CloudDetailTarget
+
+    /** Banner 指向的单曲：旧版 CloudMusicRoute.BannerTrack，进详情页而非直接播放。 */
+    data class BannerTrack(
+        val id: String,
+        val title: String,
+        val artworkUrl: String? = null,
+        val subtitle: String? = null,
     ) : CloudDetailTarget
 }
 
@@ -221,6 +230,15 @@ internal fun CloudMusicHost(
             creator = radio.creator,
             programCount = radio.programCount,
             playCount = radio.playCount,
+        )
+    }
+    // 带歌曲目标的 Banner 进单曲详情页（旧版 CloudMusicRoute.BannerTrack），不再直接播放。
+    val openBannerTrack: (OnlineBanner) -> Unit = { banner ->
+        selectedDetail = CloudDetailTarget.BannerTrack(
+            id = banner.targetTrackId.orEmpty(),
+            title = banner.title,
+            artworkUrl = banner.imageUrl,
+            subtitle = banner.subtitle,
         )
     }
     /** 入口行切换：进入任一入口时清掉其他推进层，避免层叠残留。 */
@@ -375,6 +393,7 @@ internal fun CloudMusicHost(
                                 onOpenAlbum = openAlbumDetail,
                                 onOpenArtist = openArtistDetail,
                                 onOpenFeatured = { featuredPage = it },
+                                onOpenBannerTrack = openBannerTrack,
                                 modifier = Modifier.fillMaxSize(),
                             )
                             CloudSubPage.Mine -> CloudMusicMinePage(

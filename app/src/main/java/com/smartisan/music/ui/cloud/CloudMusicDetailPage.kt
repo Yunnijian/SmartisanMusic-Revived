@@ -425,6 +425,7 @@ private fun CloudMusicDetailHeader(
         is CloudDetailTarget.Album -> target.title
         is CloudDetailTarget.Artist -> target.name
         is CloudDetailTarget.Radio -> target.title
+        is CloudDetailTarget.BannerTrack -> target.title
     }
     val subtitle = cloudDetailSubtitle(target, tracks.size)
     val artworkUrl = when (target) {
@@ -432,6 +433,7 @@ private fun CloudMusicDetailHeader(
         is CloudDetailTarget.Album -> target.artworkUrl
         is CloudDetailTarget.Artist -> target.artworkUrl
         is CloudDetailTarget.Radio -> target.artworkUrl
+        is CloudDetailTarget.BannerTrack -> target.artworkUrl
     } ?: tracks.firstOrNull()?.artworkUrl
     val playEnabled = tracks.isNotEmpty()
 
@@ -654,6 +656,7 @@ private fun cloudDetailSubtitle(target: CloudDetailTarget, loadedTrackCount: Int
         is CloudDetailTarget.Album -> stringResource(R.string.cloud_music_detail_kind_album)
         is CloudDetailTarget.Artist -> stringResource(R.string.cloud_music_detail_kind_artist)
         is CloudDetailTarget.Radio -> stringResource(R.string.cloud_music_detail_kind_radio)
+        is CloudDetailTarget.BannerTrack -> stringResource(R.string.cloud_music_detail_kind_track)
     }
     val parts: List<String> = when (target) {
         is CloudDetailTarget.Playlist -> buildList {
@@ -689,6 +692,9 @@ private fun cloudDetailSubtitle(target: CloudDetailTarget, loadedTrackCount: Int
             if (target.playCount > 0) {
                 add(pluralStringResource(R.plurals.cloud_music_play_count, target.playCount.toInt(), target.playCount))
             }
+        }
+        is CloudDetailTarget.BannerTrack -> buildList {
+            target.subtitle?.takeIf(String::isNotBlank)?.let(::add)
         }
     }
     return parts.joinToString(" · ").ifBlank { kindLabel }

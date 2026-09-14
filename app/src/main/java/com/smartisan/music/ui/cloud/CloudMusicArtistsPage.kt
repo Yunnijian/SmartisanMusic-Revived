@@ -7,6 +7,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -19,6 +24,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
+import com.smartisan.music.ui.cloud.components.CloudPullRefresh
 import com.smartisan.music.ui.cloud.components.cloudAlbumSubtitle
 
 /**
@@ -44,13 +50,37 @@ internal fun CloudMusicArtistsPage(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
+    // 下拉刷新：请求发出后等槽位离开 Loading 即视为完成。
+    var refreshRequested by remember { mutableStateOf(false) }
+    var artistsRefreshVersion by remember { mutableIntStateOf(-1) }
+    val artistsState = artistsSlot.state(Unit)
+    val artistsSlotVersion = artistsSlot.version
+    LaunchedEffect(artistsSlotVersion) {
+        if (refreshRequested && artistsSlotVersion != artistsRefreshVersion) {
+            refreshRequested = false
+        }
+    }
+
+    CloudPullRefresh(
+        refreshing = refreshRequested,
+        onRefresh = {
+            refreshRequested = true
+            artistsRefreshVersion = artistsSlot.version
+            data.refreshArtists()
+        },
+        canChildScrollUp = {
+            scrollStates.artists.firstVisibleItemIndex > 0 ||
+                scrollStates.artists.firstVisibleItemScrollOffset > 0
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Column(Modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
         CloudMusicSectionTitle(
             title = stringResource(R.string.cloud_music_section_artists),
             modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            when (val current = artistsSlot.state(Unit)) {
+            when (val current = artistsState) {
                 CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
                     title = stringResource(R.string.cloud_music_artists_loading),
                     modifier = Modifier.fillMaxSize(),
@@ -79,6 +109,7 @@ internal fun CloudMusicArtistsPage(
                 }
             }
         }
+        }
     }
 }
 
@@ -105,13 +136,37 @@ internal fun CloudMusicArtistAlbumsPage(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
+    // 下拉刷新：请求发出后等槽位离开 Loading 即视为完成。
+    var albumsRefreshRequested by remember { mutableStateOf(false) }
+    var albumsRefreshVersion by remember { mutableIntStateOf(-1) }
+    val albumsState = albumsSlot.state(artist)
+    val albumsSlotVersion = albumsSlot.version
+    LaunchedEffect(albumsSlotVersion) {
+        if (albumsRefreshRequested && albumsSlotVersion != albumsRefreshVersion) {
+            albumsRefreshRequested = false
+        }
+    }
+
+    CloudPullRefresh(
+        refreshing = albumsRefreshRequested,
+        onRefresh = {
+            albumsRefreshRequested = true
+            albumsRefreshVersion = albumsSlot.version
+            data.refreshArtistAlbums(artist)
+        },
+        canChildScrollUp = {
+            scrollStates.artistAlbums.firstVisibleItemIndex > 0 ||
+                scrollStates.artistAlbums.firstVisibleItemScrollOffset > 0
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Column(Modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
         CloudMusicSectionTitle(
             title = artist.name,
             modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            when (val current = albumsSlot.state(artist)) {
+            when (val current = albumsState) {
                 CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
                     title = stringResource(R.string.cloud_music_detail_loading),
                     modifier = Modifier.fillMaxSize(),
@@ -143,6 +198,7 @@ internal fun CloudMusicArtistAlbumsPage(
                     )
                 }
             }
+        }
         }
     }
 }

@@ -11,6 +11,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -33,6 +37,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
+import com.smartisan.music.ui.cloud.components.CloudPullRefresh
 import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.cloudAlbumSubtitle
 import com.smartisan.music.ui.cloud.components.cloudPlaylistSubtitle
@@ -75,13 +80,36 @@ internal fun CloudMusicFeaturedPage(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
+    // 下拉刷新：请求发出后等槽位离开 Loading 即视为完成。
+    var refreshRequested by remember { mutableStateOf(false) }
+    var homeRefreshVersion by remember { mutableIntStateOf(-1) }
+    val homeState = homeSlot.state(Unit)
+    val homeSlotVersion = homeSlot.version
+    LaunchedEffect(homeSlotVersion) {
+        if (refreshRequested && homeSlotVersion != homeRefreshVersion) {
+            refreshRequested = false
+        }
+    }
+
+    CloudPullRefresh(
+        refreshing = refreshRequested,
+        onRefresh = {
+            refreshRequested = true
+            homeRefreshVersion = homeSlot.version
+            data.refreshHome()
+        },
+        canChildScrollUp = {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Column(Modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
         CloudMusicSectionTitle(
             title = stringResource(page.titleRes),
             modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            when (val current = homeSlot.state(Unit)) {
+            when (val current = homeState) {
                 CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
                     title = stringResource(R.string.cloud_music_featured_loading),
                     modifier = Modifier.fillMaxSize(),
@@ -148,6 +176,7 @@ internal fun CloudMusicFeaturedPage(
                     }
                 }
             }
+        }
         }
     }
 }

@@ -369,6 +369,10 @@
     <string name="cloud_music_liked_songs_entry">我喜欢的音乐</string>
     <string name="cloud_music_select_all">全选</string>
     <string name="cloud_music_edit_playlist">编辑歌单</string>
+    <string name="cloud_pull_to_refresh">下拉即可刷新...</string>
+    <string name="cloud_release_to_refresh">松开即可刷新...</string>
+    <string name="cloud_refreshing">正在刷新...</string>
+    <string name="cloud_music_detail_kind_track">单曲</string>
     <plurals name="cloud_music_account_library_count">
         <item quantity="other">%1$d 项内容</item>
     </plurals>
