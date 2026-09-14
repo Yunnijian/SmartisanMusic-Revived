@@ -5,6 +5,12 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -26,7 +33,6 @@ import com.smartisan.music.data.online.NeteaseAuthStore
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlineMusicProvider
-import com.smartisan.music.data.online.OnlineMusicProviderRepository
 import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
 import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineRadio
@@ -93,6 +99,8 @@ internal sealed interface CloudDetailTarget {
  * 状态全部集中在本宿主，子页面均为受控组件（数据/交互回调来自宿主），
  * 与作者新版框架的 [com.smartisan.music.ui.shell.MusicAppShell] 组织方式一致：
  * - 一级页面（首页/我的）用 [CloudSubPage] 状态切换；
+ * - 整页数据（[CloudMusicDataStore]）与滚动位置（[CloudMusicScrollStates]）由宿主集中持有，
+ *   子页面只读状态并触发加载，在入口层之间来回切换时不重新联网、不丢列表位置；
  * - 详情页用 [PageStackTransition] 驱动列表↔详情转场，secondaryKey = [CloudDetailTarget]；
  * - 搜索作为全页覆盖层（zIndex 分层），query 由宿主持有（受控）；
  * - 返回键用 [BackHandler] 按条件逐层关闭。
@@ -101,6 +109,8 @@ internal sealed interface CloudDetailTarget {
 internal fun CloudMusicHost(
     active: Boolean,
     playbackBarOverlayHeight: Dp,
+    searchOpenRequest: Int = 0,
+    onSearchOpenRequestHandled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -139,9 +149,19 @@ internal fun CloudMusicHost(
     }
 
     // ── 宿主状态（仿 MusicAppShell 的集中持有模式） ──
+    // 整页数据与滚动位置一律由宿主持有：各页在入口层之间切换时会被移出组合，
+    // 状态留在页内就会重新联网并弹回列表顶部（旧版同样是宿主集中持有）。
+    val dataScope = rememberCoroutineScope()
+    val data = rememberCloudMusicDataStore(neteaseRepository, dataScope)
+    val scrollStates = remember { CloudMusicScrollStates() }
+
     var subPage by rememberSaveable { mutableStateOf(CloudSubPage.Home) }
+    var mineFilter by rememberSaveable { mutableStateOf(CloudAccountLibraryFilter.All) }
+    // 从「我的」打开的账号歌单：合并列表里把该行标题染成强调色（对齐旧版高亮）。
+    var selectedAccountPlaylistId by remember { mutableStateOf<String?>(null) }
     var searchVisible by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var searchCategory by rememberSaveable { mutableStateOf(CloudSearchCategory.All) }
     var selectedDetail by remember { mutableStateOf<CloudDetailTarget?>(null) }
     // 「查看全部」整页：与详情页同属列表之上的推进层，返回时先退整页再退详情。
     var featuredPage by remember { mutableStateOf<CloudFeaturedPage?>(null) }
@@ -153,6 +173,14 @@ internal fun CloudMusicHost(
     // 账号歌单库变更（加歌/移除/新建/删除）后由详情页回调递增，「我的」页订阅此值重拉。
     var accountLibraryRevision by remember { mutableStateOf(0) }
     val onAccountLibraryChanged = remember { { accountLibraryRevision += 1 } }
+
+    // 标题栏搜索按钮在云页时由壳递增请求计数；这里展开页内搜索场并消费请求。
+    LaunchedEffect(active, searchOpenRequest) {
+        if (active && searchOpenRequest > 0) {
+            searchVisible = true
+            onSearchOpenRequestHandled()
+        }
+    }
 
     // 打开详情的回调在首页/整页之间共用，元数据组装只写一份。
     val openPlaylistDetail: (OnlinePlaylist) -> Unit = { playlist ->
@@ -202,6 +230,7 @@ internal fun CloudMusicHost(
         radioSubPage = CloudRadioSubPage.Home
         artistsVisible = false
         artistAlbumsTarget = null
+        selectedAccountPlaylistId = null
         when (entry) {
             CloudHomeEntry.Mine -> subPage = CloudSubPage.Mine
             CloudHomeEntry.Recommend -> subPage = CloudSubPage.Home
@@ -215,7 +244,6 @@ internal fun CloudMusicHost(
     // 最外层：搜索覆盖层（从搜索进入详情后搜索层暂隐，返回键先退详情）
     BackHandler(enabled = active && searchVisible && selectedDetail == null) {
         searchVisible = false
-        searchQuery = ""
     }
     // 中层：详情页（搜索暂隐时同样要能退回搜索层）
     BackHandler(enabled = active && selectedDetail != null) {
@@ -253,6 +281,7 @@ internal fun CloudMusicHost(
             !radioVisible && !artistsVisible && subPage == CloudSubPage.Mine,
     ) {
         subPage = CloudSubPage.Home
+        selectedAccountPlaylistId = null
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -272,19 +301,22 @@ internal fun CloudMusicHost(
         }
 
         // 顶部五段入口行：电台/歌单广场/艺术家页的唯一入口通道（对齐旧版 IA）。
-        CloudMusicHomeEntryRow(
-            selectedEntry = when {
-                radioVisible -> CloudHomeEntry.Radio
-                artistsVisible || artistAlbumsTarget != null -> CloudHomeEntry.Artist
-                featuredPage == CloudFeaturedPage.Playlists ||
-                    featuredPage == CloudFeaturedPage.Charts -> CloudHomeEntry.Collection
-                featuredPage == CloudFeaturedPage.Artists -> CloudHomeEntry.Artist
-                subPage == CloudSubPage.Mine -> CloudHomeEntry.Mine
-                else -> CloudHomeEntry.Recommend
-            },
-            onEntryClick = ::switchEntry,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // 搜索场展开时整行隐藏，与旧版一致。
+        if (!searchVisible) {
+            CloudMusicHomeEntryRow(
+                selectedEntry = when {
+                    radioVisible -> CloudHomeEntry.Radio
+                    artistsVisible || artistAlbumsTarget != null -> CloudHomeEntry.Artist
+                    featuredPage == CloudFeaturedPage.Playlists ||
+                        featuredPage == CloudFeaturedPage.Charts -> CloudHomeEntry.Collection
+                    featuredPage == CloudFeaturedPage.Artists -> CloudHomeEntry.Artist
+                    subPage == CloudSubPage.Mine -> CloudHomeEntry.Mine
+                    else -> CloudHomeEntry.Recommend
+                },
+                onEntryClick = ::switchEntry,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             // 列表↔详情转场（仿 AlbumPage 的 PageStackTransition 用法）
@@ -296,7 +328,8 @@ internal fun CloudMusicHost(
                     val currentArtistAlbums = artistAlbumsTarget
                     when {
                         currentArtistAlbums != null -> CloudMusicArtistAlbumsPage(
-                            repository = neteaseRepository,
+                            data = data,
+                            scrollStates = scrollStates,
                             active = active,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             artist = currentArtistAlbums,
@@ -305,7 +338,8 @@ internal fun CloudMusicHost(
                             modifier = Modifier.fillMaxSize(),
                         )
                         artistsVisible -> CloudMusicArtistsPage(
-                            repository = neteaseRepository,
+                            data = data,
+                            scrollStates = scrollStates,
                             active = active,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             onOpenArtist = openArtistDetail,
@@ -313,7 +347,8 @@ internal fun CloudMusicHost(
                             modifier = Modifier.fillMaxSize(),
                         )
                         radioVisible -> CloudMusicRadioPage(
-                            repository = neteaseRepository,
+                            data = data,
+                            scrollStates = scrollStates,
                             active = active,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             subPage = radioSubPage,
@@ -324,7 +359,8 @@ internal fun CloudMusicHost(
                         )
                         featuredPage != null -> CloudMusicFeaturedPage(
                             page = featuredPage!!,
-                            repository = neteaseRepository,
+                            data = data,
+                            scrollStates = scrollStates,
                             active = active,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             onOpenPlaylist = openPlaylistDetail,
@@ -335,14 +371,10 @@ internal fun CloudMusicHost(
                         )
                         else -> when (subPage) {
                             CloudSubPage.Home -> CloudMusicHomePage(
-                                repository = neteaseRepository,
+                                data = data,
+                                scrollStates = scrollStates,
                                 active = active,
                                 playbackBarOverlayHeight = playbackBarOverlayHeight,
-                                onOpenSearch = {
-                                    searchQuery = ""
-                                    searchVisible = true
-                                },
-                                onOpenMine = { subPage = CloudSubPage.Mine },
                                 onOpenPlaylist = openPlaylistDetail,
                                 onOpenAlbum = openAlbumDetail,
                                 onOpenArtist = openArtistDetail,
@@ -350,12 +382,17 @@ internal fun CloudMusicHost(
                                 modifier = Modifier.fillMaxSize(),
                             )
                             CloudSubPage.Mine -> CloudMusicMinePage(
-                                repository = neteaseRepository,
+                                data = data,
+                                scrollStates = scrollStates,
                                 authStore = authStore,
                                 active = active,
                                 libraryRevision = accountLibraryRevision,
+                                selectedFilter = mineFilter,
+                                onFilterChange = { mineFilter = it },
+                                selectedPlaylistId = selectedAccountPlaylistId,
                                 playbackBarOverlayHeight = playbackBarOverlayHeight,
                                 onOpenPlaylist = { item ->
+                                    selectedAccountPlaylistId = item.playlistId
                                     selectedDetail = CloudDetailTarget.Playlist(
                                         id = item.playlistId,
                                         title = item.title,
@@ -392,21 +429,33 @@ internal fun CloudMusicHost(
 
             // 搜索覆盖层（zIndex 分层，仿 shell 的 SearchOverlay）；
             // 从搜索结果点进详情时暂隐，返回详情后搜索层带着原 query 恢复。
-            if (searchVisible && selectedDetail == null) {
+            // 展开/收起过渡对齐旧版搜索场的竖直伸缩 + 淡入淡出。
+            androidx.compose.animation.AnimatedVisibility(
+                visible = searchVisible && selectedDetail == null,
+                enter = expandVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) +
+                    fadeIn(animationSpec = tween(140)),
+                exit = shrinkVertically(animationSpec = tween(160, easing = FastOutSlowInEasing)) +
+                    fadeOut(animationSpec = tween(120)),
+                modifier = Modifier.fillMaxSize().zIndex(1f),
+            ) {
                 CloudMusicSearchPage(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
+                    data = data,
+                    scrollStates = scrollStates,
                     active = active,
+                    selectedCategory = searchCategory,
+                    onCategoryChange = { searchCategory = it },
                     playbackBarOverlayHeight = playbackBarOverlayHeight,
-                    repository = neteaseRepository,
                     onOpenPlaylist = openPlaylistDetail,
                     onOpenAlbum = openAlbumDetail,
                     onOpenArtist = openArtistDetail,
                     onCancel = {
                         searchVisible = false
                         searchQuery = ""
+                        searchCategory = CloudSearchCategory.All
                     },
-                    modifier = Modifier.fillMaxSize().zIndex(1f),
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }

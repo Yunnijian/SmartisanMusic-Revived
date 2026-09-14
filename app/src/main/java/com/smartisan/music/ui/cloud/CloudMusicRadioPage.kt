@@ -7,19 +7,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.smartisan.music.R
-import com.smartisan.music.data.online.OnlineMusicProviderRepository
 import com.smartisan.music.data.online.OnlineRadio
 import com.smartisan.music.data.online.OnlineRadioHome
 import com.smartisan.music.data.online.OnlineTrack
@@ -40,7 +36,6 @@ import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTrackActionsOverlays
 import com.smartisan.music.ui.cloud.components.cloudRadioSubtitle
 import com.smartisan.music.ui.cloud.components.rememberCloudTrackActionsState
-import kotlinx.coroutines.CancellationException
 
 /** 电台模块内部子页：电台首页 / 热门播客列表 / 推荐节目列表。 */
 internal enum class CloudRadioSubPage(val titleRes: Int) {
@@ -52,19 +47,15 @@ internal enum class CloudRadioSubPage(val titleRes: Int) {
 /** 电台首页推荐节目的预览行数。 */
 private const val CloudRadioPreviewTrackCount = 4
 
-private sealed interface CloudRadioHomeState {
-    object Loading : CloudRadioHomeState
-    object Error : CloudRadioHomeState
-    data class Success(val home: OnlineRadioHome) : CloudRadioHomeState
-}
-
 /**
  * 电台三页：首页（推荐节目预览 + 热门播客横滑）、热门播客竖排列表、推荐节目完整列表。
- * 数据统一来自 [OnlineMusicProviderRepository.featuredRadioHome]，子页切换只换渲染切片。
+ * 数据统一来自宿主级 [CloudMusicDataStore.radio]（featuredRadioHome 端点），
+ * 子页切换只换渲染切片，返回电台首页也不重新联网。
  */
 @Composable
 internal fun CloudMusicRadioPage(
-    repository: OnlineMusicProviderRepository,
+    data: CloudMusicDataStore,
+    scrollStates: CloudMusicScrollStates,
     active: Boolean,
     playbackBarOverlayHeight: Dp,
     subPage: CloudRadioSubPage,
@@ -75,18 +66,12 @@ internal fun CloudMusicRadioPage(
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
     val trackActionsState = rememberCloudTrackActionsState()
-    var revision by remember { mutableStateOf(0) }
-    val state by produceState<CloudRadioHomeState>(
-        initialValue = CloudRadioHomeState.Loading,
-        revision,
-        active,
-    ) {
-        if (!active) return@produceState
-        value = CloudRadioHomeState.Loading
-        value = runSuspendCatching { repository.featuredRadioHome() }.fold(
-            onSuccess = { CloudRadioHomeState.Success(it) },
-            onFailure = { CloudRadioHomeState.Error },
-        )
+    val radioSlot = data.radio
+
+    LaunchedEffect(radioSlot, active) {
+        if (active) {
+            radioSlot.ensureLoaded(Unit)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
@@ -101,22 +86,23 @@ internal fun CloudMusicRadioPage(
             },
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            when (val current = state) {
-                CloudRadioHomeState.Loading -> CloudMusicDelayedLoadingState(
+            when (val current = radioSlot.state(Unit)) {
+                CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
                     title = stringResource(R.string.cloud_music_radio_loading),
                     modifier = Modifier.fillMaxSize(),
                 )
-                CloudRadioHomeState.Error -> CloudMusicBlankState(
+                CloudSlotState.Error -> CloudMusicBlankState(
                     title = stringResource(R.string.cloud_music_radio_error),
                     subtitle = null,
                     actionText = stringResource(R.string.cloud_music_retry),
-                    onActionClick = { revision += 1 },
+                    onActionClick = { radioSlot.reload(Unit) },
                     modifier = Modifier.fillMaxSize(),
                 )
-                is CloudRadioHomeState.Success -> when (subPage) {
+                is CloudSlotState.Success -> when (subPage) {
                     CloudRadioSubPage.Home -> CloudRadioHomeContent(
-                        home = current.home,
+                        home = current.data,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        listState = scrollStates.radioHome,
                         onOpenTracks = { onSubPageChange(CloudRadioSubPage.Tracks) },
                         onOpenList = { onSubPageChange(CloudRadioSubPage.List) },
                         onOpenRadio = onOpenRadio,
@@ -132,8 +118,9 @@ internal fun CloudMusicRadioPage(
                         modifier = Modifier.fillMaxSize(),
                     )
                     CloudRadioSubPage.List -> CloudMusicVerticalCoverList(
-                        items = current.home.radios,
+                        items = current.data.radios,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        listState = scrollStates.radioList,
                         title = OnlineRadio::title,
                         subtitle = { radio -> cloudRadioSubtitle(radio) },
                         imageUrl = OnlineRadio::artworkUrl,
@@ -142,8 +129,9 @@ internal fun CloudMusicRadioPage(
                         modifier = Modifier.fillMaxSize(),
                     )
                     CloudRadioSubPage.Tracks -> CloudRadioTrackList(
-                        tracks = current.home.tracks,
+                        tracks = current.data.tracks,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        listState = scrollStates.radioTracks,
                         onPlayTracks = { tracks, index ->
                             playbackBrowser?.replaceQueueAndPlay(
                                 mediaItems = tracks.map {
@@ -159,7 +147,7 @@ internal fun CloudMusicRadioPage(
             }
             CloudTrackActionsOverlays(
                 state = trackActionsState,
-                repository = repository,
+                repository = data.repository,
                 editablePlaylist = null,
                 onTrackRemoved = {},
                 onAccountLibraryChanged = {},
@@ -174,6 +162,7 @@ internal fun CloudMusicRadioPage(
 private fun CloudRadioHomeContent(
     home: OnlineRadioHome,
     playbackBarOverlayHeight: Dp,
+    listState: LazyListState,
     onOpenTracks: () -> Unit,
     onOpenList: () -> Unit,
     onOpenRadio: (OnlineRadio) -> Unit,
@@ -192,6 +181,7 @@ private fun CloudRadioHomeContent(
     val viewAllText = stringResource(R.string.cloud_music_section_view_all)
     val tracks = home.tracks
     LazyColumn(
+        state = listState,
         modifier = modifier.background(CloudSurfaceColor),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
@@ -247,6 +237,7 @@ private fun CloudRadioHomeContent(
 private fun CloudRadioTrackList(
     tracks: List<OnlineTrack>,
     playbackBarOverlayHeight: Dp,
+    listState: LazyListState,
     onPlayTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
     onTrackMoreClick: (OnlineTrack) -> Unit,
     modifier: Modifier = Modifier,
@@ -260,6 +251,7 @@ private fun CloudRadioTrackList(
         return
     }
     LazyColumn(
+        state = listState,
         modifier = modifier.background(CloudSurfaceColor),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
@@ -277,16 +269,5 @@ private fun CloudRadioTrackList(
                 CloudMusicDivider()
             }
         }
-    }
-}
-
-/** 捕获非取消异常，避免网络错误直接打断协程作用域。 */
-private suspend inline fun <T> runSuspendCatching(block: suspend () -> T): Result<T> {
-    return try {
-        Result.success(block())
-    } catch (error: CancellationException) {
-        throw error
-    } catch (error: Throwable) {
-        Result.failure(error)
     }
 }

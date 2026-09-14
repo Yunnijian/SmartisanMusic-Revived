@@ -30,8 +30,8 @@ import androidx.compose.ui.unit.sp
 import com.smartisan.music.data.online.OnlineBanner
 import kotlinx.coroutines.delay
 
-/** Banner 高度：对齐旧版云音乐首页推荐位比例。 */
-internal val CloudMusicBannerHeight = 140.dp
+/** Banner 高度：对齐旧版 CloudBannerHeight。 */
+internal val CloudMusicBannerHeight = 142.dp
 
 /** Banner 两侧留白，使轮播卡片与页面内容左右对齐。 */
 internal val CloudMusicBannerHorizontalPadding = 12.dp
@@ -39,8 +39,8 @@ internal val CloudMusicBannerHorizontalPadding = 12.dp
 /** Banner 圆角。 */
 internal val CloudMusicBannerCornerRadius = 8.dp
 
-/** Banner 自动轮播间隔。 */
-internal const val CloudMusicBannerAutoScrollIntervalMs = 4000L
+/** Banner 自动轮播间隔：对齐旧版 CloudBannerAutoScrollMs。 */
+internal const val CloudMusicBannerAutoScrollIntervalMs = 5_000L
 
 /** 未选中圆点颜色。 */
 private val CloudMusicBannerDotColor = Color(0x80FFFFFF)

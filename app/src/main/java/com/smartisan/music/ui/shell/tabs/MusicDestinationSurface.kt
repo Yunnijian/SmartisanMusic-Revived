@@ -203,6 +203,8 @@ internal fun MusicDestinationSurface(
                 onArtistTargetChanged = uiState::setArtistTarget,
                 onPlaylistAddModeActiveChanged = uiState::updatePlaylistAddModeActive,
                 onSearchClick = uiState::openSearch,
+                cloudSearchOpenRequest = uiState.cloudSearchOpenRequest,
+                onCloudSearchOpenRequestHandled = uiState::consumeCloudSearchOpenRequest,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
         }

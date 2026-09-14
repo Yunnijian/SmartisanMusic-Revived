@@ -81,6 +81,9 @@ internal class MusicShellUiState {
     var searchVisible: Boolean by mutableStateOf(false)
     var searchQuery: String by mutableStateOf("")
     var searchDrilldownTarget: SearchDrilldownTarget? by mutableStateOf(null)
+    /** 云音乐页内搜索的打开请求计数：标题栏搜索按钮在云页时递增，由云页宿主消费。 */
+    var cloudSearchOpenRequest: Int by mutableStateOf(0)
+        private set
 
     fun showPlaybackOverlay() {
         playbackVisible = true
@@ -90,11 +93,20 @@ internal class MusicShellUiState {
         playbackVisible = false
     }
 
-    /** 每次打开搜索都回到干净的输入态。 */
+    /** 标题栏搜索：云音乐页走页内在线搜索，其余目的地走本地搜索覆盖层。 */
     fun openSearch() {
-        searchQuery = ""
-        searchDrilldownTarget = null
-        searchVisible = true
+        if (currentDestination == MusicDestination.Cloud) {
+            cloudSearchOpenRequest += 1
+        } else {
+            searchQuery = ""
+            searchDrilldownTarget = null
+            searchVisible = true
+        }
+    }
+
+    /** 云页宿主已消费打开请求，清零等待下一次。 */
+    fun consumeCloudSearchOpenRequest() {
+        cloudSearchOpenRequest = 0
     }
 
     fun closeSearch() {

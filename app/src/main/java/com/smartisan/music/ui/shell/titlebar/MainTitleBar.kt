@@ -127,15 +127,12 @@ internal fun MainTitleBar(
                         else onEnterSongsEditMode,
                     )
             }
-            // 云音乐页内自带在线搜索入口，隐藏本地媒体库搜索按钮。
-            if (destination != MusicDestination.Cloud) {
-                right +=
-                    icon(
-                        R.drawable.search_btn_selector,
-                        resources.getString(R.string.tab_local_search),
-                        onSearchClick,
-                    )
-            }
+            right +=
+                icon(
+                    R.drawable.search_btn_selector,
+                    resources.getString(R.string.tab_local_search),
+                    onSearchClick,
+                )
             if (destination == MusicDestination.Album)
                 right +=
                     icon(

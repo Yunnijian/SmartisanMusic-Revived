@@ -7,13 +7,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -21,8 +19,6 @@ import androidx.compose.ui.unit.dp
 import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
-import com.smartisan.music.data.online.OnlineMusicHome
-import com.smartisan.music.data.online.OnlineMusicProviderRepository
 import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineTrack
 import com.smartisan.music.data.online.toMediaItem
@@ -37,9 +33,8 @@ import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
 import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
-import com.smartisan.music.ui.cloud.components.cloudArtistSubtitle
+import com.smartisan.music.ui.cloud.components.cloudAlbumSubtitle
 import com.smartisan.music.ui.cloud.components.cloudPlaylistSubtitle
-import kotlinx.coroutines.CancellationException
 
 /** 首页五个分区「全部」对应的完整列表页。 */
 internal enum class CloudFeaturedPage(val titleRes: Int) {
@@ -50,21 +45,18 @@ internal enum class CloudFeaturedPage(val titleRes: Int) {
     Artists(R.string.cloud_music_section_artists),
 }
 
-/** 整页共用一份 featuredHome 数据，按分区取对应列表渲染。 */
-private sealed interface CloudFeaturedState {
-    object Loading : CloudFeaturedState
-    object Error : CloudFeaturedState
-    data class Success(val home: OnlineMusicHome) : CloudFeaturedState
-}
-
 /**
- * 「查看全部」整页：顶栏 + 竖排列表，数据来自 [OnlineMusicProviderRepository.featuredHome]。
+ * 「查看全部」整页：顶栏 + 竖排列表，按分区取 [CloudHomeBundle.home] 的对应列表渲染。
  * 与旧版五个 Featured* 路由一一对应，点击条目沿用宿主的详情/播放回调。
+ *
+ * 数据复用首页的 [CloudMusicDataStore.home] 槽——两者打的是同一个 featuredHome 端点，
+ * 从首页进入整页时结果已在缓存里，不必再拉一次。
  */
 @Composable
 internal fun CloudMusicFeaturedPage(
     page: CloudFeaturedPage,
-    repository: OnlineMusicProviderRepository,
+    data: CloudMusicDataStore,
+    scrollStates: CloudMusicScrollStates,
     active: Boolean,
     playbackBarOverlayHeight: Dp,
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
@@ -74,19 +66,13 @@ internal fun CloudMusicFeaturedPage(
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
-    var revision by remember { mutableStateOf(0) }
-    val state by produceState<CloudFeaturedState>(
-        initialValue = CloudFeaturedState.Loading,
-        page,
-        revision,
-        active,
-    ) {
-        if (!active) return@produceState
-        value = CloudFeaturedState.Loading
-        value = runSuspendCatching { repository.featuredHome() }.fold(
-            onSuccess = { CloudFeaturedState.Success(it) },
-            onFailure = { CloudFeaturedState.Error },
-        )
+    val homeSlot = data.home
+    val listState = scrollStates.featured(page)
+
+    LaunchedEffect(homeSlot, active) {
+        if (active) {
+            homeSlot.ensureLoaded(Unit)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
@@ -95,22 +81,23 @@ internal fun CloudMusicFeaturedPage(
             onBack = onBack,
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            when (val current = state) {
-                CloudFeaturedState.Loading -> CloudMusicDelayedLoadingState(
+            when (val current = homeSlot.state(Unit)) {
+                CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
                     title = stringResource(R.string.cloud_music_featured_loading),
                     modifier = Modifier.fillMaxSize(),
                 )
-                CloudFeaturedState.Error -> CloudMusicBlankState(
+                CloudSlotState.Error -> CloudMusicBlankState(
                     title = stringResource(R.string.cloud_music_featured_error),
                     subtitle = null,
                     actionText = stringResource(R.string.cloud_music_retry),
-                    onActionClick = { revision += 1 },
+                    onActionClick = { homeSlot.reload(Unit) },
                     modifier = Modifier.fillMaxSize(),
                 )
-                is CloudFeaturedState.Success -> when (page) {
+                is CloudSlotState.Success -> when (page) {
                     CloudFeaturedPage.Tracks -> CloudFeaturedTrackList(
-                        tracks = current.home.tracks,
+                        tracks = current.data.home.tracks,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        listState = listState,
                         onTrackClick = { items, index ->
                             playbackBrowser?.replaceQueueAndPlay(
                                 mediaItems = items,
@@ -120,35 +107,31 @@ internal fun CloudMusicFeaturedPage(
                         modifier = Modifier.fillMaxSize(),
                     )
                     CloudFeaturedPage.Playlists -> CloudFeaturedPlaylistList(
-                        playlists = current.home.playlists,
+                        playlists = current.data.home.playlists,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        listState = listState,
                         onPlaylistClick = onOpenPlaylist,
                         modifier = Modifier.fillMaxSize(),
                     )
                     CloudFeaturedPage.Charts -> CloudFeaturedPlaylistList(
-                        playlists = current.home.charts,
+                        playlists = current.data.home.charts,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        listState = listState,
                         onPlaylistClick = onOpenPlaylist,
                         modifier = Modifier.fillMaxSize(),
                     )
                     CloudFeaturedPage.Albums -> CloudMusicVerticalCoverList(
-                        items = current.home.albums,
+                        items = current.data.home.albums,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        listState = listState,
                         title = OnlineAlbum::title,
-                        subtitle = { album ->
-                            listOfNotNull(
-                                album.artist?.takeIf(String::isNotBlank),
-                                album.trackCount.takeIf { it > 0 }?.let { count ->
-                                    stringResource(R.string.cloud_music_album_total_tracks, count)
-                                },
-                            ).joinToString(" · ").ifBlank { null }
-                        },
+                        subtitle = { album -> cloudAlbumSubtitle(album) },
                         imageUrl = OnlineAlbum::artworkUrl,
                         onItemClick = onOpenAlbum,
                         itemKey = OnlineAlbum::albumId,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    CloudFeaturedPage.Artists -> if (current.home.artists.isEmpty()) {
+                    CloudFeaturedPage.Artists -> if (current.data.home.artists.isEmpty()) {
                         CloudMusicBlankState(
                             title = stringResource(R.string.cloud_music_artists_empty),
                             subtitle = null,
@@ -156,8 +139,9 @@ internal fun CloudMusicFeaturedPage(
                         )
                     } else {
                         CloudMusicArtistList(
-                            artists = current.home.artists,
+                            artists = current.data.home.artists,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
+                            listState = listState,
                             onArtistClick = onOpenArtist,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -172,6 +156,7 @@ internal fun CloudMusicFeaturedPage(
 private fun CloudFeaturedTrackList(
     tracks: List<OnlineTrack>,
     playbackBarOverlayHeight: Dp,
+    listState: LazyListState,
     onTrackClick: (List<androidx.media3.common.MediaItem>, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -187,6 +172,7 @@ private fun CloudFeaturedTrackList(
         tracks.map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
     }
     LazyColumn(
+        state = listState,
         modifier = modifier.background(CloudSurfaceColor),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
@@ -210,12 +196,14 @@ private fun CloudFeaturedTrackList(
 private fun CloudFeaturedPlaylistList(
     playlists: List<OnlinePlaylist>,
     playbackBarOverlayHeight: Dp,
+    listState: LazyListState,
     onPlaylistClick: (OnlinePlaylist) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     CloudMusicVerticalCoverList(
         items = playlists,
         playbackBarOverlayHeight = playbackBarOverlayHeight,
+        listState = listState,
         title = OnlinePlaylist::title,
         subtitle = { playlist -> cloudPlaylistSubtitle(playlist) },
         imageUrl = OnlinePlaylist::artworkUrl,
@@ -223,15 +211,4 @@ private fun CloudFeaturedPlaylistList(
         itemKey = OnlinePlaylist::playlistId,
         modifier = modifier,
     )
-}
-
-/** 捕获非取消异常，避免网络错误直接打断协程作用域。 */
-private suspend inline fun <T> runSuspendCatching(block: suspend () -> T): Result<T> {
-    return try {
-        Result.success(block())
-    } catch (error: CancellationException) {
-        throw error
-    } catch (error: Throwable) {
-        Result.failure(error)
-    }
 }

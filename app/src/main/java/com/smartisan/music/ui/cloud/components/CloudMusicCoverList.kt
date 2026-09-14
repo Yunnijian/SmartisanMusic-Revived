@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
+import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineRadio
@@ -43,8 +46,10 @@ internal fun <T> CloudMusicVerticalCoverList(
     onItemClick: (T) -> Unit,
     itemKey: (T) -> Any,
     modifier: Modifier = Modifier,
+    listState: LazyListState? = null,
 ) {
     LazyColumn(
+        state = listState ?: rememberLazyListState(),
         modifier = modifier.background(CloudSurfaceColor),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
@@ -109,8 +114,10 @@ internal fun CloudMusicArtistList(
     playbackBarOverlayHeight: Dp,
     onArtistClick: (OnlineArtist) -> Unit,
     modifier: Modifier = Modifier,
+    listState: LazyListState? = null,
 ) {
     LazyColumn(
+        state = listState ?: rememberLazyListState(),
         modifier = modifier.background(CloudSurfaceColor),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
@@ -180,27 +187,43 @@ internal fun cloudArtistSubtitle(artist: OnlineArtist): String {
         .ifBlank { stringResource(R.string.cloud_music_artist_provider_netease) }
 }
 
+/** 专辑副标题：艺人 · 共 N 首，全缺时不显示（对齐旧版 albumSubtitle 的拼接顺序）。 */
+@Composable
+internal fun cloudAlbumSubtitle(album: OnlineAlbum): String? {
+    return listOfNotNull(
+        album.artist?.takeIf(String::isNotBlank),
+        album.trackCount.takeIf { it > 0 }?.let { count ->
+            stringResource(R.string.cloud_music_album_total_tracks, count)
+        },
+    ).joinToString(" · ").ifBlank { null }
+}
+
+/**
+ * 播放数文案：≥1 万按「N 万次播放」缩写，否则用原始次数的复数资源，非正数返回 null。
+ * 对齐旧版 [OnlinePlaylist.homeSubtitle] 的阈值逻辑，供歌单副标题与详情页头部共用。
+ */
+@Composable
+internal fun cloudPlayCountText(playCount: Long): String? {
+    if (playCount <= 0L) return null
+    return if (playCount >= 10_000L) {
+        stringResource(R.string.cloud_music_play_count_wan, playCount / 10_000L)
+    } else {
+        pluralStringResource(R.plurals.cloud_music_play_count, playCount.toInt(), playCount)
+    }
+}
+
 /** 歌单副标题：自带副标题 → 曲目数 → 播放数（≥1 万按万次缩写，对齐旧版 homeSubtitle）。 */
 @Composable
 internal fun cloudPlaylistSubtitle(playlist: OnlinePlaylist): String? {
     playlist.subtitle?.takeIf(String::isNotBlank)?.let { return it }
-    return when {
-        playlist.trackCount > 0 -> pluralStringResource(
+    if (playlist.trackCount > 0) {
+        return pluralStringResource(
             R.plurals.track_count,
             playlist.trackCount,
             playlist.trackCount,
         )
-        playlist.playCount >= 10_000L -> stringResource(
-            R.string.cloud_music_play_count_wan,
-            playlist.playCount / 10_000L,
-        )
-        playlist.playCount > 0L -> pluralStringResource(
-            R.plurals.cloud_music_play_count,
-            playlist.playCount.toInt(),
-            playlist.playCount,
-        )
-        else -> null
     }
+    return cloudPlayCountText(playlist.playCount)
 }
 
 /** 电台副标题：分类 · 节目数 · 播放数，全缺时回退自带副标题/提供方文案（对齐旧版 subtitleText）。 */

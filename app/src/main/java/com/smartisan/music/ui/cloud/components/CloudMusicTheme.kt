@@ -50,6 +50,18 @@ internal val CloudArtworkPlaceholderColor: Color
 internal val CloudBlankIconTintColor: Color
     @Composable get() = if (isSystemInDarkTheme()) Color(0x8AFFFFFF) else Color(0xFFD0D0D0)
 
+/** 「我的」页筛选胶囊未选中底色（旧版 0xFFF5F5F5）。 */
+internal val CloudFilterChipIdleBackgroundColor: Color
+    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF353535) else Color(0xFFF5F5F5)
+
+/** 「我的」页筛选胶囊未选中文字色（旧版 0x99000000）。 */
+internal val CloudFilterChipIdleTextColor: Color
+    @Composable get() = if (isSystemInDarkTheme()) Color(0x99FFFFFF) else Color(0x99000000)
+
+/** 列表 footer 计数文字色（旧版 0xFFBCBCBC）。 */
+internal val CloudListFooterTextColor: Color
+    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF6E6E6E) else Color(0xFFBCBCBC)
+
 internal val CloudMusicSearchBarHeight = 50.dp
 internal val CloudSearchCoverArtworkSize = 48.dp
 internal val CloudSearchCoverRowHeight = 72.dp

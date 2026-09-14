@@ -357,4 +357,17 @@
     <string name="cloud_music_radio_empty">暂无电台内容</string>
     <string name="cloud_music_radio_error">电台暂时无法载入</string>
     <string name="cloud_music_radio_program_count">%1$d 期节目</string>
+    <string name="cloud_music_playlist_track_count">%1$d 首歌曲</string>
+    <string name="cloud_music_filter_all">全部</string>
+    <string name="cloud_music_filter_playlist">歌单</string>
+    <string name="cloud_music_filter_album">专辑</string>
+    <string name="cloud_music_filter_radio">播客</string>
+    <string name="cloud_music_account_playlist_label">歌单</string>
+    <string name="cloud_music_account_album_label">专辑</string>
+    <string name="cloud_music_account_radio_label">播客</string>
+    <string name="cloud_music_blank_no_content">这里还没有内容</string>
+    <string name="cloud_music_liked_songs_entry">我喜欢的音乐</string>
+    <plurals name="cloud_music_account_library_count">
+        <item quantity="other">%1$d 项内容</item>
+    </plurals>
 </resources>

@@ -1,107 +1,56 @@
 package com.smartisan.music.ui.cloud
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
-import com.smartisan.music.data.online.OnlineMusicHome
 import com.smartisan.music.data.online.OnlineMusicProvider
-import com.smartisan.music.data.online.OnlineMusicProviderRepository
 import com.smartisan.music.data.online.OnlinePlaylist
-import com.smartisan.music.data.online.OnlineBanner
 import com.smartisan.music.data.online.OnlineTrack
 import com.smartisan.music.data.online.toMediaItem
 import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
 import com.smartisan.music.playback.LocalPlaybackBrowser
 import com.smartisan.music.playback.replaceQueueAndPlay
-import com.smartisan.music.ui.cloud.components.CloudAccentColor
+import com.smartisan.music.ui.cloud.components.CloudHomeAnimatedSection
+import com.smartisan.music.ui.cloud.components.CloudHomeSectionAnimation
 import com.smartisan.music.ui.cloud.components.CloudMusicBanner
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverCard
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverCardSection
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
-import com.smartisan.music.ui.cloud.components.CloudSearchFieldBackgroundColor
-import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
-import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
-import com.smartisan.music.ui.cloud.components.cloudMusicPressable
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-
-/** 首页顶部栏高度。 */
-private val CloudMusicHomeTopBarHeight = 50.dp
-
-/** 顶部搜索入口的高度。 */
-private val CloudMusicHomeSearchEntryHeight = 32.dp
-
-/** 顶部搜索入口圆角。 */
-private val CloudMusicHomeSearchEntryCornerRadius = 16.dp
-
-/** “我的”按钮文字。 */
-private val CloudMusicMineButtonColor = CloudAccentColor
-
-/** 首页推荐页状态机：请求 / 空态 / 错误 / 成功，错误态可递增 revision 触发重试。 */
-private sealed interface CloudMusicHomeState {
-    object Loading : CloudMusicHomeState
-    object Empty : CloudMusicHomeState
-    object Error : CloudMusicHomeState
-    data class Success(
-        val banners: List<OnlineBanner>,
-        val home: OnlineMusicHome,
-        val dailyTracks: List<OnlineTrack>,
-    ) : CloudMusicHomeState
-}
 
 /**
  * 云音乐首页推荐页。
  *
- * 无 ViewModel：用 [androidx.compose.runtime.produceState] 发起 `featuredHome()` +
- * `featuredBanners()` 并行请求，状态机 loading/empty/error/success，错误态可重试。
+ * 数据来自宿主级 [CloudMusicDataStore.home]：首页与「查看全部」整页共用同一份
+ * featuredHome 结果，页面在入口层之间被销毁重建时不再重新联网。本页只负责触发加载
+ * （[CloudDataSlot.ensureLoaded]，非活跃时不发起）、渲染三态与重试。
  *
  * 布局：[LazyColumn] 垂直滚动，从上到下依次为 Banner 轮播、每日推荐、推荐歌单、
  * 排行榜、新碟上架、热门艺人（空区块跳过）。底部为播放条预留 padding。
  */
 @Composable
 internal fun CloudMusicHomePage(
-    repository: OnlineMusicProviderRepository,
+    data: CloudMusicDataStore,
+    scrollStates: CloudMusicScrollStates,
     active: Boolean,
     playbackBarOverlayHeight: Dp,
-    onOpenSearch: () -> Unit,
-    onOpenMine: () -> Unit,
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
     onOpenAlbum: (OnlineAlbum) -> Unit,
     onOpenArtist: (OnlineArtist) -> Unit,
@@ -110,100 +59,78 @@ internal fun CloudMusicHomePage(
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
     val scope = rememberCoroutineScope()
-    // 错误态重试时递增，触发 produceState 重新加载。
-    var revision by remember { mutableIntStateOf(0) }
+    val homeSlot = data.home
+    val repository = data.repository
+    val sectionAnimation = data.homeSectionAnimation
+    val homeLoaded = homeSlot.state(Unit) is CloudSlotState.Success
 
-    val state by produceState<CloudMusicHomeState>(
-        initialValue = CloudMusicHomeState.Loading,
-        repository,
-        revision,
-        active,
-    ) {
-        // 切到非活跃 tab 时不发起请求；active 恢复后由 key 变化重新触发加载。
-        if (!active) {
-            return@produceState
+    // 切到非活跃 tab 时不发起请求；active 恢复后重新触发（已加载则直接复用缓存）。
+    LaunchedEffect(homeSlot, active) {
+        if (active) {
+            homeSlot.ensureLoaded(Unit)
         }
-        value = runSuspendCatching {
-            coroutineScope {
-                val homeAsync = async { repository.featuredHome() }
-                val bannersAsync = async { repository.featuredBanners() }
-                val dailyAsync = async {
-                    runSuspendCatching { repository.currentUserDailyRecommendedTracks() }
-                        .getOrNull().orEmpty()
-                }
-                val home = homeAsync.await()
-                val banners = bannersAsync.await()
-                val accountDaily = dailyAsync.await()
-                if (banners.isEmpty() &&
-                    home.tracks.isEmpty() &&
-                    home.playlists.isEmpty() &&
-                    home.charts.isEmpty() &&
-                    home.albums.isEmpty() &&
-                    home.artists.isEmpty()
-                ) {
-                    CloudMusicHomeState.Empty
-                } else {
-                    CloudMusicHomeState.Success(
-                        banners = banners,
-                        home = home,
-                        dailyTracks = accountDaily.ifEmpty { home.tracks },
-                    )
-                }
-            }
-        }.fold(
-            onSuccess = { it },
-            onFailure = { CloudMusicHomeState.Error },
-        )
+    }
+    // 入场动画只播一次：状态在仓库里，页面重建时区块保持展开。
+    LaunchedEffect(sectionAnimation, homeLoaded) {
+        if (homeLoaded) {
+            sectionAnimation.requestPlay()
+        }
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        CloudMusicHomeTopBar(
-            onOpenSearch = onOpenSearch,
-            onOpenMine = onOpenMine,
-        )
-        when (val current = state) {
-            CloudMusicHomeState.Loading -> CloudMusicDelayedLoadingState(
+        when (val current = homeSlot.state(Unit)) {
+            CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
                 title = stringResource(R.string.cloud_music_home_loading),
                 modifier = Modifier.fillMaxSize(),
             )
-            CloudMusicHomeState.Empty -> CloudMusicBlankState(
-                title = stringResource(R.string.cloud_music_empty_title),
-                subtitle = stringResource(R.string.cloud_music_empty_subtitle),
-                modifier = Modifier.fillMaxSize(),
-            )
-            CloudMusicHomeState.Error -> CloudMusicBlankState(
+            CloudSlotState.Error -> CloudMusicBlankState(
                 title = stringResource(R.string.cloud_music_home_error),
                 subtitle = null,
                 actionText = stringResource(R.string.cloud_music_retry),
-                onActionClick = { revision += 1 },
+                onActionClick = { homeSlot.reload(Unit) },
                 modifier = Modifier.fillMaxSize(),
             )
-            is CloudMusicHomeState.Success -> CloudMusicHomeContent(
-                state = current,
-                active = active,
-                playbackBarOverlayHeight = playbackBarOverlayHeight,
-                onOpenPlaylist = onOpenPlaylist,
-                onOpenAlbum = onOpenAlbum,
-                onOpenArtist = onOpenArtist,
-                onOpenFeatured = onOpenFeatured,
-                onPlayBannerTrack = { trackId ->
-                    scope.launch {
-                        val track = runSuspendCatching { repository.track(trackId) }.getOrNull()
-                            ?: return@launch
+            is CloudSlotState.Success -> if (current.data.isEmpty) {
+                CloudMusicBlankState(
+                    title = stringResource(R.string.cloud_music_empty_title),
+                    subtitle = stringResource(R.string.cloud_music_empty_subtitle),
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                CloudMusicHomeContent(
+                    bundle = current.data,
+                    listState = scrollStates.home,
+                    sectionAnimation = sectionAnimation,
+                    active = active,
+                    playbackBarOverlayHeight = playbackBarOverlayHeight,
+                    onOpenPlaylist = onOpenPlaylist,
+                    onOpenAlbum = onOpenAlbum,
+                    onOpenArtist = onOpenArtist,
+                    onOpenFeatured = onOpenFeatured,
+                    onPlayBannerTrack = { trackId ->
+                        scope.launch {
+                            val track = cloudRunSuspendCatching { repository.track(trackId) }
+                                .getOrNull()
+                                ?: return@launch
+                            playbackBrowser?.replaceQueueAndPlay(
+                                mediaItems = listOf(
+                                    track.toMediaItem().withOnlinePlaybackPlaceholderUri(),
+                                ),
+                                startIndex = 0,
+                            )
+                        }
+                    },
+                    onPlayDailyTracks = { tracks, index ->
+                        val items = tracks.map {
+                            it.toMediaItem().withOnlinePlaybackPlaceholderUri()
+                        }
                         playbackBrowser?.replaceQueueAndPlay(
-                            mediaItems = listOf(track.toMediaItem().withOnlinePlaybackPlaceholderUri()),
-                            startIndex = 0,
+                            mediaItems = items,
+                            startIndex = index,
                         )
-                    }
-                },
-                onPlayDailyTracks = { tracks, index ->
-                    val items = tracks.map { it.toMediaItem().withOnlinePlaybackPlaceholderUri() }
-                    playbackBrowser?.replaceQueueAndPlay(
-                        mediaItems = items,
-                        startIndex = index,
-                    )
-                },
-            )
+                    },
+                )
+            }
         }
     }
 }
@@ -211,7 +138,9 @@ internal fun CloudMusicHomePage(
 /** 首页滚动内容：Banner + 各横滑区块。空区块跳过，列表 key 用 `${id}:$index`。 */
 @Composable
 private fun CloudMusicHomeContent(
-    state: CloudMusicHomeState.Success,
+    bundle: CloudHomeBundle,
+    listState: LazyListState,
+    sectionAnimation: CloudHomeSectionAnimation,
     active: Boolean,
     playbackBarOverlayHeight: Dp,
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
@@ -221,9 +150,9 @@ private fun CloudMusicHomeContent(
     onPlayBannerTrack: (trackId: String) -> Unit,
     onPlayDailyTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
 ) {
-    val home = state.home
-    val banners = state.banners
-    val dailyTracks = state.dailyTracks
+    val home = bundle.home
+    val banners = bundle.banners
+    val dailyTracks = bundle.dailyTracks
     val dailyTracksTitle = stringResource(R.string.cloud_music_section_daily_tracks)
     val playlistsTitle = stringResource(R.string.cloud_music_section_playlists)
     val chartsTitle = stringResource(R.string.cloud_music_section_charts)
@@ -232,9 +161,12 @@ private fun CloudMusicHomeContent(
     val viewAllText = stringResource(R.string.cloud_music_section_view_all)
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
     ) {
+        // 区块索引按实际渲染顺序递增：空区块跳过时不占位，首个可见区块总是立即入场。
+        var sectionIndex = 0
         if (banners.isNotEmpty()) {
             item(key = "cloud-home-banner") {
                 CloudMusicBanner(
@@ -264,107 +196,122 @@ private fun CloudMusicHomeContent(
             }
         }
         if (dailyTracks.isNotEmpty()) {
+            val animationIndex = sectionIndex++
             item(key = "cloud-home-section-daily") {
                 val tracks = dailyTracks
-                CloudMusicCoverCardSection(title = dailyTracksTitle) {
-                    itemsIndexed(
-                        items = tracks,
-                        key = { index, track -> "${track.mediaId}:$index" },
-                    ) { index, track ->
-                        CloudMusicCoverCard(
-                            imageUrl = track.artworkUrl,
-                            title = track.title,
-                            subtitle = track.artist,
-                            onClick = { onPlayDailyTracks(tracks, index) },
-                        )
+                CloudHomeAnimatedSection(visibleState = sectionAnimation.stateAt(animationIndex)) {
+                    CloudMusicCoverCardSection(title = dailyTracksTitle) {
+                        itemsIndexed(
+                            items = tracks,
+                            key = { index, track -> "${track.mediaId}:$index" },
+                        ) { index, track ->
+                            CloudMusicCoverCard(
+                                imageUrl = track.artworkUrl,
+                                title = track.title,
+                                subtitle = track.artist,
+                                onClick = { onPlayDailyTracks(tracks, index) },
+                            )
+                        }
                     }
                 }
             }
         }
         if (home.playlists.isNotEmpty()) {
+            val animationIndex = sectionIndex++
             item(key = "cloud-home-section-playlists") {
                 val playlists = home.playlists
-                CloudMusicCoverCardSection(
-                    title = playlistsTitle,
-                    actionText = viewAllText,
-                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Playlists) },
-                ) {
-                    itemsIndexed(
-                        items = playlists,
-                        key = { index, playlist -> "${playlist.playlistId}:$index" },
-                    ) { _, playlist ->
-                        CloudMusicCoverCard(
-                            imageUrl = playlist.artworkUrl,
-                            title = playlist.title,
-                            subtitle = playlist.subtitle,
-                            onClick = { onOpenPlaylist(playlist) },
-                        )
+                CloudHomeAnimatedSection(visibleState = sectionAnimation.stateAt(animationIndex)) {
+                    CloudMusicCoverCardSection(
+                        title = playlistsTitle,
+                        actionText = viewAllText,
+                        onActionClick = { onOpenFeatured(CloudFeaturedPage.Playlists) },
+                    ) {
+                        itemsIndexed(
+                            items = playlists,
+                            key = { index, playlist -> "${playlist.playlistId}:$index" },
+                        ) { _, playlist ->
+                            CloudMusicCoverCard(
+                                imageUrl = playlist.artworkUrl,
+                                title = playlist.title,
+                                subtitle = playlist.subtitle,
+                                onClick = { onOpenPlaylist(playlist) },
+                            )
+                        }
                     }
                 }
             }
         }
         if (home.charts.isNotEmpty()) {
+            val animationIndex = sectionIndex++
             item(key = "cloud-home-section-charts") {
                 val charts = home.charts
-                CloudMusicCoverCardSection(
-                    title = chartsTitle,
-                    actionText = viewAllText,
-                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Charts) },
-                ) {
-                    itemsIndexed(
-                        items = charts,
-                        key = { index, chart -> "${chart.playlistId}:$index" },
-                    ) { _, chart ->
-                        CloudMusicCoverCard(
-                            imageUrl = chart.artworkUrl,
-                            title = chart.title,
-                            subtitle = chart.subtitle,
-                            onClick = { onOpenPlaylist(chart) },
-                        )
+                CloudHomeAnimatedSection(visibleState = sectionAnimation.stateAt(animationIndex)) {
+                    CloudMusicCoverCardSection(
+                        title = chartsTitle,
+                        actionText = viewAllText,
+                        onActionClick = { onOpenFeatured(CloudFeaturedPage.Charts) },
+                    ) {
+                        itemsIndexed(
+                            items = charts,
+                            key = { index, chart -> "${chart.playlistId}:$index" },
+                        ) { _, chart ->
+                            CloudMusicCoverCard(
+                                imageUrl = chart.artworkUrl,
+                                title = chart.title,
+                                subtitle = chart.subtitle,
+                                onClick = { onOpenPlaylist(chart) },
+                            )
+                        }
                     }
                 }
             }
         }
         if (home.albums.isNotEmpty()) {
+            val animationIndex = sectionIndex++
             item(key = "cloud-home-section-albums") {
                 val albums = home.albums
-                CloudMusicCoverCardSection(
-                    title = albumsTitle,
-                    actionText = viewAllText,
-                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Albums) },
-                ) {
-                    itemsIndexed(
-                        items = albums,
-                        key = { index, album -> "${album.albumId}:$index" },
-                    ) { _, album ->
-                        CloudMusicCoverCard(
-                            imageUrl = album.artworkUrl,
-                            title = album.title,
-                            subtitle = album.subtitle(),
-                            onClick = { onOpenAlbum(album) },
-                        )
+                CloudHomeAnimatedSection(visibleState = sectionAnimation.stateAt(animationIndex)) {
+                    CloudMusicCoverCardSection(
+                        title = albumsTitle,
+                        actionText = viewAllText,
+                        onActionClick = { onOpenFeatured(CloudFeaturedPage.Albums) },
+                    ) {
+                        itemsIndexed(
+                            items = albums,
+                            key = { index, album -> "${album.albumId}:$index" },
+                        ) { _, album ->
+                            CloudMusicCoverCard(
+                                imageUrl = album.artworkUrl,
+                                title = album.title,
+                                subtitle = album.subtitle(),
+                                onClick = { onOpenAlbum(album) },
+                            )
+                        }
                     }
                 }
             }
         }
         if (home.artists.isNotEmpty()) {
+            val animationIndex = sectionIndex++
             item(key = "cloud-home-section-artists") {
                 val artists = home.artists
-                CloudMusicCoverCardSection(
-                    title = artistsTitle,
-                    actionText = viewAllText,
-                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Artists) },
-                ) {
-                    itemsIndexed(
-                        items = artists,
-                        key = { index, artist -> "${artist.artistId}:$index" },
-                    ) { _, artist ->
-                        CloudMusicCoverCard(
-                            imageUrl = artist.artworkUrl,
-                            title = artist.name,
-                            subtitle = artist.subtitle,
-                            onClick = { onOpenArtist(artist) },
-                        )
+                CloudHomeAnimatedSection(visibleState = sectionAnimation.stateAt(animationIndex)) {
+                    CloudMusicCoverCardSection(
+                        title = artistsTitle,
+                        actionText = viewAllText,
+                        onActionClick = { onOpenFeatured(CloudFeaturedPage.Artists) },
+                    ) {
+                        itemsIndexed(
+                            items = artists,
+                            key = { index, artist -> "${artist.artistId}:$index" },
+                        ) { _, artist ->
+                            CloudMusicCoverCard(
+                                imageUrl = artist.artworkUrl,
+                                title = artist.name,
+                                subtitle = artist.subtitle,
+                                onClick = { onOpenArtist(artist) },
+                            )
+                        }
                     }
                 }
             }
@@ -377,69 +324,4 @@ private fun CloudMusicHomeContent(
 private fun OnlineAlbum.subtitle(): String? {
     artist?.takeIf(String::isNotBlank)?.let { return it }
     return trackCount.takeIf { it > 0 }?.let { stringResource(R.string.cloud_music_album_total_tracks, it) }
-}
-
-/** 首页顶部栏：左侧搜索入口（点击进入搜索页）+ 右侧“我的”入口。 */
-@Composable
-private fun CloudMusicHomeTopBar(
-    onOpenSearch: () -> Unit,
-    onOpenMine: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(CloudMusicHomeTopBarHeight)
-            .background(CloudSurfaceColor)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .height(CloudMusicHomeSearchEntryHeight)
-                .clip(RoundedCornerShape(CloudMusicHomeSearchEntryCornerRadius))
-                .background(CloudSearchFieldBackgroundColor)
-                .cloudMusicPressable(onClick = onOpenSearch)
-                .padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.search_bar_left_icon),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-            )
-            Text(
-                text = stringResource(R.string.cloud_music_search_hint_netease),
-                style = TextStyle(
-                    fontSize = 13.sp,
-                    color = CloudSecondaryTextColor,
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 6.dp),
-            )
-        }
-        Text(
-            text = stringResource(R.string.cloud_music_mine_title),
-            style = TextStyle(
-                fontSize = 14.sp,
-                color = CloudMusicMineButtonColor,
-            ),
-            maxLines = 1,
-            modifier = Modifier
-                .padding(start = 12.dp)
-                .cloudMusicPressable(onClick = onOpenMine),
-        )
-    }
-}
-
-/** 捕获非取消异常，避免网络错误直接打断协程作用域。 */
-private suspend inline fun <T> runSuspendCatching(block: suspend () -> T): Result<T> {
-    return try {
-        Result.success(block())
-    } catch (error: CancellationException) {
-        throw error
-    } catch (error: Throwable) {
-        Result.failure(error)
-    }
 }

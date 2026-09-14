@@ -26,9 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,7 +45,6 @@ import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
-import com.smartisan.music.data.online.OnlineMusicProviderRepository
 import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineSearchResults
 import com.smartisan.music.data.online.OnlineTrack
@@ -72,21 +69,12 @@ import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTextHintColor
 import com.smartisan.music.ui.cloud.components.CloudTrackActionsOverlays
 import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
+import com.smartisan.music.ui.cloud.components.cloudAlbumSubtitle
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
 import com.smartisan.music.ui.cloud.components.cloudPlaylistSubtitle
 import com.smartisan.music.ui.cloud.components.rememberCloudTrackActionsState
 import com.smartisan.music.ui.components.SmartisanDrawableBackground
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-
-/** 云音乐搜索结果状态机：输入为空时回到 Idle，网络失败可重试。 */
-internal sealed interface CloudSearchResultsState {
-    object Idle : CloudSearchResultsState
-    object Loading : CloudSearchResultsState
-    data class Empty(val query: String) : CloudSearchResultsState
-    data class Error(val query: String) : CloudSearchResultsState
-    data class Success(val results: OnlineSearchResults) : CloudSearchResultsState
-}
 
 /** 搜索分类：综合聚合视图 + 四个单类列表，对齐旧版五段分类栏。 */
 internal enum class CloudSearchCategory(val labelRes: Int) {
@@ -103,17 +91,21 @@ private const val CloudSearchPreviewTrackCount = 4
 /**
  * 云音乐搜索页：搜索框 + 分类栏 + 五类结果（综合/歌曲/艺术家/专辑/歌单）。
  *
- * 数据走 [OnlineMusicProviderRepository.searchAll] 一次拿全五类；综合视图按分区展示，
- * 各分区「全部」切到对应单类列表。歌曲点击把结果列表作为在线队列交给播放控制器，
- * 单曲「更多」复用 [CloudTrackActionsOverlays] 的完整动作集。
- * query 由宿主持有（受控），与作者新版框架的 SearchOverlay 受控模式一致。
+ * 数据走宿主级 [CloudMusicDataStore.search] 槽（`searchAll` 一次拿全五类），按 query 缓存：
+ * 从结果点进详情时本页会被移出组合，返回时直接复用结果，不重跑搜索也不丢滚动位置。
+ * 页内只保留输入防抖。综合视图按分区展示，各分区「全部」切到对应单类列表；
+ * 歌曲点击把结果列表作为在线队列交给播放控制器，单曲「更多」复用
+ * [CloudTrackActionsOverlays] 的完整动作集。query 与分类选中态均由宿主持有（受控）。
  */
 @Composable
 internal fun CloudMusicSearchPage(
     query: String,
     onQueryChange: (String) -> Unit,
-    repository: OnlineMusicProviderRepository,
+    data: CloudMusicDataStore,
+    scrollStates: CloudMusicScrollStates,
     active: Boolean,
+    selectedCategory: CloudSearchCategory,
+    onCategoryChange: (CloudSearchCategory) -> Unit,
     playbackBarOverlayHeight: Dp,
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
     onOpenAlbum: (OnlineAlbum) -> Unit,
@@ -123,37 +115,15 @@ internal fun CloudMusicSearchPage(
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
     val trackActionsState = rememberCloudTrackActionsState()
-    var selectedCategory by remember { mutableStateOf(CloudSearchCategory.All) }
-    var state by remember { mutableStateOf<CloudSearchResultsState>(CloudSearchResultsState.Idle) }
-    // 失败重试时递增，让 LaunchedEffect 以相同 query 重新发起搜索。
-    var searchRevision by remember { mutableStateOf(0) }
+    val searchSlot = data.search
+    val normalizedQuery = query.trim()
 
-    // 输入防抖后调用网易云搜索；query 变化即取消上一次未完成的请求。
-    // 非活跃（被详情页/其他层覆盖）时不发起搜索，active 恢复后由 key 变化重新触发。
-    LaunchedEffect(query, searchRevision, active) {
-        if (!active) return@LaunchedEffect
-        val normalizedQuery = query.trim()
-        if (normalizedQuery.isEmpty()) {
-            state = CloudSearchResultsState.Idle
-            return@LaunchedEffect
-        }
-        state = CloudSearchResultsState.Loading
+    // 输入防抖后触发搜索；query 变化即取消上一次的防抖等待。
+    // 非活跃（被详情页覆盖）时不发起搜索，active 恢复后由 key 变化重新触发。
+    LaunchedEffect(searchSlot, normalizedQuery, active) {
+        if (!active || normalizedQuery.isEmpty()) return@LaunchedEffect
         delay(CloudSearchDebounceMs)
-        val result = runSuspendCatching {
-            repository.searchAll(normalizedQuery)
-        }
-        state = result.fold(
-            onSuccess = { results ->
-                if (results.hasResults) {
-                    CloudSearchResultsState.Success(results)
-                } else {
-                    CloudSearchResultsState.Empty(normalizedQuery)
-                }
-            },
-            onFailure = {
-                CloudSearchResultsState.Error(normalizedQuery)
-            },
-        )
+        searchSlot.ensureLoaded(normalizedQuery)
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -166,59 +136,66 @@ internal fun CloudMusicSearchPage(
             modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            when (val currentState = state) {
-                CloudSearchResultsState.Idle -> CloudMusicBlankState(
+            if (normalizedQuery.isEmpty()) {
+                CloudMusicBlankState(
                     title = stringResource(R.string.cloud_music_empty_title),
                     subtitle = stringResource(R.string.cloud_music_empty_subtitle),
                     modifier = Modifier.fillMaxSize(),
                 )
-                CloudSearchResultsState.Loading -> CloudMusicDelayedLoadingState(
-                    title = stringResource(R.string.cloud_music_loading),
-                    modifier = Modifier.fillMaxSize(),
-                )
-                is CloudSearchResultsState.Empty -> CloudMusicBlankState(
-                    title = stringResource(R.string.cloud_music_no_result),
-                    subtitle = currentState.query,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                is CloudSearchResultsState.Error -> CloudMusicBlankState(
-                    title = stringResource(R.string.cloud_music_error),
-                    subtitle = currentState.query,
-                    actionText = stringResource(R.string.cloud_music_retry),
-                    onActionClick = { searchRevision += 1 },
-                    modifier = Modifier.fillMaxSize(),
-                )
-                is CloudSearchResultsState.Success -> Column(Modifier.fillMaxSize()) {
-                    CloudSearchCategoryBar(
-                        selectedCategory = selectedCategory,
-                        onCategoryChange = { selectedCategory = it },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    CloudSearchResultsContent(
-                        results = currentState.results,
-                        selectedCategory = selectedCategory,
-                        playbackBarOverlayHeight = playbackBarOverlayHeight,
-                        onCategoryChange = { selectedCategory = it },
-                        onOpenPlaylist = onOpenPlaylist,
-                        onOpenAlbum = onOpenAlbum,
-                        onOpenArtist = onOpenArtist,
-                        onTrackMoreClick = trackActionsState::show,
-                        onPlayTracks = { tracks, index ->
-                            val items = tracks.map {
-                                it.toMediaItem().withOnlinePlaybackPlaceholderUri()
-                            }
-                            playbackBrowser?.replaceQueueAndPlay(
-                                mediaItems = items,
-                                startIndex = index,
-                            )
-                        },
+            } else {
+                when (val current = searchSlot.state(normalizedQuery)) {
+                    CloudSlotState.Loading -> CloudMusicDelayedLoadingState(
+                        title = stringResource(R.string.cloud_music_loading),
                         modifier = Modifier.fillMaxSize(),
                     )
+                    CloudSlotState.Error -> CloudMusicBlankState(
+                        title = stringResource(R.string.cloud_music_error),
+                        subtitle = normalizedQuery,
+                        actionText = stringResource(R.string.cloud_music_retry),
+                        onActionClick = { searchSlot.reload(normalizedQuery) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    is CloudSlotState.Success -> if (!current.data.hasResults) {
+                        CloudMusicBlankState(
+                            title = stringResource(R.string.cloud_music_no_result),
+                            subtitle = normalizedQuery,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            CloudSearchCategoryBar(
+                                selectedCategory = selectedCategory,
+                                onCategoryChange = onCategoryChange,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            CloudSearchResultsContent(
+                                results = current.data,
+                                selectedCategory = selectedCategory,
+                                scrollStates = scrollStates,
+                                playbackBarOverlayHeight = playbackBarOverlayHeight,
+                                onCategoryChange = onCategoryChange,
+                                onOpenPlaylist = onOpenPlaylist,
+                                onOpenAlbum = onOpenAlbum,
+                                onOpenArtist = onOpenArtist,
+                                onTrackMoreClick = trackActionsState::show,
+                                onPlayTracks = { tracks, index ->
+                                    val items = tracks.map {
+                                        it.toMediaItem().withOnlinePlaybackPlaceholderUri()
+                                    }
+                                    playbackBrowser?.replaceQueueAndPlay(
+                                        mediaItems = items,
+                                        startIndex = index,
+                                    )
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
                 }
             }
             CloudTrackActionsOverlays(
                 state = trackActionsState,
-                repository = repository,
+                repository = data.repository,
                 editablePlaylist = null,
                 onTrackRemoved = {},
                 onAccountLibraryChanged = {},
@@ -283,6 +260,7 @@ private fun CloudSearchCategoryBar(
 private fun CloudSearchResultsContent(
     results: OnlineSearchResults,
     selectedCategory: CloudSearchCategory,
+    scrollStates: CloudMusicScrollStates,
     playbackBarOverlayHeight: Dp,
     onCategoryChange: (CloudSearchCategory) -> Unit,
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
@@ -295,6 +273,7 @@ private fun CloudSearchResultsContent(
     val viewAllText = stringResource(R.string.cloud_music_section_view_all)
     when (selectedCategory) {
         CloudSearchCategory.All -> LazyColumn(
+            state = scrollStates.search(CloudSearchCategory.All),
             modifier = modifier.background(CloudSurfaceColor),
             contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
         ) {
@@ -397,6 +376,7 @@ private fun CloudSearchResultsContent(
         } else {
             val tracks = results.tracks
             LazyColumn(
+                state = scrollStates.search(CloudSearchCategory.Tracks),
                 modifier = modifier.background(CloudSurfaceColor),
                 contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
             ) {
@@ -426,6 +406,7 @@ private fun CloudSearchResultsContent(
             CloudMusicArtistList(
                 artists = results.artists,
                 playbackBarOverlayHeight = playbackBarOverlayHeight,
+                listState = scrollStates.search(CloudSearchCategory.Artists),
                 onArtistClick = onOpenArtist,
                 modifier = modifier,
             )
@@ -433,15 +414,9 @@ private fun CloudSearchResultsContent(
         CloudSearchCategory.Albums -> CloudMusicVerticalCoverList(
             items = results.albums,
             playbackBarOverlayHeight = playbackBarOverlayHeight,
+            listState = scrollStates.search(CloudSearchCategory.Albums),
             title = OnlineAlbum::title,
-            subtitle = { album ->
-                listOfNotNull(
-                    album.artist?.takeIf(String::isNotBlank),
-                    album.trackCount.takeIf { it > 0 }?.let { count ->
-                        stringResource(R.string.cloud_music_album_total_tracks, count)
-                    },
-                ).joinToString(" · ").ifBlank { null }
-            },
+            subtitle = { album -> cloudAlbumSubtitle(album) },
             imageUrl = OnlineAlbum::artworkUrl,
             onItemClick = onOpenAlbum,
             itemKey = OnlineAlbum::albumId,
@@ -450,6 +425,7 @@ private fun CloudSearchResultsContent(
         CloudSearchCategory.Playlists -> CloudMusicVerticalCoverList(
             items = results.playlists,
             playbackBarOverlayHeight = playbackBarOverlayHeight,
+            listState = scrollStates.search(CloudSearchCategory.Playlists),
             title = OnlinePlaylist::title,
             subtitle = { playlist -> cloudPlaylistSubtitle(playlist) },
             imageUrl = OnlinePlaylist::artworkUrl,
@@ -593,16 +569,5 @@ internal fun CloudMusicSearchField(
                     onClick = onCancel,
                 ),
         )
-    }
-}
-
-/** 捕获非取消异常，避免网络错误直接把协程作用域打断。 */
-private suspend inline fun <T> runSuspendCatching(block: suspend () -> T): Result<T> {
-    return try {
-        Result.success(block())
-    } catch (error: CancellationException) {
-        throw error
-    } catch (error: Throwable) {
-        Result.failure(error)
     }
 }

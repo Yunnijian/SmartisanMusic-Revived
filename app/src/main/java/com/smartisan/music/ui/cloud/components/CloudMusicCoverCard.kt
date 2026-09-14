@@ -1,8 +1,11 @@
 package com.smartisan.music.ui.cloud.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,8 +17,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 封面卡片默认边长：与旧版云音乐推荐位的方形封面尺寸接近。 */
-internal val CloudMusicCoverCardSize = 100.dp
+/** 封面卡片默认边长：对齐旧版 CloudHomeCoverCardWidth。 */
+internal val CloudMusicCoverCardSize = 96.dp
 
 /** 区块内卡片之间的横向间距。 */
 internal val CloudMusicCoverCardSpacing = 10.dp
@@ -23,11 +26,8 @@ internal val CloudMusicCoverCardSpacing = 10.dp
 /** 封面卡片圆角。 */
 internal val CloudMusicCoverCardCornerRadius = 6.dp
 
-/** 区块标题上下的纵向间距，让分区之间留出呼吸空间。 */
-internal val CloudMusicCoverSectionVerticalSpacing = 6.dp
-
 /**
- * 云音乐通用封面卡片：正方形封面 + 标题（1 行省略）+ 副标题（1 行省略），
+ * 云音乐通用封面卡片：正方形封面 + 标题（2 行省略）+ 副标题（1 行省略），
  * 套用统一的按压缩放动效。供首页各横滑区块复用。
  */
 @Composable
@@ -56,9 +56,9 @@ internal fun CloudMusicCoverCard(
                 fontSize = 13.sp,
                 color = CloudTrackTitleColor,
             ),
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
+            modifier = Modifier.padding(top = 8.dp),
         )
         if (!subtitle.isNullOrBlank()) {
             Text(
@@ -69,14 +69,14 @@ internal fun CloudMusicCoverCard(
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 3.dp),
             )
         }
     }
 }
 
 /**
- * 云音乐封面卡片区块容器：[CloudMusicSectionTitle] 标题 + [LazyRow] 横滑封面卡片列表。
+ * 云音乐封面卡片区块容器：[CloudHomeSectionHeader] 标题 + [LazyRow] 横滑封面卡片列表 + 分隔线。
  *
  * 区块内容以 [LazyListScope] 形式注入，调用方可在其中使用 `itemsIndexed` 安排任意类型的
  * 封面卡片（歌单 / 专辑 / 艺人 / 歌曲等），与新版框架 AlbumDetailPage 把内容交给
@@ -88,12 +88,13 @@ internal fun CloudMusicCoverCardSection(
     modifier: Modifier = Modifier,
     actionText: String? = null,
     onActionClick: (() -> Unit)? = null,
+    listState: LazyListState? = null,
     content: LazyListScope.() -> Unit,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = CloudMusicCoverSectionVerticalSpacing),
+            .background(CloudSurfaceColor),
     ) {
         CloudHomeSectionHeader(
             title = title,
@@ -101,10 +102,12 @@ internal fun CloudMusicCoverCardSection(
             onClick = onActionClick,
         )
         LazyRow(
+            state = listState ?: rememberLazyListState(),
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp),
+            contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(CloudMusicCoverCardSpacing),
             content = content,
         )
+        CloudMusicDivider()
     }
 }

@@ -76,6 +76,7 @@ import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTrackActionsOverlays
 import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
+import com.smartisan.music.ui.cloud.components.cloudPlayCountText
 import com.smartisan.music.ui.cloud.components.rememberCloudTrackActionsState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import kotlinx.coroutines.CancellationException
@@ -524,9 +525,7 @@ private fun cloudDetailSubtitle(target: CloudDetailTarget): String {
             if (target.trackCount > 0) {
                 add(pluralStringResource(R.plurals.track_count, target.trackCount, target.trackCount))
             }
-            if (target.playCount > 0) {
-                add(pluralStringResource(R.plurals.cloud_music_play_count, target.playCount.toInt(), target.playCount))
-            }
+            cloudPlayCountText(target.playCount)?.let(::add)
         }
         is CloudDetailTarget.Album -> buildList {
             target.artist?.takeIf(String::isNotBlank)?.let(::add)
