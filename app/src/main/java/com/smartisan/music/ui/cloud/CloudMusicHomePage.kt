@@ -37,6 +37,7 @@ import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlineMusicHome
+import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlineMusicProviderRepository
 import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineBanner
@@ -101,9 +102,9 @@ internal fun CloudMusicHomePage(
     playbackBarOverlayHeight: Dp,
     onOpenSearch: () -> Unit,
     onOpenMine: () -> Unit,
-    onOpenPlaylist: (id: String, title: String) -> Unit,
-    onOpenAlbum: (id: String, title: String) -> Unit,
-    onOpenArtist: (id: String, name: String) -> Unit,
+    onOpenPlaylist: (OnlinePlaylist) -> Unit,
+    onOpenAlbum: (OnlineAlbum) -> Unit,
+    onOpenArtist: (OnlineArtist) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
@@ -115,7 +116,12 @@ internal fun CloudMusicHomePage(
         initialValue = CloudMusicHomeState.Loading,
         repository,
         revision,
+        active,
     ) {
+        // 切到非活跃 tab 时不发起请求；active 恢复后由 key 变化重新触发加载。
+        if (!active) {
+            return@produceState
+        }
         value = runSuspendCatching {
             coroutineScope {
                 val homeAsync = async { repository.featuredHome() }
@@ -173,6 +179,7 @@ internal fun CloudMusicHomePage(
             )
             is CloudMusicHomeState.Success -> CloudMusicHomeContent(
                 state = current,
+                active = active,
                 playbackBarOverlayHeight = playbackBarOverlayHeight,
                 onOpenPlaylist = onOpenPlaylist,
                 onOpenAlbum = onOpenAlbum,
@@ -203,10 +210,11 @@ internal fun CloudMusicHomePage(
 @Composable
 private fun CloudMusicHomeContent(
     state: CloudMusicHomeState.Success,
+    active: Boolean,
     playbackBarOverlayHeight: Dp,
-    onOpenPlaylist: (id: String, title: String) -> Unit,
-    onOpenAlbum: (id: String, title: String) -> Unit,
-    onOpenArtist: (id: String, name: String) -> Unit,
+    onOpenPlaylist: (OnlinePlaylist) -> Unit,
+    onOpenAlbum: (OnlineAlbum) -> Unit,
+    onOpenArtist: (OnlineArtist) -> Unit,
     onPlayBannerTrack: (trackId: String) -> Unit,
     onPlayDailyTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
 ) {
@@ -227,8 +235,25 @@ private fun CloudMusicHomeContent(
             item(key = "cloud-home-banner") {
                 CloudMusicBanner(
                     banners = banners,
-                    onOpenPlaylist = onOpenPlaylist,
-                    onOpenAlbum = onOpenAlbum,
+                    active = active,
+                    onOpenPlaylist = { id, title ->
+                        onOpenPlaylist(
+                            OnlinePlaylist(
+                                provider = OnlineMusicProvider.Netease,
+                                playlistId = id,
+                                title = title,
+                            ),
+                        )
+                    },
+                    onOpenAlbum = { id, title ->
+                        onOpenAlbum(
+                            OnlineAlbum(
+                                provider = OnlineMusicProvider.Netease,
+                                albumId = id,
+                                title = title,
+                            ),
+                        )
+                    },
                     onPlayTrack = onPlayBannerTrack,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -264,7 +289,7 @@ private fun CloudMusicHomeContent(
                             imageUrl = playlist.artworkUrl,
                             title = playlist.title,
                             subtitle = playlist.subtitle,
-                            onClick = { onOpenPlaylist(playlist.playlistId, playlist.title) },
+                            onClick = { onOpenPlaylist(playlist) },
                         )
                     }
                 }
@@ -282,7 +307,7 @@ private fun CloudMusicHomeContent(
                             imageUrl = chart.artworkUrl,
                             title = chart.title,
                             subtitle = chart.subtitle,
-                            onClick = { onOpenPlaylist(chart.playlistId, chart.title) },
+                            onClick = { onOpenPlaylist(chart) },
                         )
                     }
                 }
@@ -300,7 +325,7 @@ private fun CloudMusicHomeContent(
                             imageUrl = album.artworkUrl,
                             title = album.title,
                             subtitle = album.subtitle(),
-                            onClick = { onOpenAlbum(album.albumId, album.title) },
+                            onClick = { onOpenAlbum(album) },
                         )
                     }
                 }
@@ -318,7 +343,7 @@ private fun CloudMusicHomeContent(
                             imageUrl = artist.artworkUrl,
                             title = artist.name,
                             subtitle = artist.subtitle,
-                            onClick = { onOpenArtist(artist.artistId, artist.name) },
+                            onClick = { onOpenArtist(artist) },
                         )
                     }
                 }
@@ -328,9 +353,10 @@ private fun CloudMusicHomeContent(
 }
 
 /** 专辑卡片副标题：优先艺人，其次“共 N 首”。 */
+@Composable
 private fun OnlineAlbum.subtitle(): String? {
     artist?.takeIf(String::isNotBlank)?.let { return it }
-    return trackCount.takeIf { it > 0 }?.let { "共 $it 首" }
+    return trackCount.takeIf { it > 0 }?.let { stringResource(R.string.cloud_music_album_total_tracks, it) }
 }
 
 /** 首页顶部栏：左侧搜索入口（点击进入搜索页）+ 右侧“我的”入口。 */

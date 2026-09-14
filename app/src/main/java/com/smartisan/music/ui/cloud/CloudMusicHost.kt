@@ -36,18 +36,49 @@ internal enum class CloudSubPage {
     Mine,
 }
 
-/** 详情页目标：歌单 / 专辑 / 艺人三种，由宿主持有、PageStackTransition 驱动列表↔详情转场。 */
+/** 详情页目标：歌单 / 专辑 / 艺人 / 电台四种，由宿主持有、PageStackTransition 驱动列表↔详情转场。
+ *
+ * 除 id/title 外携带展示元数据（封面、副标题来源、计数），跳转时一并传入，
+ * 详情页头部不必再退化到"第一首歌的封面/种类硬编码"。
+ */
 internal sealed interface CloudDetailTarget {
     /** @param accountEditable 是否为当前账号可编辑的「我的歌单」（用于删除歌单/从歌单移除歌曲）。 */
     data class Playlist(
         val id: String,
         val title: String,
         val accountEditable: Boolean = false,
+        val artworkUrl: String? = null,
+        val subtitle: String? = null,
+        val trackCount: Int = 0,
+        val playCount: Long = 0L,
     ) : CloudDetailTarget
 
-    data class Album(val id: String, val title: String) : CloudDetailTarget
-    data class Artist(val id: String, val name: String) : CloudDetailTarget
-    data class Radio(val id: String, val title: String) : CloudDetailTarget
+    data class Album(
+        val id: String,
+        val title: String,
+        val artworkUrl: String? = null,
+        val artist: String? = null,
+        val trackCount: Int = 0,
+    ) : CloudDetailTarget
+
+    data class Artist(
+        val id: String,
+        val name: String,
+        val artworkUrl: String? = null,
+        val alias: String? = null,
+        val trackCount: Int = 0,
+        val albumCount: Int = 0,
+    ) : CloudDetailTarget
+
+    data class Radio(
+        val id: String,
+        val title: String,
+        val artworkUrl: String? = null,
+        val category: String? = null,
+        val creator: String? = null,
+        val programCount: Int = 0,
+        val playCount: Long = 0L,
+    ) : CloudDetailTarget
 }
 
 /**
@@ -106,6 +137,9 @@ internal fun CloudMusicHost(
     var searchVisible by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedDetail by remember { mutableStateOf<CloudDetailTarget?>(null) }
+    // 账号歌单库变更（加歌/移除/新建/删除）后由详情页回调递增，「我的」页订阅此值重拉。
+    var accountLibraryRevision by remember { mutableStateOf(0) }
+    val onAccountLibraryChanged = remember { { accountLibraryRevision += 1 } }
 
     // ── 返回键：逐层关闭（仿 shell 的 BackHandler 条件链） ──
     // 最外层：搜索覆盖层
@@ -155,14 +189,34 @@ internal fun CloudMusicHost(
                                 searchVisible = true
                             },
                             onOpenMine = { subPage = CloudSubPage.Mine },
-                            onOpenPlaylist = { id, title ->
-                                selectedDetail = CloudDetailTarget.Playlist(id, title)
+                            onOpenPlaylist = { playlist ->
+                                selectedDetail = CloudDetailTarget.Playlist(
+                                    id = playlist.playlistId,
+                                    title = playlist.title,
+                                    artworkUrl = playlist.artworkUrl,
+                                    subtitle = playlist.subtitle,
+                                    trackCount = playlist.trackCount,
+                                    playCount = playlist.playCount,
+                                )
                             },
-                            onOpenAlbum = { id, title ->
-                                selectedDetail = CloudDetailTarget.Album(id, title)
+                            onOpenAlbum = { album ->
+                                selectedDetail = CloudDetailTarget.Album(
+                                    id = album.albumId,
+                                    title = album.title,
+                                    artworkUrl = album.artworkUrl,
+                                    artist = album.artist,
+                                    trackCount = album.trackCount,
+                                )
                             },
-                            onOpenArtist = { id, name ->
-                                selectedDetail = CloudDetailTarget.Artist(id, name)
+                            onOpenArtist = { artist ->
+                                selectedDetail = CloudDetailTarget.Artist(
+                                    id = artist.artistId,
+                                    name = artist.name,
+                                    artworkUrl = artist.artworkUrl,
+                                    alias = artist.subtitle,
+                                    trackCount = artist.trackCount,
+                                    albumCount = artist.albumCount,
+                                )
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -170,15 +224,37 @@ internal fun CloudMusicHost(
                             repository = neteaseRepository,
                             authStore = authStore,
                             active = active,
+                            libraryRevision = accountLibraryRevision,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
-                            onOpenPlaylist = { id, title, accountEditable ->
-                                selectedDetail = CloudDetailTarget.Playlist(id, title, accountEditable)
+                            onOpenPlaylist = { item ->
+                                selectedDetail = CloudDetailTarget.Playlist(
+                                    id = item.playlistId,
+                                    title = item.title,
+                                    accountEditable = item.isEditable,
+                                    artworkUrl = item.artworkUrl,
+                                    subtitle = item.subtitle,
+                                    trackCount = item.trackCount,
+                                )
                             },
-                            onOpenAlbum = { id, title ->
-                                selectedDetail = CloudDetailTarget.Album(id, title)
+                            onOpenAlbum = { album ->
+                                selectedDetail = CloudDetailTarget.Album(
+                                    id = album.albumId,
+                                    title = album.title,
+                                    artworkUrl = album.artworkUrl,
+                                    artist = album.artist,
+                                    trackCount = album.trackCount,
+                                )
                             },
-                            onOpenRadio = { id, title ->
-                                selectedDetail = CloudDetailTarget.Radio(id, title)
+                            onOpenRadio = { radio ->
+                                selectedDetail = CloudDetailTarget.Radio(
+                                    id = radio.radioId,
+                                    title = radio.title,
+                                    artworkUrl = radio.artworkUrl,
+                                    category = radio.category,
+                                    creator = radio.creator,
+                                    programCount = radio.programCount,
+                                    playCount = radio.playCount,
+                                )
                             },
                             onBack = { subPage = CloudSubPage.Home },
                             modifier = Modifier.fillMaxSize(),
@@ -193,6 +269,7 @@ internal fun CloudMusicHost(
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
                         target = target,
                         onBack = { selectedDetail = null },
+                        onAccountLibraryChanged = onAccountLibraryChanged,
                         modifier = Modifier.fillMaxSize(),
                     )
                 },

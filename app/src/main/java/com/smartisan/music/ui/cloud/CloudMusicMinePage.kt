@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -91,10 +92,11 @@ internal fun CloudMusicMinePage(
     repository: OnlineMusicProviderRepository,
     authStore: NeteaseAuthStore,
     active: Boolean,
+    libraryRevision: Int,
     playbackBarOverlayHeight: Dp,
-    onOpenPlaylist: (id: String, title: String, accountEditable: Boolean) -> Unit,
-    onOpenAlbum: (id: String, title: String) -> Unit,
-    onOpenRadio: (id: String, title: String) -> Unit,
+    onOpenPlaylist: (OnlineAccountPlaylist) -> Unit,
+    onOpenAlbum: (OnlineAlbum) -> Unit,
+    onOpenRadio: (OnlineRadio) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -112,6 +114,7 @@ internal fun CloudMusicMinePage(
         initialValue = MineLoadState.Loading,
         selectedTab,
         retryRevision,
+        libraryRevision,
     ) {
         value = MineLoadState.Loading
         value = try {
@@ -179,7 +182,7 @@ internal fun CloudMusicMinePage(
                     itemTitle = OnlineAccountPlaylist::title,
                     itemSubtitle = OnlineAccountPlaylist::mineSubtitle,
                     itemArtwork = OnlineAccountPlaylist::artworkUrl,
-                    itemOnClick = { item -> onOpenPlaylist(item.playlistId, item.title, item.isEditable) },
+                    itemOnClick = { item -> onOpenPlaylist(item) },
                     playbackBarOverlayHeight = playbackBarOverlayHeight,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -189,7 +192,7 @@ internal fun CloudMusicMinePage(
                     itemTitle = OnlineAlbum::title,
                     itemSubtitle = OnlineAlbum::mineSubtitle,
                     itemArtwork = OnlineAlbum::artworkUrl,
-                    itemOnClick = { item -> onOpenAlbum(item.albumId, item.title) },
+                    itemOnClick = { item -> onOpenAlbum(item) },
                     playbackBarOverlayHeight = playbackBarOverlayHeight,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -199,7 +202,7 @@ internal fun CloudMusicMinePage(
                     itemTitle = OnlineRadio::title,
                     itemSubtitle = OnlineRadio::mineSubtitle,
                     itemArtwork = OnlineRadio::artworkUrl,
-                    itemOnClick = { item -> onOpenRadio(item.radioId, item.title) },
+                    itemOnClick = { item -> onOpenRadio(item) },
                     playbackBarOverlayHeight = playbackBarOverlayHeight,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -331,7 +334,7 @@ private fun <T> CloudMusicMineList(
     items: List<T>,
     itemKey: (index: Int, item: T) -> Any,
     itemTitle: (item: T) -> String,
-    itemSubtitle: (item: T) -> String,
+    itemSubtitle: @Composable (item: T) -> String,
     itemArtwork: (item: T) -> String?,
     itemOnClick: ((item: T) -> Unit)?,
     playbackBarOverlayHeight: Dp,
@@ -414,24 +417,41 @@ private fun CloudMusicMineCard(
     }
 }
 
+@Composable
 private fun OnlineAccountPlaylist.mineSubtitle(): String {
-    return subtitle?.takeIf(String::isNotBlank)
-        ?: if (trackCount > 0) "${trackCount}首" else ""
+    subtitle?.takeIf(String::isNotBlank)?.let { return it }
+    return if (trackCount > 0) {
+        pluralStringResource(R.plurals.cloud_music_count_track_short, trackCount, trackCount)
+    } else {
+        ""
+    }
 }
 
+@Composable
 private fun OnlineAlbum.mineSubtitle(): String {
+    val trackCountText = if (trackCount > 0) {
+        pluralStringResource(R.plurals.cloud_music_count_track_short, trackCount, trackCount)
+    } else {
+        null
+    }
     val parts = listOfNotNull(
         artist?.takeIf(String::isNotBlank),
-        if (trackCount > 0) "${trackCount}首" else null,
+        trackCountText,
     )
-    return parts.joinToString(" · ").ifBlank { "网易云音乐" }
+    return parts.joinToString(" · ").ifBlank { stringResource(R.string.cloud_music_provider_netease) }
 }
 
+@Composable
 private fun OnlineRadio.mineSubtitle(): String {
+    val programCountText = if (programCount > 0) {
+        pluralStringResource(R.plurals.cloud_music_count_program_short, programCount, programCount)
+    } else {
+        null
+    }
     val parts = listOfNotNull(
         creator?.takeIf(String::isNotBlank),
         category?.takeIf(String::isNotBlank),
-        if (programCount > 0) "${programCount}期" else null,
+        programCountText,
     )
-    return parts.joinToString(" · ").ifBlank { "网易云音乐" }
+    return parts.joinToString(" · ").ifBlank { stringResource(R.string.cloud_music_provider_netease) }
 }

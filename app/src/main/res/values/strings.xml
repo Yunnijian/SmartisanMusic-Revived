@@ -311,4 +311,24 @@
     <string name="cloud_music_delete_playlist">删除歌单</string>
     <string name="cloud_music_delete_playlist_confirm">删除后不可恢复</string>
     <string name="cloud_music_delete">删除</string>
+    <string name="cloud_music_action_like">喜欢</string>
+    <string name="cloud_music_action_unlike">取消喜欢</string>
+    <string name="cloud_music_add_to_queue">添加到播放队列</string>
+    <string name="cloud_music_provider_netease">网易云音乐</string>
+    <string name="cloud_music_album_total_tracks">共 %1$d 首</string>
+    <plurals name="cloud_music_album_count">
+        <item quantity="other">%1$d 张专辑</item>
+    </plurals>
+    <plurals name="cloud_music_program_count">
+        <item quantity="other">%1$d 期节目</item>
+    </plurals>
+    <plurals name="cloud_music_play_count">
+        <item quantity="other">%1$d 次播放</item>
+    </plurals>
+    <plurals name="cloud_music_count_track_short">
+        <item quantity="other">%1$d首</item>
+    </plurals>
+    <plurals name="cloud_music_count_program_short">
+        <item quantity="other">%1$d期</item>
+    </plurals>
 </resources>

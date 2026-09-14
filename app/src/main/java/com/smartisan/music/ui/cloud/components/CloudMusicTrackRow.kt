@@ -70,7 +70,7 @@ internal fun CloudMusicTrackRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = track.rowSubtitle(),
+                text = track.rowSubtitle(defaultProvider = stringResource(R.string.cloud_music_provider_netease)),
                 style = TextStyle(
                     fontSize = 11.sp,
                     color = CloudSecondaryTextColor,
@@ -107,14 +107,14 @@ internal fun CloudMusicTrackRow(
     }
 }
 
-private fun OnlineTrack.rowSubtitle(): String {
+private fun OnlineTrack.rowSubtitle(defaultProvider: String): String {
     return listOfNotNull(
         artist.takeIf(String::isNotBlank),
         album?.takeIf(String::isNotBlank),
     )
         .joinToString(" - ")
         .takeIf(String::isNotBlank)
-        ?: "网易云音乐"
+        ?: defaultProvider
 }
 
 /** 毫秒时长格式化为 m:ss（不足一分钟按 0:ss 展示）。 */

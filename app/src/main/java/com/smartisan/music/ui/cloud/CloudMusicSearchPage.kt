@@ -93,7 +93,9 @@ internal fun CloudMusicSearchPage(
     var searchRevision by remember { mutableStateOf(0) }
 
     // 输入防抖后调用网易云搜索；query 变化即取消上一次未完成的请求。
-    LaunchedEffect(query, searchRevision) {
+    // 非活跃（被详情页/其他层覆盖）时不发起搜索，active 恢复后由 key 变化重新触发。
+    LaunchedEffect(query, searchRevision, active) {
+        if (!active) return@LaunchedEffect
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) {
             state = CloudSearchResultsState.Idle

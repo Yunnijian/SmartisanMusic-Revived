@@ -55,6 +55,7 @@ private val CloudMusicBannerDotSelectedColor = Color.White
 @Composable
 internal fun CloudMusicBanner(
     banners: List<OnlineBanner>,
+    active: Boolean,
     onOpenPlaylist: (id: String, title: String) -> Unit,
     onOpenAlbum: (id: String, title: String) -> Unit,
     onPlayTrack: (trackId: String) -> Unit,
@@ -64,9 +65,9 @@ internal fun CloudMusicBanner(
     val pageCount = banners.size
     val pagerState = rememberPagerState(pageCount = { pageCount })
 
-    // 自动轮播：仅在多于 1 页时启动；pageCount 变化后重启计时。
-    LaunchedEffect(pagerState.pageCount) {
-        if (pagerState.pageCount <= 1) return@LaunchedEffect
+    // 自动轮播：仅在活跃且多于 1 页时启动；pageCount/active 变化后重启计时。
+    LaunchedEffect(pagerState.pageCount, active) {
+        if (!active || pagerState.pageCount <= 1) return@LaunchedEffect
         while (true) {
             delay(CloudMusicBannerAutoScrollIntervalMs)
             val nextPage = (pagerState.currentPage + 1) % pagerState.pageCount

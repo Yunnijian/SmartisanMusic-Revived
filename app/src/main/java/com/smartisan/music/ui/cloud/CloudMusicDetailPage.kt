@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
+import com.smartisan.music.data.favorite.FavoriteSongsRepository
 import com.smartisan.music.data.online.NeteaseAccountActionStatus
 import com.smartisan.music.data.online.NeteaseAuthStore
 import com.smartisan.music.data.online.OnlineAccountPlaylist
@@ -52,13 +55,16 @@ import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlineArtistIntroduction
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlineMusicProviderRepository
+import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
 import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineRadio
 import com.smartisan.music.data.online.OnlineTrack
+import com.smartisan.music.data.online.onlineTrackIdentityOrNull
 import com.smartisan.music.data.online.toMediaItem
 import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
 import com.smartisan.music.playback.LocalPlaybackBrowser
 import com.smartisan.music.playback.replaceQueueAndPlay
+import com.smartisan.music.playback.replaceQueueAndPlayShuffled
 import com.smartisan.music.ui.cloud.components.CloudAccentColor
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverImage
@@ -113,6 +119,7 @@ internal fun CloudMusicDetailPage(
     playbackBarOverlayHeight: Dp,
     target: CloudDetailTarget,
     onBack: () -> Unit,
+    onAccountLibraryChanged: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
@@ -203,6 +210,10 @@ internal fun CloudMusicDetailPage(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // 本地收藏为准（与播放条心形一致），喜欢动作同步回写网易云账号。
+    val favoriteRepository = remember(context) { FavoriteSongsRepository.getInstance(context) }
+    val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
+    val onlineRouter = remember(context) { OnlineMusicRepositoryRouter.getInstance(context) }
 
     // ── 歌单管理本地状态（全部本页内管理，不改宿主） ──
     var pendingTrack by remember { mutableStateOf<OnlineTrack?>(null) }
@@ -241,17 +252,35 @@ internal fun CloudMusicDetailPage(
         )
     }
 
+    /** 账号动作三态文案：成功 → 操作专属串，未登录 → 引导串，其余 → 通用失败串。 */
+    fun accountActionMessage(
+        status: NeteaseAccountActionStatus,
+        successMessage: String,
+    ): String {
+        return when (status) {
+            NeteaseAccountActionStatus.Success -> successMessage
+            NeteaseAccountActionStatus.RequiresLogin ->
+                context.getString(R.string.cloud_music_detail_login_required)
+            else -> context.getString(R.string.cloud_music_action_failed)
+        }
+    }
+
     fun onAddToPlaylist(playlist: OnlineAccountPlaylist) {
         val track = pendingTrack ?: return
         pickerVisible = false
         scope.launch {
             val result = repository.addTracksToAccountPlaylist(playlist, listOf(track.trackId))
-            val message = if (result.status == NeteaseAccountActionStatus.Success) {
-                    context.getString(R.string.cloud_music_added_to_playlist)
-                } else {
-                    context.getString(R.string.cloud_music_action_failed)
-                }
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                accountActionMessage(
+                    result.status,
+                    context.getString(R.string.cloud_music_added_to_playlist),
+                ),
+                Toast.LENGTH_SHORT,
+            ).show()
+            if (result.status == NeteaseAccountActionStatus.Success) {
+                onAccountLibraryChanged()
+            }
         }
     }
 
@@ -262,11 +291,17 @@ internal fun CloudMusicDetailPage(
                 playlist = accountPlaylistFor(playlistTarget),
                 trackIds = listOf(track.trackId),
             )
+            Toast.makeText(
+                context,
+                accountActionMessage(
+                    result.status,
+                    context.getString(R.string.cloud_music_removed_from_playlist),
+                ),
+                Toast.LENGTH_SHORT,
+            ).show()
             if (result.status == NeteaseAccountActionStatus.Success) {
                 removedTrackIds = removedTrackIds + track.trackId
-                Toast.makeText(context, context.getString(R.string.cloud_music_removed_from_playlist), Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context, context.getString(R.string.cloud_music_action_failed), Toast.LENGTH_SHORT).show()
+                onAccountLibraryChanged()
             }
         }
     }
@@ -282,9 +317,21 @@ internal fun CloudMusicDetailPage(
             val newPlaylist = result.playlist
             if (result.status == NeteaseAccountActionStatus.Success && newPlaylist != null) {
                 repository.addTracksToAccountPlaylist(newPlaylist, listOf(track.trackId))
-                Toast.makeText(context, context.getString(R.string.cloud_music_created_and_added), Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.cloud_music_created_and_added),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                onAccountLibraryChanged()
             } else {
-                Toast.makeText(context, context.getString(R.string.cloud_music_create_failed), Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    accountActionMessage(
+                        result.status,
+                        context.getString(R.string.cloud_music_created_and_added),
+                    ),
+                    Toast.LENGTH_SHORT,
+                ).show()
             }
         }
     }
@@ -294,16 +341,25 @@ internal fun CloudMusicDetailPage(
         val playlistTarget = target as? CloudDetailTarget.Playlist ?: return
         scope.launch {
             val result = repository.deleteAccountPlaylist(accountPlaylistFor(playlistTarget))
+            Toast.makeText(
+                context,
+                accountActionMessage(
+                    result.status,
+                    context.getString(R.string.cloud_music_deleted_playlist),
+                ),
+                Toast.LENGTH_SHORT,
+            ).show()
             if (result.status == NeteaseAccountActionStatus.Success) {
-                Toast.makeText(context, context.getString(R.string.cloud_music_deleted_playlist), Toast.LENGTH_SHORT).show()
+                onAccountLibraryChanged()
                 onBack()
-            } else {
-                Toast.makeText(context, context.getString(R.string.cloud_music_action_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    Box(modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
+    Column(modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
+        // 返回栏常驻在滚动区外：loading/error/empty 态同样可返回，滚到底也不会随 header 滚走。
+        CloudMusicDetailTopBar(onBack = onBack)
+        Box(Modifier.fillMaxWidth().weight(1f)) {
         when (val current = state) {
             CloudDetailState.Loading -> CloudMusicDelayedLoadingState(
                 title = stringResource(R.string.cloud_music_detail_loading),
@@ -339,7 +395,6 @@ internal fun CloudMusicDetailPage(
                         CloudMusicDetailHeader(
                             target = current.target,
                             tracks = visibleTracks,
-                            onBack = onBack,
                             onDeletePlaylist = if (current.target is CloudDetailTarget.Playlist &&
                                 current.target.accountEditable
                             ) {
@@ -354,9 +409,8 @@ internal fun CloudMusicDetailPage(
                                 )
                             },
                             onShuffle = {
-                                playbackBrowser.replaceQueueAndPlay(
-                                    mediaItems = playableItems.shuffled(),
-                                    startIndex = 0,
+                                playbackBrowser.replaceQueueAndPlayShuffled(
+                                    mediaItems = playableItems,
                                 )
                             },
                         )
@@ -411,6 +465,54 @@ internal fun CloudMusicDetailPage(
                     },
                 ),
             )
+            add(
+                CloudMusicTrackAction(
+                    label = stringResource(R.string.cloud_music_add_to_queue),
+                    destructive = false,
+                    onClick = {
+                        val track = pendingTrack
+                        trackActionsVisible = false
+                        if (track != null) {
+                            playbackBrowser?.addMediaItems(
+                                listOf(track.toMediaItem().withOnlinePlaybackPlaceholderUri()),
+                            )
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.add_to_queue_success),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
+                ),
+            )
+            val pending = pendingTrack
+            if (pending != null) {
+                val liked = pending.mediaId in favoriteIds
+                add(
+                    CloudMusicTrackAction(
+                        label = stringResource(
+                            if (liked) R.string.cloud_music_action_unlike
+                            else R.string.cloud_music_action_like,
+                        ),
+                        destructive = false,
+                        onClick = {
+                            trackActionsVisible = false
+                            scope.launch {
+                                val likedNow = favoriteRepository.toggle(pending.mediaId)
+                                val identity = pending.mediaId.onlineTrackIdentityOrNull()
+                                if (identity != null &&
+                                    identity.source == OnlineMusicProvider.Netease.sourceId
+                                ) {
+                                    // 本地收藏为准，回写网易云失败不回滚本地状态。
+                                    runCatching {
+                                        onlineRouter.setTrackLiked(identity, likedNow)
+                                    }
+                                }
+                            }
+                        },
+                    ),
+                )
+            }
             if (target is CloudDetailTarget.Playlist && target.accountEditable) {
                 add(
                     CloudMusicTrackAction(
@@ -436,6 +538,7 @@ internal fun CloudMusicDetailPage(
         )
         val filterablePlaylists = pickerPlaylists.filter { playlist ->
             playlist.provider == OnlineMusicProvider.Netease &&
+                playlist.isEditable &&
                 !playlist.isLikedSongs &&
                 !(target is CloudDetailTarget.Playlist &&
                     target.accountEditable &&
@@ -465,19 +568,58 @@ internal fun CloudMusicDetailPage(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        }
     }
 }
 
 /**
- * 详情页顶部 header：返回按钮 + 封面 + 标题/副标题 + 播放全部 / 随机播放。
- * 封面取列表首曲的 [OnlineTrack.artworkUrl]（target 仅携带 id/title，无封面 URL）；
- * 列表为空时由 [CloudMusicCoverImage] 兜底占位色。
+ * 详情页常驻返回栏（位于滚动区外，所有加载态同样可返回）。
+ * 返回箭头沿用 standard_icon_back_selector，与「我的」页顶栏一致。
+ */
+@Composable
+private fun CloudMusicDetailTopBar(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        val backInteraction = remember { MutableInteractionSource() }
+        val backPressed by backInteraction.collectIsPressedAsState()
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clickable(
+                    interactionSource = backInteraction,
+                    indication = null,
+                    onClick = onBack,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = rememberSmartisanDrawablePainter(
+                    R.drawable.standard_icon_back_selector,
+                    pressed = backPressed,
+                ),
+                contentDescription = stringResource(R.string.back),
+                modifier = Modifier.size(24.dp),
+            )
+        }
+    }
+}
+
+/**
+ * 详情页顶部 header：封面 + 标题/副标题 + 播放全部 / 随机播放。
+ * 副标题按目标类型拼接元数据（副标题/曲数/播放数等），缺失时回退类型文案；
+ * 封面优先取 target 自带 artworkUrl，其次列表首曲封面，空列表由占位色兜底。
  */
 @Composable
 private fun CloudMusicDetailHeader(
     target: CloudDetailTarget,
     tracks: List<OnlineTrack>,
-    onBack: () -> Unit,
     onPlayAll: () -> Unit,
     onShuffle: () -> Unit,
     onDeletePlaylist: (() -> Unit)? = null,
@@ -488,45 +630,16 @@ private fun CloudMusicDetailHeader(
         is CloudDetailTarget.Artist -> target.name
         is CloudDetailTarget.Radio -> target.title
     }
-    val subtitle = when (target) {
-        is CloudDetailTarget.Playlist -> stringResource(R.string.cloud_music_detail_kind_playlist)
-        is CloudDetailTarget.Album -> stringResource(R.string.cloud_music_detail_kind_album)
-        is CloudDetailTarget.Artist -> stringResource(R.string.cloud_music_detail_kind_artist)
-        is CloudDetailTarget.Radio -> stringResource(R.string.cloud_music_detail_kind_radio)
-    }
-    val artworkUrl = tracks.firstOrNull()?.artworkUrl
+    val subtitle = cloudDetailSubtitle(target)
+    val artworkUrl = when (target) {
+        is CloudDetailTarget.Playlist -> target.artworkUrl
+        is CloudDetailTarget.Album -> target.artworkUrl
+        is CloudDetailTarget.Artist -> target.artworkUrl
+        is CloudDetailTarget.Radio -> target.artworkUrl
+    } ?: tracks.firstOrNull()?.artworkUrl
     val playEnabled = tracks.isNotEmpty()
 
     Column(Modifier.fillMaxWidth()) {
-        // 顶栏：仅返回按钮（左对齐）。
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            val backInteraction = remember { MutableInteractionSource() }
-            val backPressed by backInteraction.collectIsPressedAsState()
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clickable(
-                        interactionSource = backInteraction,
-                        indication = null,
-                        onClick = onBack,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    painter = rememberSmartisanDrawablePainter(
-                        R.drawable.standard_icon_back_selector,
-                        pressed = backPressed,
-                    ),
-                    contentDescription = stringResource(R.string.back),
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
         // 封面 + 标题 + 副标题。
         Row(
             modifier = Modifier
@@ -604,6 +717,54 @@ private fun CloudMusicDetailHeader(
         }
         CloudMusicDivider()
     }
+}
+
+/** 按目标类型拼接详情页副标题；元数据全缺时回退类型文案。 */
+@Composable
+private fun cloudDetailSubtitle(target: CloudDetailTarget): String {
+    val kindLabel = when (target) {
+        is CloudDetailTarget.Playlist -> stringResource(R.string.cloud_music_detail_kind_playlist)
+        is CloudDetailTarget.Album -> stringResource(R.string.cloud_music_detail_kind_album)
+        is CloudDetailTarget.Artist -> stringResource(R.string.cloud_music_detail_kind_artist)
+        is CloudDetailTarget.Radio -> stringResource(R.string.cloud_music_detail_kind_radio)
+    }
+    val parts: List<String> = when (target) {
+        is CloudDetailTarget.Playlist -> buildList {
+            target.subtitle?.takeIf(String::isNotBlank)?.let(::add)
+            if (target.trackCount > 0) {
+                add(pluralStringResource(R.plurals.track_count, target.trackCount, target.trackCount))
+            }
+            if (target.playCount > 0) {
+                add(pluralStringResource(R.plurals.cloud_music_play_count, target.playCount.toInt(), target.playCount))
+            }
+        }
+        is CloudDetailTarget.Album -> buildList {
+            target.artist?.takeIf(String::isNotBlank)?.let(::add)
+            if (target.trackCount > 0) {
+                add(pluralStringResource(R.plurals.track_count, target.trackCount, target.trackCount))
+            }
+        }
+        is CloudDetailTarget.Artist -> buildList {
+            target.alias?.takeIf(String::isNotBlank)?.let(::add)
+            if (target.trackCount > 0) {
+                add(pluralStringResource(R.plurals.track_count, target.trackCount, target.trackCount))
+            }
+            if (target.albumCount > 0) {
+                add(pluralStringResource(R.plurals.cloud_music_album_count, target.albumCount, target.albumCount))
+            }
+        }
+        is CloudDetailTarget.Radio -> buildList {
+            target.category?.takeIf(String::isNotBlank)?.let(::add)
+            target.creator?.takeIf(String::isNotBlank)?.let(::add)
+            if (target.programCount > 0) {
+                add(pluralStringResource(R.plurals.cloud_music_program_count, target.programCount, target.programCount))
+            }
+            if (target.playCount > 0) {
+                add(pluralStringResource(R.plurals.cloud_music_play_count, target.playCount.toInt(), target.playCount))
+            }
+        }
+    }
+    return parts.joinToString(" · ").ifBlank { kindLabel }
 }
 
 /** header 中的强调色圆角操作按钮。 */

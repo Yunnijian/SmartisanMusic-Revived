@@ -228,7 +228,8 @@ internal fun MusicTabContent(
                 )
             MusicDestination.Cloud ->
                 CloudMusicHost(
-                    active = true,
+                    // 云页仅在底部 tab 选中时活跃；详情页/搜索覆盖其上时应挂起后台请求与轮播。
+                    active = destination == MusicDestination.Cloud,
                     playbackBarOverlayHeight = playbackBarOverlayHeight,
                     modifier = activePageModifier,
                 )
