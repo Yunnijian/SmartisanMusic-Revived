@@ -59,6 +59,7 @@ internal fun CloudTrackActionsOverlays(
     editablePlaylist: OnlineAccountPlaylist?,
     onTrackRemoved: (OnlineTrack) -> Unit,
     onAccountLibraryChanged: () -> Unit,
+    onAddedToPlaylist: (OnlineAccountPlaylist) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -115,6 +116,7 @@ internal fun CloudTrackActionsOverlays(
             ).show()
             if (result.status == NeteaseAccountActionStatus.Success) {
                 onAccountLibraryChanged()
+                onAddedToPlaylist(playlist)
             }
         }
     }

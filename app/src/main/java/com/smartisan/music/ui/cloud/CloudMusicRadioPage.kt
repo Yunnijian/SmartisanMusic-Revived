@@ -29,6 +29,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicCoverCard
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverCardSection
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudMusicDivider
+import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
@@ -61,7 +62,6 @@ internal fun CloudMusicRadioPage(
     subPage: CloudRadioSubPage,
     onSubPageChange: (CloudRadioSubPage) -> Unit,
     onOpenRadio: (OnlineRadio) -> Unit,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
@@ -75,15 +75,9 @@ internal fun CloudMusicRadioPage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        CloudMusicPageTopBar(
+        CloudMusicSectionTitle(
             title = stringResource(subPage.titleRes),
-            onBack = {
-                if (subPage != CloudRadioSubPage.Home) {
-                    onSubPageChange(CloudRadioSubPage.Home)
-                } else {
-                    onBack()
-                }
-            },
+            modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (val current = radioSlot.state(Unit)) {
@@ -151,6 +145,7 @@ internal fun CloudMusicRadioPage(
                 editablePlaylist = null,
                 onTrackRemoved = {},
                 onAccountLibraryChanged = {},
+                onAddedToPlaylist = { data.detail.invalidateAll() },
                 modifier = Modifier.fillMaxSize(),
             )
         }

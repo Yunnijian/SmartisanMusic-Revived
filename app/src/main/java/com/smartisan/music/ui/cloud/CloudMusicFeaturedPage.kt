@@ -29,6 +29,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicArtistList
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudMusicDivider
+import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
@@ -62,7 +63,6 @@ internal fun CloudMusicFeaturedPage(
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
     onOpenAlbum: (OnlineAlbum) -> Unit,
     onOpenArtist: (OnlineArtist) -> Unit,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
@@ -76,9 +76,9 @@ internal fun CloudMusicFeaturedPage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        CloudMusicPageTopBar(
+        CloudMusicSectionTitle(
             title = stringResource(page.titleRes),
-            onBack = onBack,
+            modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (val current = homeSlot.state(Unit)) {

@@ -199,6 +199,7 @@ internal fun CloudMusicSearchPage(
                 editablePlaylist = null,
                 onTrackRemoved = {},
                 onAccountLibraryChanged = {},
+                onAddedToPlaylist = { data.detail.invalidateAll() },
                 modifier = Modifier.fillMaxSize(),
             )
         }

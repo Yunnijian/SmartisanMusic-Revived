@@ -334,7 +334,6 @@ internal fun CloudMusicHost(
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             artist = currentArtistAlbums,
                             onOpenAlbum = openAlbumDetail,
-                            onBack = { artistAlbumsTarget = null },
                             modifier = Modifier.fillMaxSize(),
                         )
                         artistsVisible -> CloudMusicArtistsPage(
@@ -343,7 +342,6 @@ internal fun CloudMusicHost(
                             active = active,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             onOpenArtist = openArtistDetail,
-                            onBack = { artistsVisible = false },
                             modifier = Modifier.fillMaxSize(),
                         )
                         radioVisible -> CloudMusicRadioPage(
@@ -354,7 +352,6 @@ internal fun CloudMusicHost(
                             subPage = radioSubPage,
                             onSubPageChange = { radioSubPage = it },
                             onOpenRadio = openRadioDetail,
-                            onBack = { radioVisible = false },
                             modifier = Modifier.fillMaxSize(),
                         )
                         featuredPage != null -> CloudMusicFeaturedPage(
@@ -366,7 +363,6 @@ internal fun CloudMusicHost(
                             onOpenPlaylist = openPlaylistDetail,
                             onOpenAlbum = openAlbumDetail,
                             onOpenArtist = openArtistDetail,
-                            onBack = { featuredPage = null },
                             modifier = Modifier.fillMaxSize(),
                         )
                         else -> when (subPage) {
@@ -404,7 +400,6 @@ internal fun CloudMusicHost(
                                 },
                                 onOpenAlbum = openAlbumDetail,
                                 onOpenRadio = openRadioDetail,
-                                onBack = { subPage = CloudSubPage.Home },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -412,7 +407,7 @@ internal fun CloudMusicHost(
                 },
                 secondaryContent = { target ->
                     CloudMusicDetailPage(
-                        repository = neteaseRepository,
+                        data = data,
                         authStore = authStore,
                         active = active,
                         playbackBarOverlayHeight = playbackBarOverlayHeight,

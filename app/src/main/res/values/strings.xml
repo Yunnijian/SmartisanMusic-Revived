@@ -367,6 +367,8 @@
     <string name="cloud_music_account_radio_label">播客</string>
     <string name="cloud_music_blank_no_content">这里还没有内容</string>
     <string name="cloud_music_liked_songs_entry">我喜欢的音乐</string>
+    <string name="cloud_music_select_all">全选</string>
+    <string name="cloud_music_edit_playlist">编辑歌单</string>
     <plurals name="cloud_music_account_library_count">
         <item quantity="other">%1$d 项内容</item>
     </plurals>

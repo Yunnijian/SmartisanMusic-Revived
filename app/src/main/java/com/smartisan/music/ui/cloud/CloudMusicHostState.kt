@@ -8,10 +8,12 @@ import androidx.compose.runtime.remember
 import com.smartisan.music.data.online.OnlineAccountPlaylist
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
+import com.smartisan.music.data.online.OnlineArtistIntroduction
 import com.smartisan.music.data.online.OnlineBanner
 import com.smartisan.music.data.online.OnlineMusicHome
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlineMusicProviderRepository
+import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineRadio
 import com.smartisan.music.data.online.OnlineRadioHome
 import com.smartisan.music.data.online.OnlineSearchResults
@@ -77,6 +79,11 @@ internal class CloudDataSlot<K, T>(
         ensureLoaded(key, revision)
     }
 
+    /** 整体作废：写操作影响面无法定位到单个 key 时使用，下次读取重新加载。 */
+    fun invalidateAll() {
+        entries.clear()
+    }
+
     private class Entry<T>(val revision: Int, val state: CloudSlotState<T>)
 }
 
@@ -105,6 +112,13 @@ internal data class CloudAccountLibraryBundle(
     val albums: List<OnlineAlbum>,
     val radios: List<OnlineRadio>,
     val loginRequired: Boolean,
+)
+
+/** 详情页数据：曲目列表，艺人页连带专辑横滑与简介段落。 */
+internal data class CloudDetailBundle(
+    val tracks: List<OnlineTrack>,
+    val albums: List<OnlineAlbum> = emptyList(),
+    val introduction: List<OnlineArtistIntroduction> = emptyList(),
 )
 
 /**
@@ -175,6 +189,64 @@ internal class CloudMusicDataStore(
     /** 搜索结果：按 query 缓存，从结果点进详情再返回时直接复用，不重跑搜索。 */
     val search = CloudDataSlot<String, OnlineSearchResults>(scope) { query ->
         repository.searchAll(query)
+    }
+
+    /** 详情页：按 target 缓存曲目（艺人页连带专辑与简介），重开同一详情不再联网。 */
+    val detail = CloudDataSlot<CloudDetailTarget, CloudDetailBundle>(scope) { target ->
+        when (target) {
+            is CloudDetailTarget.Playlist -> {
+                val tracks = if (target.accountEditable) {
+                    repository.accountPlaylistTracks(
+                        OnlineAccountPlaylist(
+                            provider = OnlineMusicProvider.Netease,
+                            playlistId = target.id,
+                            title = target.title,
+                            trackCount = 0,
+                            isEditable = true,
+                        ),
+                    )
+                } else {
+                    repository.playlistTracks(
+                        OnlinePlaylist(
+                            provider = OnlineMusicProvider.Netease,
+                            playlistId = target.id,
+                            title = target.title,
+                        ),
+                    )
+                }
+                CloudDetailBundle(tracks = tracks)
+            }
+            is CloudDetailTarget.Album -> CloudDetailBundle(
+                tracks = repository.albumTracks(
+                    OnlineAlbum(
+                        provider = OnlineMusicProvider.Netease,
+                        albumId = target.id,
+                        title = target.title,
+                    ),
+                ),
+            )
+            is CloudDetailTarget.Artist -> {
+                val artist = OnlineArtist(
+                    provider = OnlineMusicProvider.Netease,
+                    artistId = target.id,
+                    name = target.name,
+                )
+                CloudDetailBundle(
+                    tracks = repository.artistTopTracks(artist),
+                    albums = repository.artistAlbums(artist),
+                    introduction = repository.artistIntroduction(artist),
+                )
+            }
+            is CloudDetailTarget.Radio -> CloudDetailBundle(
+                tracks = repository.radioTracks(
+                    OnlineRadio(
+                        provider = OnlineMusicProvider.Netease,
+                        radioId = target.id,
+                        title = target.title,
+                    ),
+                ),
+            )
+        }
     }
 }
 

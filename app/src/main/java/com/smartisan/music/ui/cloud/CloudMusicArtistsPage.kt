@@ -16,6 +16,7 @@ import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.ui.cloud.components.CloudMusicArtistList
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
+import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
 import com.smartisan.music.ui.cloud.components.cloudAlbumSubtitle
@@ -33,7 +34,6 @@ internal fun CloudMusicArtistsPage(
     active: Boolean,
     playbackBarOverlayHeight: Dp,
     onOpenArtist: (OnlineArtist) -> Unit,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val artistsSlot = data.artists
@@ -45,9 +45,9 @@ internal fun CloudMusicArtistsPage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        CloudMusicPageTopBar(
+        CloudMusicSectionTitle(
             title = stringResource(R.string.cloud_music_section_artists),
-            onBack = onBack,
+            modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (val current = artistsSlot.state(Unit)) {
@@ -95,7 +95,6 @@ internal fun CloudMusicArtistAlbumsPage(
     playbackBarOverlayHeight: Dp,
     artist: CloudDetailTarget.Artist,
     onOpenAlbum: (OnlineAlbum) -> Unit,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val albumsSlot = data.artistAlbums
@@ -107,9 +106,9 @@ internal fun CloudMusicArtistAlbumsPage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        CloudMusicPageTopBar(
+        CloudMusicSectionTitle(
             title = artist.name,
-            onBack = onBack,
+            modifier = Modifier.fillMaxWidth(),
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (val current = albumsSlot.state(artist)) {

@@ -1,6 +1,5 @@
 package com.smartisan.music.ui.cloud
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,7 +44,7 @@ import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverImage
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudMusicDivider
-import com.smartisan.music.ui.cloud.components.CloudMusicSearchBarHeight
+import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
 import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
 import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
@@ -54,7 +53,6 @@ import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
 import com.smartisan.music.ui.cloud.components.cloudAlbumSubtitle
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
 import com.smartisan.music.ui.cloud.components.cloudRadioSubtitle
-import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 
 /** 「我的」页筛选胶囊：全部 / 歌单 / 专辑 / 播客，对齐旧版 CloudAccountLibraryFilter。 */
 internal enum class CloudAccountLibraryFilter(val labelRes: Int) {
@@ -98,7 +96,6 @@ internal fun CloudMusicMinePage(
     onOpenPlaylist: (OnlineAccountPlaylist) -> Unit,
     onOpenAlbum: (OnlineAlbum) -> Unit,
     onOpenRadio: (OnlineRadio) -> Unit,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // authState.isLoggedIn 在宿主处已判定为 true 才会进入本页；profile 可能为空（仅有 cookie）。
@@ -116,9 +113,9 @@ internal fun CloudMusicMinePage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        CloudMusicPageTopBar(
+        CloudMusicSectionTitle(
             title = stringResource(R.string.cloud_music_mine_title),
-            onBack = onBack,
+            modifier = Modifier.fillMaxWidth(),
         )
         CloudMusicMineUserInfoRow(
             nickname = nickname,
@@ -368,48 +365,6 @@ private fun CloudAccountLibraryItem.displaySubtitle(): String {
         )
     }
     return parts.joinToString(" · ")
-}
-
-/** 顶部标题栏：返回按钮 + 标题。布局与搜索栏等高，风格与云音乐各页一致。 */
-@Composable
-internal fun CloudMusicPageTopBar(
-    title: String,
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(CloudMusicSearchBarHeight)
-            .background(CloudSurfaceColor),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 48.dp, height = CloudMusicSearchBarHeight)
-                .cloudMusicPressable(onClick = onBack)
-                .align(Alignment.CenterStart),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = rememberSmartisanDrawablePainter(R.drawable.standard_icon_back_selector),
-                contentDescription = stringResource(R.string.back),
-                modifier = Modifier.size(24.dp),
-            )
-        }
-        Text(
-            text = title,
-            style = TextStyle(
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                color = CloudTrackTitleColor,
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 56.dp, end = 12.dp),
-        )
-    }
 }
 
 /** 用户信息行：圆形头像 + 昵称。昵称缺失时回退到页面标题文案。 */
