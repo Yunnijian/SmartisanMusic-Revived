@@ -229,6 +229,33 @@
     <string name="cloud_music_login_prompt">登录后可搜索并播放在线歌曲</string>
     <string name="cloud_music_login_action">登录网易云音乐</string>
 
+    <!-- 设置：账号与在线音乐 -->
+    <string name="settings_section_online_music">账号与在线音乐</string>
+    <string name="cloud_music_account_netease">网易云音乐账号</string>
+    <string name="cloud_music_account_not_logged_in">未登录</string>
+    <string name="netease_logged_in">已登录</string>
+    <string name="cloud_music_logout_confirm_title">退出网易云音乐？</string>
+    <string name="cloud_music_logout_confirm_action">退出登录</string>
+    <string name="netease_logout_success">已退出网易云</string>
+    <string name="online_music_play_quality">在线播放音质</string>
+    <string name="online_music_quality_standard">标准</string>
+    <string name="online_music_quality_higher">较高</string>
+    <string name="online_music_quality_exhigh">极高</string>
+    <string name="online_music_quality_lossless">无损</string>
+    <string name="online_music_quality_hires">Hi-Res</string>
+    <string name="online_music_quality_hd_surround">高清环绕声</string>
+    <string name="online_music_quality_surround">沉浸环绕声</string>
+    <string name="online_music_quality_master">超清母带</string>
+    <string name="online_music_quality_summary_standard">MP3 · 128K</string>
+    <string name="online_music_quality_summary_higher">MP3 · 192K</string>
+    <string name="online_music_quality_summary_exhigh">MP3 · 320K</string>
+    <string name="online_music_quality_summary_lossless">FLAC · 约 1000K</string>
+    <string name="online_music_quality_summary_hires">FLAC · 约 1600K 以上</string>
+    <string name="online_music_quality_summary_hd_surround">FLAC · 24bit/96kHz</string>
+    <string name="online_music_quality_summary_surround">FLAC · 5.1 声道</string>
+    <string name="online_music_quality_summary_master">FLAC · 24bit/192kHz</string>
+    <string name="online_music_quality_hint">播放时会优先请求所选音质，不可用时自动降级。</string>
+
     <!-- 云音乐首页 -->
     <string name="cloud_music_home_loading">正在加载</string>
     <string name="cloud_music_home_error">加载失败</string>

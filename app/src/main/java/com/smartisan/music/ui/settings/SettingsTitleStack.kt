@@ -43,6 +43,7 @@ internal fun SettingsTitleStack(
                 SmartisanTitleBar(
                     stringResource(
                         when (target) {
+                            SettingsSecondaryPage.OnlineQuality -> R.string.online_music_play_quality
                             SettingsSecondaryPage.AudioFx -> R.string.audio_fx
                             SettingsSecondaryPage.Navigation -> R.string.bottom_tab_visibility
                             SettingsSecondaryPage.Theme -> R.string.theme_settings

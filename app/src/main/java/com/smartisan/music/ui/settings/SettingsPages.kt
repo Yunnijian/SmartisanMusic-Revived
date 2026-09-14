@@ -60,10 +60,14 @@ internal fun SettingsRootPage(
     navigationSettings: NavigationSettings,
     themeMode: ThemeMode,
     appIcon: AppIcon,
+    neteaseSignedIn: Boolean,
+    playbackQuality: NeteaseAudioQuality,
     onClose: () -> Unit,
     onScratchEnabledChange: (Boolean) -> Unit,
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit,
     onPopcornSoundEnabledChange: (Boolean) -> Unit,
+    onAccountClick: () -> Unit,
+    onPlaybackQualityClick: () -> Unit,
     onAudioFxClick: () -> Unit,
     onArtistSeparatorsClick: () -> Unit,
     onNavigationClick: () -> Unit,
@@ -72,6 +76,25 @@ internal fun SettingsRootPage(
     modifier: Modifier = Modifier,
 ) {
     SettingsScaffold(active, stringResource(R.string.setting), onClose, modifier, complete = true) {
+        SettingsSection(R.string.settings_section_online_music) {
+            SettingsValueRow(
+                R.string.cloud_music_account_netease,
+                stringResource(
+                    if (neteaseSignedIn) R.string.netease_logged_in
+                    else R.string.cloud_music_account_not_logged_in
+                ),
+                true,
+                RowShape.Top,
+                onAccountClick,
+            )
+            SettingsValueRow(
+                R.string.online_music_play_quality,
+                stringResource(playbackQuality.labelRes()),
+                true,
+                RowShape.Bottom,
+                onPlaybackQualityClick,
+            )
+        }
         SettingsSection(R.string.settings_section_playback) {
             SettingsValueRow(
                 R.string.audio_fx,
@@ -288,7 +311,7 @@ internal fun AudioFxSettingsPage(
 }
 
 @Composable
-private fun SettingsScaffold(
+internal fun SettingsScaffold(
     active: Boolean,
     title: String,
     onClose: () -> Unit,
@@ -326,12 +349,12 @@ private fun SettingsScaffold(
 }
 
 @Composable
-private fun SettingsGap() {
+internal fun SettingsGap() {
     Spacer(Modifier.height(dimensionResource(R.dimen.list_item_vertical_gap)))
 }
 
 @Composable
-private fun SettingsSection(title: Int, content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsSection(title: Int, content: @Composable ColumnScope.() -> Unit) {
     SettingsGap()
     BasicText(
         stringResource(title),
@@ -428,7 +451,7 @@ private fun SettingsSwitchRow(
 }
 
 @Composable
-private fun SettingsRow(
+internal fun SettingsRow(
     title: Int,
     summary: String?,
     shape: RowShape,
@@ -513,7 +536,7 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun settingsTextStyle(summary: Boolean = false) =
+internal fun settingsTextStyle(summary: Boolean = false) =
     TextStyle(
         fontSize =
             smartisanTextSize(
@@ -527,7 +550,7 @@ private fun settingsTextStyle(summary: Boolean = false) =
         platformStyle = PlatformTextStyle(includeFontPadding = true),
     )
 
-private enum class RowShape(val background: Int, val shadow: Int) {
+internal enum class RowShape(val background: Int, val shadow: Int) {
     Single(R.drawable.group_list_item_bg_single, R.drawable.list_content_item_single_shadow),
     Top(R.drawable.group_list_item_bg_top, R.drawable.list_content_item_top_shadow),
     Middle(R.drawable.group_list_item_bg_mid, R.drawable.list_content_item_middle_shadow),

@@ -1,18 +1,25 @@
 package com.smartisan.music.ui.settings
 
+import android.app.Activity
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.smartisan.music.R
+import com.smartisan.music.data.online.NeteaseAuthStore
 import com.smartisan.music.data.settings.*
 import com.smartisan.music.launcher.AppIconManager
+import com.smartisan.music.ui.online.NeteaseWebLoginActivity
 import com.smartisan.music.ui.shell.PageStackTransition
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun SettingsPage(
@@ -42,6 +49,40 @@ internal fun SettingsPage(
     var artistSeparatorsInitialValues by remember { mutableStateOf(emptySet<String>()) }
     val latestOnArtistSeparatorsChange by rememberUpdatedState(onArtistSeparatorsChange)
 
+    val appContext = context.applicationContext
+    val authStore = remember(appContext) { NeteaseAuthStore(appContext) }
+    var neteaseSignedIn by remember { mutableStateOf(authStore.load().isLoggedIn) }
+    var logoutConfirmationVisible by remember { mutableStateOf(false) }
+    val onlineSettingsStore = remember(appContext) { OnlineMusicSettingsStore(appContext) }
+    val onlineSettings by onlineSettingsStore.settings.collectAsStateWithLifecycle(
+        initialValue = OnlineMusicSettings(),
+    )
+    val onlineSettingsScope = rememberCoroutineScope()
+
+    // 登录也可能发生在云音乐 tab 内，进入设置页时按存储重读一次，避免行值停留在旧登录态。
+    LaunchedEffect(active) {
+        if (active) {
+            neteaseSignedIn = authStore.load().isLoggedIn
+        }
+    }
+
+    val neteaseLoginLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val cookieJson = result.data
+                ?.getStringExtra(NeteaseWebLoginActivity.ExtraCookieJson)
+                .orEmpty()
+            if (cookieJson.isNotBlank() && authStore.saveCookieJson(cookieJson)) {
+                Toast.makeText(context, R.string.netease_login_success, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, R.string.netease_login_cookie_missing, Toast.LENGTH_SHORT)
+                    .show()
+            }
+        }
+        neteaseSignedIn = authStore.load().isLoggedIn
+    }
+
     BackHandler(enabled = active && secondaryPage != null) {
         onSecondaryPageChange(null)
     }
@@ -61,10 +102,22 @@ internal fun SettingsPage(
                 navigationSettings = navigationSettings,
                 themeMode = themeMode,
                 appIcon = appIcon,
+                neteaseSignedIn = neteaseSignedIn,
+                playbackQuality = onlineSettings.neteasePlaybackQuality,
                 onClose = onClose,
                 onScratchEnabledChange = onScratchEnabledChange,
                 onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                 onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                onAccountClick = {
+                    if (neteaseSignedIn) {
+                        logoutConfirmationVisible = true
+                    } else {
+                        neteaseLoginLauncher.launch(NeteaseWebLoginActivity.createIntent(context))
+                    }
+                },
+                onPlaybackQualityClick = {
+                    onSecondaryPageChange(SettingsSecondaryPage.OnlineQuality)
+                },
                 onAudioFxClick = {
                     onSecondaryPageChange(SettingsSecondaryPage.AudioFx)
                 },
@@ -86,6 +139,20 @@ internal fun SettingsPage(
         },
         secondaryContent = { page ->
             when (page) {
+                SettingsSecondaryPage.OnlineQuality ->
+                    OnlineQualitySettingsPage(
+                        active = active,
+                        quality = onlineSettings.neteasePlaybackQuality,
+                        onClose = {
+                            onSecondaryPageChange(null)
+                        },
+                        onQualityChange = { selected ->
+                            onlineSettingsScope.launch {
+                                onlineSettingsStore.setNeteasePlaybackQuality(selected)
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 SettingsSecondaryPage.AudioFx ->
                     AudioFxSettingsPage(
                         active = active,
@@ -161,9 +228,22 @@ internal fun SettingsPage(
             },
         )
     }
+
+    if (logoutConfirmationVisible) {
+        NeteaseLogoutConfirmation(
+            onDismiss = { logoutConfirmationVisible = false },
+            onConfirm = {
+                authStore.clear()
+                neteaseSignedIn = false
+                logoutConfirmationVisible = false
+                Toast.makeText(context, R.string.netease_logout_success, Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
 }
 
 internal enum class SettingsSecondaryPage {
+    OnlineQuality,
     AudioFx,
     Navigation,
     Theme,
