@@ -189,7 +189,7 @@ class PlaybackService : MediaLibraryService() {
         libraryExclusionsStore = LibraryExclusionsStore(this)
         playbackSettingsStore = PlaybackSettingsStore(this)
         playbackSessionStateStore = PlaybackSessionStateStore(this)
-        onlineMusicRepository = OnlineMusicRepositoryRouter(applicationContext)
+        onlineMusicRepository = OnlineMusicRepositoryRouter.getInstance(applicationContext)
         libraryExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
         libraryRefreshExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
 
