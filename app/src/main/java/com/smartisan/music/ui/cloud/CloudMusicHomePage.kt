@@ -105,6 +105,7 @@ internal fun CloudMusicHomePage(
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
     onOpenAlbum: (OnlineAlbum) -> Unit,
     onOpenArtist: (OnlineArtist) -> Unit,
+    onOpenFeatured: (CloudFeaturedPage) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
@@ -184,6 +185,7 @@ internal fun CloudMusicHomePage(
                 onOpenPlaylist = onOpenPlaylist,
                 onOpenAlbum = onOpenAlbum,
                 onOpenArtist = onOpenArtist,
+                onOpenFeatured = onOpenFeatured,
                 onPlayBannerTrack = { trackId ->
                     scope.launch {
                         val track = runSuspendCatching { repository.track(trackId) }.getOrNull()
@@ -215,6 +217,7 @@ private fun CloudMusicHomeContent(
     onOpenPlaylist: (OnlinePlaylist) -> Unit,
     onOpenAlbum: (OnlineAlbum) -> Unit,
     onOpenArtist: (OnlineArtist) -> Unit,
+    onOpenFeatured: (CloudFeaturedPage) -> Unit,
     onPlayBannerTrack: (trackId: String) -> Unit,
     onPlayDailyTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
 ) {
@@ -226,6 +229,7 @@ private fun CloudMusicHomeContent(
     val chartsTitle = stringResource(R.string.cloud_music_section_charts)
     val albumsTitle = stringResource(R.string.cloud_music_section_albums)
     val artistsTitle = stringResource(R.string.cloud_music_section_artists)
+    val viewAllText = stringResource(R.string.cloud_music_section_view_all)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -280,7 +284,11 @@ private fun CloudMusicHomeContent(
         if (home.playlists.isNotEmpty()) {
             item(key = "cloud-home-section-playlists") {
                 val playlists = home.playlists
-                CloudMusicCoverCardSection(title = playlistsTitle) {
+                CloudMusicCoverCardSection(
+                    title = playlistsTitle,
+                    actionText = viewAllText,
+                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Playlists) },
+                ) {
                     itemsIndexed(
                         items = playlists,
                         key = { index, playlist -> "${playlist.playlistId}:$index" },
@@ -298,7 +306,11 @@ private fun CloudMusicHomeContent(
         if (home.charts.isNotEmpty()) {
             item(key = "cloud-home-section-charts") {
                 val charts = home.charts
-                CloudMusicCoverCardSection(title = chartsTitle) {
+                CloudMusicCoverCardSection(
+                    title = chartsTitle,
+                    actionText = viewAllText,
+                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Charts) },
+                ) {
                     itemsIndexed(
                         items = charts,
                         key = { index, chart -> "${chart.playlistId}:$index" },
@@ -316,7 +328,11 @@ private fun CloudMusicHomeContent(
         if (home.albums.isNotEmpty()) {
             item(key = "cloud-home-section-albums") {
                 val albums = home.albums
-                CloudMusicCoverCardSection(title = albumsTitle) {
+                CloudMusicCoverCardSection(
+                    title = albumsTitle,
+                    actionText = viewAllText,
+                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Albums) },
+                ) {
                     itemsIndexed(
                         items = albums,
                         key = { index, album -> "${album.albumId}:$index" },
@@ -334,7 +350,11 @@ private fun CloudMusicHomeContent(
         if (home.artists.isNotEmpty()) {
             item(key = "cloud-home-section-artists") {
                 val artists = home.artists
-                CloudMusicCoverCardSection(title = artistsTitle) {
+                CloudMusicCoverCardSection(
+                    title = artistsTitle,
+                    actionText = viewAllText,
+                    onActionClick = { onOpenFeatured(CloudFeaturedPage.Artists) },
+                ) {
                     itemsIndexed(
                         items = artists,
                         key = { index, artist -> "${artist.artistId}:$index" },

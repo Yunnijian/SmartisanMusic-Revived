@@ -141,7 +141,7 @@ internal fun CloudMusicMinePage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(CloudPageBackgroundColor)) {
-        CloudMusicMineTopBar(
+        CloudMusicPageTopBar(
             title = stringResource(R.string.cloud_music_mine_title),
             onBack = onBack,
         )
@@ -211,9 +211,9 @@ internal fun CloudMusicMinePage(
     }
 }
 
-/** 顶部标题栏：返回按钮 + “我的音乐”。布局与搜索栏等高，风格与云音乐各页一致。 */
+/** 顶部标题栏：返回按钮 + 标题。布局与搜索栏等高，风格与云音乐各页一致。 */
 @Composable
-private fun CloudMusicMineTopBar(
+internal fun CloudMusicPageTopBar(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,

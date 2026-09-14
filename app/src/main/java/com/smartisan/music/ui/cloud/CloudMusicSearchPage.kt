@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
@@ -43,22 +45,36 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
+import com.smartisan.music.data.online.OnlineAlbum
+import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlineMusicProviderRepository
+import com.smartisan.music.data.online.OnlinePlaylist
+import com.smartisan.music.data.online.OnlineSearchResults
 import com.smartisan.music.data.online.OnlineTrack
-import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
 import com.smartisan.music.data.online.toMediaItem
+import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
 import com.smartisan.music.playback.LocalPlaybackBrowser
 import com.smartisan.music.playback.replaceQueueAndPlay
+import com.smartisan.music.ui.cloud.components.CloudAccentColor
+import com.smartisan.music.ui.cloud.components.CloudHomeSectionHeader
+import com.smartisan.music.ui.cloud.components.CloudMusicArtistList
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
+import com.smartisan.music.ui.cloud.components.CloudMusicCoverCard
+import com.smartisan.music.ui.cloud.components.CloudMusicCoverCardSection
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudMusicDivider
 import com.smartisan.music.ui.cloud.components.CloudMusicSearchBarHeight
 import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
-import com.smartisan.music.ui.cloud.components.CloudAccentColor
+import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudSearchDebounceMs
+import com.smartisan.music.ui.cloud.components.CloudSecondaryTextColor
 import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTextHintColor
+import com.smartisan.music.ui.cloud.components.CloudTrackActionsOverlays
 import com.smartisan.music.ui.cloud.components.CloudTrackTitleColor
+import com.smartisan.music.ui.cloud.components.cloudMusicPressable
+import com.smartisan.music.ui.cloud.components.cloudPlaylistSubtitle
+import com.smartisan.music.ui.cloud.components.rememberCloudTrackActionsState
 import com.smartisan.music.ui.components.SmartisanDrawableBackground
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -69,12 +85,27 @@ internal sealed interface CloudSearchResultsState {
     object Loading : CloudSearchResultsState
     data class Empty(val query: String) : CloudSearchResultsState
     data class Error(val query: String) : CloudSearchResultsState
-    data class Success(val tracks: List<OnlineTrack>) : CloudSearchResultsState
+    data class Success(val results: OnlineSearchResults) : CloudSearchResultsState
 }
 
+/** 搜索分类：综合聚合视图 + 四个单类列表，对齐旧版五段分类栏。 */
+internal enum class CloudSearchCategory(val labelRes: Int) {
+    All(R.string.cloud_music_search_tab_all),
+    Tracks(R.string.search_tab_songs),
+    Artists(R.string.search_tab_artists),
+    Albums(R.string.search_tab_albums),
+    Playlists(R.string.cloud_music_entry_collection),
+}
+
+/** 综合视图里歌曲预览的行数。 */
+private const val CloudSearchPreviewTrackCount = 4
+
 /**
- * 云音乐搜索页：搜索框 + 歌曲结果列表（封面 / 歌名 / 艺人 - 专辑 / 时长）。
- * 点击歌曲时把整个结果列表作为在线队列交给播放控制器（占位 URI 由服务端解析）。
+ * 云音乐搜索页：搜索框 + 分类栏 + 五类结果（综合/歌曲/艺术家/专辑/歌单）。
+ *
+ * 数据走 [OnlineMusicProviderRepository.searchAll] 一次拿全五类；综合视图按分区展示，
+ * 各分区「全部」切到对应单类列表。歌曲点击把结果列表作为在线队列交给播放控制器，
+ * 单曲「更多」复用 [CloudTrackActionsOverlays] 的完整动作集。
  * query 由宿主持有（受控），与作者新版框架的 SearchOverlay 受控模式一致。
  */
 @Composable
@@ -84,10 +115,15 @@ internal fun CloudMusicSearchPage(
     repository: OnlineMusicProviderRepository,
     active: Boolean,
     playbackBarOverlayHeight: Dp,
+    onOpenPlaylist: (OnlinePlaylist) -> Unit,
+    onOpenAlbum: (OnlineAlbum) -> Unit,
+    onOpenArtist: (OnlineArtist) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
+    val trackActionsState = rememberCloudTrackActionsState()
+    var selectedCategory by remember { mutableStateOf(CloudSearchCategory.All) }
     var state by remember { mutableStateOf<CloudSearchResultsState>(CloudSearchResultsState.Idle) }
     // 失败重试时递增，让 LaunchedEffect 以相同 query 重新发起搜索。
     var searchRevision by remember { mutableStateOf(0) }
@@ -104,14 +140,14 @@ internal fun CloudMusicSearchPage(
         state = CloudSearchResultsState.Loading
         delay(CloudSearchDebounceMs)
         val result = runSuspendCatching {
-            repository.search(normalizedQuery)
+            repository.searchAll(normalizedQuery)
         }
         state = result.fold(
-            onSuccess = { tracks ->
-                if (tracks.isEmpty()) {
-                    CloudSearchResultsState.Empty(normalizedQuery)
+            onSuccess = { results ->
+                if (results.hasResults) {
+                    CloudSearchResultsState.Success(results)
                 } else {
-                    CloudSearchResultsState.Success(tracks)
+                    CloudSearchResultsState.Empty(normalizedQuery)
                 }
             },
             onFailure = {
@@ -152,51 +188,275 @@ internal fun CloudMusicSearchPage(
                     onActionClick = { searchRevision += 1 },
                     modifier = Modifier.fillMaxSize(),
                 )
-                is CloudSearchResultsState.Success -> CloudMusicSearchResultList(
-                    tracks = currentState.tracks,
-                    playbackBarOverlayHeight = playbackBarOverlayHeight,
-                    onTrackClick = { items, index ->
-                        playbackBrowser.replaceQueueAndPlay(
-                            mediaItems = items,
-                            startIndex = index,
-                        )
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                is CloudSearchResultsState.Success -> Column(Modifier.fillMaxSize()) {
+                    CloudSearchCategoryBar(
+                        selectedCategory = selectedCategory,
+                        onCategoryChange = { selectedCategory = it },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    CloudSearchResultsContent(
+                        results = currentState.results,
+                        selectedCategory = selectedCategory,
+                        playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        onCategoryChange = { selectedCategory = it },
+                        onOpenPlaylist = onOpenPlaylist,
+                        onOpenAlbum = onOpenAlbum,
+                        onOpenArtist = onOpenArtist,
+                        onTrackMoreClick = trackActionsState::show,
+                        onPlayTracks = { tracks, index ->
+                            val items = tracks.map {
+                                it.toMediaItem().withOnlinePlaybackPlaceholderUri()
+                            }
+                            playbackBrowser?.replaceQueueAndPlay(
+                                mediaItems = items,
+                                startIndex = index,
+                            )
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
+            CloudTrackActionsOverlays(
+                state = trackActionsState,
+                repository = repository,
+                editablePlaylist = null,
+                onTrackRemoved = {},
+                onAccountLibraryChanged = {},
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }
 
+/** 分类栏：五段等宽文字 tab，选中态强调色 + 底部短下划线。 */
 @Composable
-private fun CloudMusicSearchResultList(
-    tracks: List<OnlineTrack>,
-    playbackBarOverlayHeight: Dp,
-    onTrackClick: (List<androidx.media3.common.MediaItem>, Int) -> Unit,
+private fun CloudSearchCategoryBar(
+    selectedCategory: CloudSearchCategory,
+    onCategoryChange: (CloudSearchCategory) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // toMediaItem 携带在线身份 extras；withOnlinePlaybackPlaceholderUri 补上
-    // smartisan-online://netease/{trackId} 占位 URI，播放服务端负责解析真实地址。
-    val playableItems = remember(tracks) {
-        tracks.map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
-    }
-    LazyColumn(
-        modifier = modifier.background(CloudSurfaceColor),
-        contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
-    ) {
-        itemsIndexed(
-            items = tracks,
-            key = { _, track -> track.mediaId },
-        ) { index, track ->
-            Column {
-                CloudMusicTrackRow(
-                    track = track,
-                    onClick = { onTrackClick(playableItems, index) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                CloudMusicDivider()
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp)
+                .background(CloudSurfaceColor),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CloudSearchCategory.entries.forEach { category ->
+                val selected = category == selectedCategory
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .cloudMusicPressable(onClick = { onCategoryChange(category) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(category.labelRes),
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            color = if (selected) CloudAccentColor else CloudSecondaryTextColor,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (selected) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .width(20.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(1.5.dp))
+                                .background(CloudAccentColor),
+                        )
+                    }
+                }
             }
         }
+        CloudMusicDivider()
+    }
+}
+
+/** 分类内容：综合为分区聚合，其余为单类完整列表。空类显示无结果空态。 */
+@Composable
+private fun CloudSearchResultsContent(
+    results: OnlineSearchResults,
+    selectedCategory: CloudSearchCategory,
+    playbackBarOverlayHeight: Dp,
+    onCategoryChange: (CloudSearchCategory) -> Unit,
+    onOpenPlaylist: (OnlinePlaylist) -> Unit,
+    onOpenAlbum: (OnlineAlbum) -> Unit,
+    onOpenArtist: (OnlineArtist) -> Unit,
+    onTrackMoreClick: (OnlineTrack) -> Unit,
+    onPlayTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val viewAllText = stringResource(R.string.cloud_music_section_view_all)
+    when (selectedCategory) {
+        CloudSearchCategory.All -> LazyColumn(
+            modifier = modifier.background(CloudSurfaceColor),
+            contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
+        ) {
+            if (results.tracks.isNotEmpty()) {
+                item(key = "cloud-search-all-tracks-header") {
+                    CloudHomeSectionHeader(
+                        title = stringResource(R.string.search_tab_songs),
+                        actionText = viewAllText,
+                        onClick = { onCategoryChange(CloudSearchCategory.Tracks) },
+                    )
+                }
+                itemsIndexed(
+                    items = results.tracks.take(CloudSearchPreviewTrackCount),
+                    key = { index, track -> "track:${track.mediaId}:$index" },
+                ) { index, track ->
+                    Column {
+                        CloudMusicTrackRow(
+                            track = track,
+                            onClick = { onPlayTracks(results.tracks, index) },
+                            onMoreClick = { onTrackMoreClick(track) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        CloudMusicDivider()
+                    }
+                }
+            }
+            if (results.artists.isNotEmpty()) {
+                item(key = "cloud-search-all-artists") {
+                    val artists = results.artists
+                    CloudMusicCoverCardSection(
+                        title = stringResource(R.string.search_tab_artists),
+                        actionText = viewAllText,
+                        onActionClick = { onCategoryChange(CloudSearchCategory.Artists) },
+                    ) {
+                        itemsIndexed(
+                            items = artists,
+                            key = { index, artist -> "artist:${artist.artistId}:$index" },
+                        ) { _, artist ->
+                            CloudMusicCoverCard(
+                                imageUrl = artist.artworkUrl,
+                                title = artist.name,
+                                subtitle = artist.subtitle,
+                                onClick = { onOpenArtist(artist) },
+                            )
+                        }
+                    }
+                }
+            }
+            if (results.albums.isNotEmpty()) {
+                item(key = "cloud-search-all-albums") {
+                    val albums = results.albums
+                    CloudMusicCoverCardSection(
+                        title = stringResource(R.string.search_tab_albums),
+                        actionText = viewAllText,
+                        onActionClick = { onCategoryChange(CloudSearchCategory.Albums) },
+                    ) {
+                        itemsIndexed(
+                            items = albums,
+                            key = { index, album -> "album:${album.albumId}:$index" },
+                        ) { _, album ->
+                            CloudMusicCoverCard(
+                                imageUrl = album.artworkUrl,
+                                title = album.title,
+                                subtitle = album.artist,
+                                onClick = { onOpenAlbum(album) },
+                            )
+                        }
+                    }
+                }
+            }
+            if (results.playlists.isNotEmpty()) {
+                item(key = "cloud-search-all-playlists") {
+                    val playlists = results.playlists
+                    CloudMusicCoverCardSection(
+                        title = stringResource(R.string.cloud_music_entry_collection),
+                        actionText = viewAllText,
+                        onActionClick = { onCategoryChange(CloudSearchCategory.Playlists) },
+                    ) {
+                        itemsIndexed(
+                            items = playlists,
+                            key = { index, playlist -> "playlist:${playlist.playlistId}:$index" },
+                        ) { _, playlist ->
+                            CloudMusicCoverCard(
+                                imageUrl = playlist.artworkUrl,
+                                title = playlist.title,
+                                subtitle = playlist.subtitle,
+                                onClick = { onOpenPlaylist(playlist) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        CloudSearchCategory.Tracks -> if (results.tracks.isEmpty()) {
+            CloudMusicBlankState(
+                title = stringResource(R.string.cloud_music_no_result),
+                subtitle = results.query,
+                modifier = modifier,
+            )
+        } else {
+            val tracks = results.tracks
+            LazyColumn(
+                modifier = modifier.background(CloudSurfaceColor),
+                contentPadding = PaddingValues(bottom = playbackBarOverlayHeight + 10.dp),
+            ) {
+                itemsIndexed(
+                    items = tracks,
+                    key = { index, track -> "${track.mediaId}:$index" },
+                ) { index, track ->
+                    Column {
+                        CloudMusicTrackRow(
+                            track = track,
+                            onClick = { onPlayTracks(tracks, index) },
+                            onMoreClick = { onTrackMoreClick(track) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        CloudMusicDivider()
+                    }
+                }
+            }
+        }
+        CloudSearchCategory.Artists -> if (results.artists.isEmpty()) {
+            CloudMusicBlankState(
+                title = stringResource(R.string.cloud_music_no_result),
+                subtitle = results.query,
+                modifier = modifier,
+            )
+        } else {
+            CloudMusicArtistList(
+                artists = results.artists,
+                playbackBarOverlayHeight = playbackBarOverlayHeight,
+                onArtistClick = onOpenArtist,
+                modifier = modifier,
+            )
+        }
+        CloudSearchCategory.Albums -> CloudMusicVerticalCoverList(
+            items = results.albums,
+            playbackBarOverlayHeight = playbackBarOverlayHeight,
+            title = OnlineAlbum::title,
+            subtitle = { album ->
+                listOfNotNull(
+                    album.artist?.takeIf(String::isNotBlank),
+                    album.trackCount.takeIf { it > 0 }?.let { count ->
+                        stringResource(R.string.cloud_music_album_total_tracks, count)
+                    },
+                ).joinToString(" · ").ifBlank { null }
+            },
+            imageUrl = OnlineAlbum::artworkUrl,
+            onItemClick = onOpenAlbum,
+            itemKey = OnlineAlbum::albumId,
+            modifier = modifier,
+        )
+        CloudSearchCategory.Playlists -> CloudMusicVerticalCoverList(
+            items = results.playlists,
+            playbackBarOverlayHeight = playbackBarOverlayHeight,
+            title = OnlinePlaylist::title,
+            subtitle = { playlist -> cloudPlaylistSubtitle(playlist) },
+            imageUrl = OnlinePlaylist::artworkUrl,
+            onItemClick = onOpenPlaylist,
+            itemKey = OnlinePlaylist::playlistId,
+            modifier = modifier,
+        )
     }
 }
 

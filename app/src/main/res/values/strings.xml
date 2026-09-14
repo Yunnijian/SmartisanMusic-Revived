@@ -77,6 +77,13 @@
     <string name="clear_history">清空历史</string>
     <string name="search_tab_albums">专辑</string>
     <string name="search_tab_artists">艺术家</string>
+    <string name="search_tab_songs">歌曲</string>
+    <string name="cloud_music_search_tab_all">综合</string>
+    <string name="cloud_music_entry_collection">歌单</string>
+    <string name="cloud_music_entry_mine">我的</string>
+    <string name="cloud_music_entry_recommend">推荐</string>
+    <string name="cloud_music_entry_radio">电台</string>
+    <string name="cloud_music_entry_artist">艺术家</string>
     <string name="settings_section_playback">播放体验</string>
     <string name="settings_section_library">资料库</string>
     <string name="settings_section_appearance">外观</string>
@@ -331,4 +338,23 @@
     <plurals name="cloud_music_count_program_short">
         <item quantity="other">%1$d期</item>
     </plurals>
+    <string name="cloud_music_section_view_all">全部</string>
+    <string name="cloud_music_featured_loading">正在载入云音乐</string>
+    <string name="cloud_music_featured_error">云音乐暂时无法载入</string>
+    <string name="cloud_music_artists_loading">正在载入艺术家</string>
+    <string name="cloud_music_artists_empty">暂无艺术家</string>
+    <string name="cloud_music_artists_error">艺术家暂时无法载入</string>
+    <string name="cloud_music_artist_track_album_count">%1$d 首歌曲 · %2$d 张专辑</string>
+    <string name="cloud_music_artist_track_count">%1$d 首歌曲</string>
+    <string name="cloud_music_artist_album_count">%1$d 张专辑</string>
+    <string name="cloud_music_artist_provider_netease">网易云音乐艺术家</string>
+    <string name="cloud_music_play_count_wan">%1$d 万次播放</string>
+    <string name="cloud_music_section_radio">网易云电台</string>
+    <string name="cloud_music_section_radio_programs">推荐节目</string>
+    <string name="cloud_music_section_hot_radios">热门播客</string>
+    <string name="cloud_music_section_daily_radio_program">今日推荐节目</string>
+    <string name="cloud_music_radio_loading">正在载入电台</string>
+    <string name="cloud_music_radio_empty">暂无电台内容</string>
+    <string name="cloud_music_radio_error">电台暂时无法载入</string>
+    <string name="cloud_music_radio_program_count">%1$d 期节目</string>
 </resources>

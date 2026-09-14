@@ -86,6 +86,8 @@ internal fun CloudMusicCoverCard(
 internal fun CloudMusicCoverCardSection(
     title: String,
     modifier: Modifier = Modifier,
+    actionText: String? = null,
+    onActionClick: (() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     Column(
@@ -93,7 +95,11 @@ internal fun CloudMusicCoverCardSection(
             .fillMaxWidth()
             .padding(vertical = CloudMusicCoverSectionVerticalSpacing),
     ) {
-        CloudMusicSectionTitle(title = title)
+        CloudHomeSectionHeader(
+            title = title,
+            actionText = actionText,
+            onClick = onActionClick,
+        )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 12.dp),

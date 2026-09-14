@@ -52,6 +52,7 @@ internal val CloudBlankIconTintColor: Color
 
 internal val CloudMusicSearchBarHeight = 50.dp
 internal val CloudSearchCoverArtworkSize = 48.dp
+internal val CloudSearchCoverRowHeight = 72.dp
 internal val CloudTrackRowHeight = 60.dp
 internal val CloudSectionTitleHeight = 39.dp
 
