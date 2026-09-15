@@ -5,13 +5,19 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.smartisan.music.LocalMusicAppContainer
@@ -35,6 +42,11 @@ import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicHomeEntryRow
 import com.smartisan.music.ui.online.NeteaseWebLoginActivity
 import com.smartisan.music.ui.shell.PageStackTransition
+import com.smartisan.music.ui.navigation.SmartisanNavigationDuration
+import kotlin.math.cos
+
+/** 一级页横向推入的缓动，与导航位移同款（cos 曲线）。 */
+private val CloudPrimaryTransitionEasing = Easing { ((1.0 - cos(it * Math.PI)) / 2.0).toFloat() }
 
 /**
  * 云音乐宿主页：未登录引导 + 已登录内容区。
@@ -178,14 +190,33 @@ internal fun CloudMusicHost(
                 modifier = Modifier.fillMaxSize(),
                 label = "cloud detail transition",
                 primaryContent = {
-                    CloudMusicHostPrimaryContent(
-                        data = data,
-                        scrollStates = scrollStates,
-                        authStore = authStore,
-                        active = active,
-                        playbackBarOverlayHeight = playbackBarOverlayHeight,
-                        viewModel = viewModel,
-                    )
+                    AnimatedContent<CloudPrimaryPage>(
+                        targetState = viewModel.primaryPage,
+                        transitionSpec = {
+                            val spec: FiniteAnimationSpec<IntOffset> = tween(
+                                SmartisanNavigationDuration,
+                                easing = CloudPrimaryTransitionEasing,
+                            )
+                            if (targetState.order >= initialState.order) {
+                                slideInHorizontally(animationSpec = spec) { fullWidth -> fullWidth } togetherWith
+                                    slideOutHorizontally(animationSpec = spec) { fullWidth -> -fullWidth }
+                            } else {
+                                slideInHorizontally(animationSpec = spec) { fullWidth -> -fullWidth } togetherWith
+                                    slideOutHorizontally(animationSpec = spec) { fullWidth -> fullWidth }
+                            }
+                        },
+                        label = "cloud primary transition",
+                    ) { page ->
+                        CloudMusicHostPrimaryContent(
+                            page = page,
+                            data = data,
+                            scrollStates = scrollStates,
+                            authStore = authStore,
+                            active = active,
+                            playbackBarOverlayHeight = playbackBarOverlayHeight,
+                            viewModel = viewModel,
+                        )
+                    }
                 },
                 secondaryContent = { target ->
                     CloudMusicDetailPage(
@@ -218,6 +249,7 @@ internal fun CloudMusicHost(
 /** 一级页与各推进层的内容分发（歌手/电台/「查看全部」/首页/我的）。 */
 @Composable
 private fun CloudMusicHostPrimaryContent(
+    page: CloudPrimaryPage,
     data: CloudMusicDataStore,
     scrollStates: CloudMusicScrollStates,
     authStore: NeteaseAuthStore,
@@ -225,18 +257,17 @@ private fun CloudMusicHostPrimaryContent(
     playbackBarOverlayHeight: Dp,
     viewModel: CloudMusicHostViewModel,
 ) {
-    val currentArtistAlbums = viewModel.artistAlbumsTarget
-    when {
-        currentArtistAlbums != null -> CloudMusicArtistAlbumsPage(
+    when (page) {
+        is CloudPrimaryPage.ArtistAlbums -> CloudMusicArtistAlbumsPage(
             data = data,
             scrollStates = scrollStates,
             active = active,
             playbackBarOverlayHeight = playbackBarOverlayHeight,
-            artist = currentArtistAlbums,
+            artist = page.artist,
             onOpenAlbum = viewModel::openAlbumDetail,
             modifier = Modifier.fillMaxSize(),
         )
-        viewModel.artistsVisible -> CloudMusicArtistsPage(
+        CloudPrimaryPage.Artists -> CloudMusicArtistsPage(
             data = data,
             scrollStates = scrollStates,
             active = active,
@@ -244,7 +275,7 @@ private fun CloudMusicHostPrimaryContent(
             onOpenArtist = viewModel::openArtistDetail,
             modifier = Modifier.fillMaxSize(),
         )
-        viewModel.radioVisible -> CloudMusicRadioPage(
+        CloudPrimaryPage.Radio -> CloudMusicRadioPage(
             data = data,
             scrollStates = scrollStates,
             active = active,
@@ -254,8 +285,8 @@ private fun CloudMusicHostPrimaryContent(
             onOpenRadio = viewModel::openRadioDetail,
             modifier = Modifier.fillMaxSize(),
         )
-        viewModel.featuredPage != null -> CloudMusicFeaturedPage(
-            page = viewModel.featuredPage!!,
+        is CloudPrimaryPage.Featured -> CloudMusicFeaturedPage(
+            page = page.page,
             data = data,
             scrollStates = scrollStates,
             active = active,
@@ -265,7 +296,7 @@ private fun CloudMusicHostPrimaryContent(
             onOpenArtist = viewModel::openArtistDetail,
             modifier = Modifier.fillMaxSize(),
         )
-        else -> when (viewModel.subPage) {
+        is CloudPrimaryPage.Entry -> when (page.subPage) {
             CloudSubPage.Home -> CloudMusicHomePage(
                 data = data,
                 scrollStates = scrollStates,

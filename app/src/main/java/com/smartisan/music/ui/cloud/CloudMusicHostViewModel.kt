@@ -15,6 +15,42 @@ import com.smartisan.music.data.online.OnlineRadio
 import com.smartisan.music.ui.cloud.components.CloudHomeEntry
 
 /**
+ * 一级内容页标识：五个入口页与各推进层（歌手 / 歌手专辑 / 电台 /「查看全部」）。
+ *
+ * 作为转场的 key：值变化即横向推入下一页，与详情层的方向一致。
+ */
+internal sealed interface CloudPrimaryPage {
+    /** 入口行上的位置（推进层接在所属入口之后），仅用于决定转场方向。 */
+    val order: Int
+
+    data class ArtistAlbums(val artist: CloudDetailTarget.Artist) : CloudPrimaryPage {
+        override val order: Int get() = 5
+    }
+
+    data object Artists : CloudPrimaryPage {
+        override val order: Int get() = 4
+    }
+
+    data object Radio : CloudPrimaryPage {
+        override val order: Int get() = 2
+    }
+
+    data class Featured(val page: CloudFeaturedPage) : CloudPrimaryPage {
+        override val order: Int get() = 3
+    }
+
+    data class Entry(val subPage: CloudSubPage) : CloudPrimaryPage {
+        override val order: Int
+            get() = if (subPage == CloudSubPage.Mine) MineOrder else RecommendOrder
+    }
+
+    private companion object {
+        const val MineOrder = 0
+        const val RecommendOrder = 1
+    }
+}
+
+/**
  * 云音乐宿主的界面状态：登录态、一级页/推进层、搜索场与详情目标。
  *
  * 原先全部在 [CloudMusicHost] 里 `remember`/`rememberSaveable` 现场持有，旋转即丢；
@@ -47,6 +83,20 @@ internal class CloudMusicHostViewModel(
     fun reloadAuthState() {
         authState = authStore.load()
     }
+
+    /** 当前一级内容页；与 [CloudMusicHostPrimaryContent] 的分支顺序保持一致。 */
+    val primaryPage: CloudPrimaryPage
+        get() {
+            val albums = artistAlbumsTarget
+            val featured = featuredPage
+            return when {
+                albums != null -> CloudPrimaryPage.ArtistAlbums(albums)
+                artistsVisible -> CloudPrimaryPage.Artists
+                radioVisible -> CloudPrimaryPage.Radio
+                featured != null -> CloudPrimaryPage.Featured(featured)
+                else -> CloudPrimaryPage.Entry(subPage)
+            }
+        }
 
     fun saveLoginCookie(cookieJson: String): Boolean = authStore.saveCookieJson(cookieJson)
 
