@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,21 +60,26 @@ class MainActivity : AppCompatActivity() {
             window.isNavigationBarContrastEnforced = false
         }
         setContent {
-            MusicTheme {
-                RequestAudioPermissionOnLaunch()
-                AlbumArtworkBrowserHost {
-                    MusicAppShell(
-                        playbackLaunchRequest = playbackLaunchRequest,
-                        externalAudioLaunchRequest = externalAudioLaunchRequest,
-                        onExternalAudioLaunchConsumed = ::clearExternalAudioLaunchRequest,
-                        onStartupReady = {
-                            startupContentReady = true
-                        },
-                        onThemeModeChange = { mode ->
-                            themeSettingsStore.setMode(mode)
-                            AppCompatDelegate.setDefaultNightMode(mode.appCompatNightMode)
-                        },
-                    )
+            CompositionLocalProvider(
+                LocalMusicAppContainer provides
+                    (application as SmartisanMusicApplication).musicAppContainer,
+            ) {
+                MusicTheme {
+                    RequestAudioPermissionOnLaunch()
+                    AlbumArtworkBrowserHost {
+                        MusicAppShell(
+                            playbackLaunchRequest = playbackLaunchRequest,
+                            externalAudioLaunchRequest = externalAudioLaunchRequest,
+                            onExternalAudioLaunchConsumed = ::clearExternalAudioLaunchRequest,
+                            onStartupReady = {
+                                startupContentReady = true
+                            },
+                            onThemeModeChange = { mode ->
+                                themeSettingsStore.setMode(mode)
+                                AppCompatDelegate.setDefaultNightMode(mode.appCompatNightMode)
+                            },
+                        )
+                    }
                 }
             }
         }

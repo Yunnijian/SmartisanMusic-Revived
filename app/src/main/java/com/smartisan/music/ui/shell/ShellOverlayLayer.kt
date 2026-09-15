@@ -28,12 +28,12 @@ import kotlinx.coroutines.launch
  *
  * 从 `MusicAppShell` 的 Box 里原样搬来，组合顺序、`zIndex` 与各 `visible` 表达式都不变；
  * 覆盖层自有的 `BackHandler` 仍然晚于主壳注册，所以返回优先级不变（见 ShellBackNavigation）。
- * 状态都读写主壳持有的 [MusicShellUiState]（唯一状态源），[scope] 也仍是主壳的协程作用域，
+ * 状态都读写主壳持有的 [MusicShellViewModel]（唯一状态源），[scope] 也仍是主壳的协程作用域，
  * 因此落库、Toast 与状态写入的时机与迁移前一致。
  */
 @Composable
 internal fun ShellOverlayLayer(
-    uiState: MusicShellUiState,
+    uiState: MusicShellViewModel,
     scope: CoroutineScope,
     playlistRepository: PlaylistRepository,
     playbackSettings: PlaybackSettings,

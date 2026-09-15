@@ -18,7 +18,7 @@ internal enum class TrackActionSource {
 /**
  * 曲目操作面板：条目集合由「来源 + 是否已收藏」决定，动作全部回主壳执行。
  *
- * 收藏、加歌单等待确认项都在 [MusicShellUiState] 里，这里只渲染与转发动作。
+ * 收藏、加歌单等待确认项都在 [MusicShellViewModel] 里，这里只渲染与转发动作。
  *
  * 从 `MusicAppShell` 原样搬来的区域，保持既有细节：
  * 每项点击都先 `onDismiss()` 再执行动作（顺序与迁移前一致），
@@ -26,7 +26,7 @@ internal enum class TrackActionSource {
  */
 @Composable
 internal fun ShellTrackActionsOverlay(
-    uiState: MusicShellUiState,
+    uiState: MusicShellViewModel,
     favoriteIds: Set<String>,
     onAddToQueue: (List<MediaItem>) -> Unit,
     onToggleFavorite: (MediaItem) -> Unit,

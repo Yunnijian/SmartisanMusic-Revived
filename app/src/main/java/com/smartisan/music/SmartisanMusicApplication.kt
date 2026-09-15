@@ -19,6 +19,8 @@ import okio.Path.Companion.toOkioPath
  * 并缓存 2xx 图片响应，避免网易云图片 CDN 在页面来回切换时反复下载封面。
  */
 class SmartisanMusicApplication : Application() {
+    internal val musicAppContainer: MusicAppContainer by lazy { MusicAppContainer.getInstance(this) }
+
     override fun onCreate() {
         super.onCreate()
         val imageLoader = ImageLoader.Builder(this)

@@ -1,9 +1,9 @@
 package com.smartisan.music.ui.shell
 
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
 import com.smartisan.music.isExternalAudioLaunchItem
 import com.smartisan.music.ui.artist.ArtistTarget
@@ -17,14 +17,14 @@ import com.smartisan.music.ui.search.SearchDrilldownTarget
  * 主壳的临时界面状态：目的地栈、覆盖层可见性、编辑与选择态、待确认操作。
  *
  * 它是这些状态的唯一来源（原先是 `MusicAppShellContent` 里 24 个 `remember { mutableStateOf(...) }`，
- * 现在整体搬进一个由主壳 `remember {}` 持有的对象，键与创建时机都不变），
+ * 现在整体搬进一个由主壳 `viewModel()` 持有的 ViewModel，键与创建时机都不变，
+ * 且随旋转/配置变更存活，搜索词、编辑态多选等临时状态不再因旋转丢失），
  * 页面层通过它读写、通过它发起状态收敛，不再靠一堆一次性 lambda 参数下传。
  *
  * 播放条快照与封面状态在 `PlaybackBarHost`，收藏与云端收敛在 `data/favorite`，
  * 这里不持有任何持久化状态，也不新增第二套导航状态源。
  */
-@Stable
-internal class MusicShellUiState {
+internal class MusicShellViewModel : ViewModel() {
 
     // ── 目的地栈 ──
 

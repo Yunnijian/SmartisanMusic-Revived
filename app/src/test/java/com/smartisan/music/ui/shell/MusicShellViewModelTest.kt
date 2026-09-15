@@ -12,13 +12,13 @@ import org.junit.Test
 
 /**
  * 主壳临时界面状态的迁移保护：这些收敛动作原先写在 `MusicAppShellContent` 的 lambda 里，
- * 现在收在 [MusicShellUiState]，逐条断言写入顺序与副作用范围没有变。
+ * 现在收在 [MusicShellViewModel]，逐条断言写入顺序与副作用范围没有变。
  */
-class MusicShellUiStateTest {
+class MusicShellViewModelTest {
 
     @Test
     fun overflowLandingAndReturnKeepStackFlags() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
 
         state.selectOverflow(MusicDestination.LovedSongs)
 
@@ -35,7 +35,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun tabSelectionClearsPresentedFromMore() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
         state.selectOverflow(MusicDestination.Folder)
 
         state.selectTab(MusicDestination.Playlist)
@@ -46,11 +46,11 @@ class MusicShellUiStateTest {
 
     @Test
     fun navigationEditorStaysClosedWhileAddModeActive() {
-        val addMode = MusicShellUiState().apply { playlistAddModeActive = true }
+        val addMode = MusicShellViewModel().apply { playlistAddModeActive = true }
         addMode.showNavigationEditor()
         assertFalse(addMode.navigationEditorVisible)
 
-        val normal = MusicShellUiState()
+        val normal = MusicShellViewModel()
         normal.showNavigationEditor()
         assertTrue(normal.navigationEditorVisible)
 
@@ -60,7 +60,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun openSearchResetsQueryAndDrilldown() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
         state.updateSearchQuery("echo")
 
         state.openSearch()
@@ -75,7 +75,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun albumDetailOpenClearsMultiSelectionAndCloseKeepsEditMode() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
         state.enterAlbumEditMode()
         state.selectAlbumRow("1", true)
 
@@ -95,7 +95,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun songDeleteConfirmationFlowRunsInOrder() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
         state.enterSongsEditMode()
         state.selectSongRow("1001", true)
         val dismissed = AtomicInteger()
@@ -117,7 +117,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun emptyDeleteRequestIsIgnoredAndDismissFallsBackToClose() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
 
         state.requestSongDeleteConfirmation(emptySet())
         assertFalse(state.showSongDeleteConfirm)
@@ -128,7 +128,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun playlistPickerVisibilityYieldsToCreateDialog() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
         assertFalse(state.playlistPickerVisible)
 
         state.requestPlaylistPicker(
@@ -155,7 +155,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun trackActionsRequireMediaIdAndKeepSource() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
 
         state.showTrackActions(mediaItem(" "), TrackActionSource.Library)
         assertNull(state.pendingTrackActionItem)
@@ -169,7 +169,7 @@ class MusicShellUiStateTest {
 
     @Test
     fun ratingOverrideIsClampedAndAdditive() {
-        val state = MusicShellUiState()
+        val state = MusicShellViewModel()
 
         state.addRatingOverride("1001", 9)
         state.addRatingOverride("1002", -3)

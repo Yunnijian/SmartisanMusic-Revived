@@ -24,7 +24,7 @@ import com.smartisan.music.ui.album.AlbumViewMode
 import com.smartisan.music.ui.artist.ArtistTarget
 import com.smartisan.music.ui.artist.ArtistTitleStack
 import com.smartisan.music.ui.navigation.MusicDestination
-import com.smartisan.music.ui.shell.MusicShellUiState
+import com.smartisan.music.ui.shell.MusicShellViewModel
 import com.smartisan.music.ui.shell.TrackActionSource
 import com.smartisan.music.ui.shell.titlebar.MainTitleBar
 import com.smartisan.music.ui.shell.titlebar.TitleBarShadow
@@ -34,14 +34,14 @@ import com.smartisan.music.ui.shell.titlebar.TitleBarTransition
  * 单个一级目的地的整页表面：固定高度标题区 + [MusicTabContent] 页面分发 + 详情页标题阴影。
  *
  * 从 `MusicAppShell` 的 `destinationSurface` 局部 lambda 原样搬来：组合顺序、`Modifier`、尺寸来源
- * 与所有回调表达式都不变。编辑态、选择态与待确认操作读写主壳持有的 [MusicShellUiState]
+ * 与所有回调表达式都不变。编辑态、选择态与待确认操作读写主壳持有的 [MusicShellViewModel]
  * （唯一状态源），需要落库的设置写回仍由主壳注入，页面层不碰存储。
  */
 @Composable
 internal fun MusicDestinationSurface(
     destination: MusicDestination,
     fromMore: Boolean,
-    uiState: MusicShellUiState,
+    uiState: MusicShellViewModel,
     realTabContentBottomMargin: Dp,
     hideBottomChrome: Boolean,
     playbackBarOverlayHeight: Dp,

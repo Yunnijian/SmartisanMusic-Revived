@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.media3.common.MediaItem
 import com.smartisan.music.ui.navigation.MusicDestination
-import com.smartisan.music.ui.shell.MusicShellUiState
+import com.smartisan.music.ui.shell.MusicShellViewModel
 import com.smartisan.music.ui.shell.playback.PlaybackBar
 import com.smartisan.music.ui.shell.playback.PlaybackBarHost
 import com.smartisan.music.ui.shell.retainedChromeVisibility
@@ -21,14 +21,14 @@ import com.smartisan.music.ui.shell.retainedChromeVisibility
  *
  * 从 `MusicAppShell` 原样搬来的区域：播放条仍然只在真正组合过之后才挂上，退场动画收尾才撤回；
  * 底栏仍然沿用同一套「加歌模式 > 来自更多 > 当前目的地」的高亮判断，切 tab 与打开导航编辑的
- * 收敛动作都收在主壳的 [MusicShellUiState] 里。
+ * 收敛动作都收在主壳的 [MusicShellViewModel] 里。
  *
  * 作为 `BoxScope` 扩展存在：底栏仍然用同一个 `align(Alignment.BottomCenter)` 挂在主壳顶层 Box 上，
  * 修饰符链与迁移前逐字一致。
  */
 @Composable
 internal fun BoxScope.MusicBottomChrome(
-    uiState: MusicShellUiState,
+    uiState: MusicShellViewModel,
     playbackBar: PlaybackBarHost,
     favoriteIds: Set<String>,
     artworkBitmap: Bitmap?,

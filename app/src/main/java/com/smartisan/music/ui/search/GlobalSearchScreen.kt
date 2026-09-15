@@ -58,6 +58,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.smartisan.music.LocalMusicAppContainer
 import com.smartisan.music.R
 import com.smartisan.music.data.library.LibraryExclusionsStore
 import com.smartisan.music.data.search.SearchHistoryStore
@@ -174,14 +175,9 @@ fun GlobalSearchScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
-    val historyStore =
-        remember(context.applicationContext) {
-            SearchHistoryStore(context.applicationContext)
-        }
-    val exclusionsStore =
-        remember(context.applicationContext) {
-            LibraryExclusionsStore(context.applicationContext)
-        }
+    val container = LocalMusicAppContainer.current
+    val historyStore = container.searchHistoryStore
+    val exclusionsStore = container.libraryExclusionsStore
     val history by historyStore.history.collectAsState(initial = emptyList())
     val libraryRevision by exclusionsStore.revision.collectAsState(initial = 0)
     val hasPermission = hasAudioPermission(context)

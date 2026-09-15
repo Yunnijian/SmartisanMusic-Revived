@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.smartisan.music.LocalMusicAppContainer
 import com.smartisan.music.R
 import com.smartisan.music.data.online.NeteaseAuthStore
 import com.smartisan.music.data.settings.*
@@ -51,10 +52,11 @@ internal fun SettingsPage(
     val latestOnArtistSeparatorsChange by rememberUpdatedState(onArtistSeparatorsChange)
 
     val appContext = context.applicationContext
-    val authStore = remember(appContext) { NeteaseAuthStore(appContext) }
+    val container = LocalMusicAppContainer.current
+    val authStore = container.neteaseAuthStore
     var neteaseSignedIn by remember { mutableStateOf(authStore.load().isLoggedIn) }
     var logoutConfirmationVisible by remember { mutableStateOf(false) }
-    val onlineSettingsStore = remember(appContext) { OnlineMusicSettingsStore(appContext) }
+    val onlineSettingsStore = container.onlineMusicSettingsStore
     val onlineSettings by onlineSettingsStore.settings.collectAsStateWithLifecycle(
         initialValue = OnlineMusicSettings(),
     )

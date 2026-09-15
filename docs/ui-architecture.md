@@ -1,10 +1,10 @@
 # UI 架构
 
-更新日期：2026-09-07。应用 UI 已完整使用 Jetpack Compose；当前视觉基线来自迁移前经过校准的实现。工程保持单 `:app` 模块，源码根包为 `com.smartisan.music`，applicationId 为 `app.smartisanmusic.revived`。迁移范围、验证状态与待验收项见 [Compose 迁移记录](compose-migration.md)。
+更新日期：2026-09-15。应用 UI 已完整使用 Jetpack Compose；当前视觉基线来自迁移前经过校准的实现。工程保持单 `:app` 模块，源码根包为 `com.smartisan.music`，applicationId 为 `app.smartisanmusic.revived`。迁移范围、验证状态与待验收项见 [Compose 迁移记录](compose-migration.md)。
 
 ## 状态与系统边界
 
-[MainActivity](../app/src/main/java/com/smartisan/music/MainActivity.kt) 负责窗口、权限、外部音频入口和 Compose 宿主。[MusicAppShell](../app/src/main/java/com/smartisan/music/ui/shell/MusicAppShell.kt) 协调目的地、编辑态、页面栈及覆盖层。具体页面消费已有媒体与设置状态，通过回调或 controller 发送用户意图。
+[MainActivity](../app/src/main/java/com/smartisan/music/MainActivity.kt) 负责窗口、权限、外部音频入口和 Compose 宿主。[MusicAppShell](../app/src/main/java/com/smartisan/music/ui/shell/MusicAppShell.kt) 编排目的地、页面栈及覆盖层，其导航与临时编辑状态由 [MusicShellViewModel](../app/src/main/java/com/smartisan/music/ui/shell/MusicShellViewModel.kt) 承载（随旋转存活）。具体页面消费已有媒体与设置状态，通过回调或 controller 发送用户意图。
 
 | 所有者 | 职责 | UI 的接入方式 |
 | --- | --- | --- |
@@ -12,7 +12,8 @@
 | [data](../app/src/main/java/com/smartisan/music/data/) | Room、DataStore、资料库索引、收藏、播放列表和设置 | 订阅已有 Repository / Flow，写入仍经原业务入口 |
 | [launcher](../app/src/main/java/com/smartisan/music/launcher/) | 应用图标 alias 切换 | 以系统组件状态确认选择，不另存一份图标状态 |
 | [ui/library](../app/src/main/java/com/smartisan/music/ui/library/) | 资料库 UI state、共用列表和专辑展示 | 将已有媒体映射为页面数据，不维护第二套媒体索引 |
-| [ui/shell](../app/src/main/java/com/smartisan/music/ui/shell/) | 全局页面编排、Tab、标题栈、播放条和跨页面覆盖层 | 持有导航与临时编辑状态，转发页面事件 |
+| [ui/shell](../app/src/main/java/com/smartisan/music/ui/shell/) | 全局页面编排、Tab、标题栈、播放条和跨页面覆盖层 | 导航与临时编辑状态由 MusicShellViewModel / CloudMusicHostViewModel 持有，shell 只做编排与转发 |
+| [MusicAppContainer](../app/src/main/java/com/smartisan/music/MusicAppContainer.kt) | 应用级依赖容器：懒加载单例持有共享 Store 与在线路由 | 经 LocalMusicAppContainer 下发，页面取同一实例 |
 
 Room schema、DataStore key、稳定媒体 ID、队列顺序、当前项及恢复协议不因 UI 迁移而改变。删除媒体继续通过系统授权协调器执行；确认界面只表达用户意图，授权结果仍走原有链路。
 

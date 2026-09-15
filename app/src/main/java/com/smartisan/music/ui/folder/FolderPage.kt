@@ -45,6 +45,7 @@ import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisan.music.AppDispatchers
+import com.smartisan.music.LocalMusicAppContainer
 import com.smartisan.music.R
 import com.smartisan.music.data.library.LibraryExclusions
 import com.smartisan.music.data.library.LibraryExclusionsStore
@@ -103,10 +104,7 @@ internal fun FolderPage(
         remember(context.applicationContext) {
             LocalAudioLibrary(context.applicationContext)
         }
-    val exclusionsStore =
-        remember(context.applicationContext) {
-            LibraryExclusionsStore(context.applicationContext)
-        }
+    val exclusionsStore = LocalMusicAppContainer.current.libraryExclusionsStore
     val directoryTitle = stringResource(R.string.tab_directory)
     val exclusions by exclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
     val audioPermission = rememberAudioPermissionState()
