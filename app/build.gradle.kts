@@ -60,6 +60,18 @@ android {
     buildFeatures {
         compose = true
     }
+    lint {
+        // 备份三项已由 res/xml 的规则落实，提升为 error 作为回归门禁；
+        // 数据库/权限类检查在 AGP 默认集之外显式打开（默认致命项之外的检查仍是 warning）。
+        error += setOf("AllowBackup", "DataExtractionRules", "FullBackupContent")
+        enable +=
+            setOf(
+                "SQLiteString",
+                "Recycle",
+                "MissingPermission",
+                "ProtectedPermissions",
+            )
+    }
 }
 
 // Room 将每个 @Database 的 schema 导出为 app/schemas/<数据库类全名>/<版本>.json，
