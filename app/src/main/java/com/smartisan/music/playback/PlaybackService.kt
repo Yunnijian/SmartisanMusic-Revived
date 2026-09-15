@@ -5,31 +5,21 @@ package com.smartisan.music.playback
 import android.Manifest
 import android.app.PendingIntent
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Bundle
 import android.os.Build
-import android.os.SystemClock
-import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
-import androidx.media3.session.SessionResult
 import androidx.core.content.ContextCompat
-import com.google.common.collect.ImmutableList
-import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.ListeningExecutorService
 import com.google.common.util.concurrent.MoreExecutors
@@ -39,14 +29,9 @@ import com.smartisan.music.MainActivity
 import com.smartisan.music.data.library.LibraryExclusions
 import com.smartisan.music.data.library.LibraryExclusionsStore
 import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
-import com.smartisan.music.data.online.OnlinePlaybackFailureReason
-import com.smartisan.music.data.online.OnlinePlaybackResolutionException
 import com.smartisan.music.data.online.OnlineTrackIdentity
 import com.smartisan.music.data.online.isOnlineMediaItem
-import com.smartisan.music.data.online.isNeteasePreviewDuration
-import com.smartisan.music.data.online.onlinePlaybackUriIdentityOrNull
 import com.smartisan.music.data.online.onlineTrackIdentityOrNull
-import com.smartisan.music.data.online.shouldRefreshOnlinePlaybackUrl
 import com.smartisan.music.data.online.toOnlinePlaybackCacheKey
 import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
 import com.smartisan.music.data.playback.PlaybackStatsRepository
@@ -55,18 +40,16 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicLong
 
 class PlaybackService : MediaLibraryService() {
 
@@ -80,21 +63,15 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var playbackStatsRepository: PlaybackStatsRepository
     private lateinit var playbackSessionStateStore: PlaybackSessionStateStore
     private lateinit var onlineMusicRepository: OnlineMusicRepositoryRouter
+    private lateinit var onlinePlaybackUrlRefresher: OnlinePlaybackUrlRefresher
+    private lateinit var playbackStartCoordinator: PlaybackStartCoordinator
+    private lateinit var playbackStatsSync: PlaybackStatsSync
     private var playbackSessionStateCoordinator: PlaybackSessionStateCoordinator? = null
     private var playbackPlayCountTracker: PlaybackPlayCountTracker? = null
     private var playbackAudioFxController: PlaybackAudioFxController? = null
     private var playbackMetadataPreloader: PlaybackMetadataPreloader? = null
     private var mediaSessionArtworkBitmapLoader: MediaSessionArtworkBitmapLoader? = null
-    private var pendingStatsLibraryRefreshJob: Job? = null
-    private var pendingRatingLibraryRefreshJob: Job? = null
-    private var pendingPlaybackStartJob: Job? = null
-    private var pendingPlaybackStartFuture: SettableFuture<SessionResult>? = null
-    private var onlineMediaRefreshJob: Job? = null
-    private var onlineMediaRefreshJobForceRefresh = false
-    private var lastOnlineMediaRefreshKey: String? = null
-    private var lastOnlineMediaRefreshAtMs: Long = 0L
     private val onlinePlaybackErrorToastNotifier = OnlinePlaybackErrorToastNotifier()
-    private val playbackStartRequestGeneration = AtomicLong()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val playbackStartFadeController = PlaybackStartFadeController(serviceScope)
     @Volatile private var exclusionsSnapshot: LibraryExclusions = LibraryExclusions()
@@ -110,12 +87,12 @@ class PlaybackService : MediaLibraryService() {
     }
     private val onlineMediaRefreshListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            resolveAdjacentOnlineMediaItem()
+            onlinePlaybackUrlRefresher.resolveAdjacentOnlineMediaItem()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) {
-                refreshCurrentOnlineMediaUrlAfterPreviewEnd()
+                onlinePlaybackUrlRefresher.refreshCurrentOnlineMediaUrlAfterPreviewEnd()
             }
         }
 
@@ -128,7 +105,7 @@ class PlaybackService : MediaLibraryService() {
                     error = error,
                 )
             }
-            refreshCurrentOnlineMediaUrlAfterError()
+            onlinePlaybackUrlRefresher.refreshCurrentOnlineMediaUrlAfterError()
         }
     }
     private val playbackStartFadePlayerListener = object : Player.Listener {
@@ -195,6 +172,7 @@ class PlaybackService : MediaLibraryService() {
         onlineMusicRepository = OnlineMusicRepositoryRouter.getInstance(applicationContext)
         libraryExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
         libraryRefreshExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
+        createPlaybackCollaborators()
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -248,7 +226,29 @@ class PlaybackService : MediaLibraryService() {
         mediaLibrarySession = MediaLibrarySession.Builder(
             this,
             PlaybackStartFadePlayer(exoPlayer, playbackStartFadeController),
-            PlaybackLibrarySessionCallback(),
+            PlaybackLibrarySessionCallback(
+                packageName = packageName,
+                localAudioLibrary = localAudioLibrary,
+                libraryExecutor = libraryExecutor,
+                libraryRefreshExecutor = libraryRefreshExecutor,
+                serviceScope = serviceScope,
+                currentPlayer = { player },
+                currentLibrarySession = { mediaLibrarySession },
+                currentSessionStateCoordinator = { playbackSessionStateCoordinator },
+                audioItemsLoader = { forceRefresh -> getAudioItems(forceRefresh) },
+                audioPermissionChecker = { hasAudioPermission() },
+                audioItemsByIdsLoader = { mediaIds -> getAudioItemsByIds(mediaIds) },
+                onlineLibraryItemLoader = { identity -> getOnlineLibraryItemFuture(identity) },
+                sessionPlaybackItemsResolver = { items ->
+                    playbackStartCoordinator.resolveSessionPlaybackMediaItems(items)
+                },
+                replaceQueueAndPlayCommandHandler = { args ->
+                    playbackStartCoordinator.replaceQueueAndPlayFromSessionCommand(args)
+                },
+                trackRatingCommandHandler = { mediaId, score ->
+                    playbackStatsSync.setTrackRatingFromSessionCommand(mediaId, score)
+                },
+            ),
         )
             .setSessionActivity(createSessionActivityPendingIntent())
             .setBitmapLoader(artworkBitmapLoader)
@@ -260,7 +260,7 @@ class PlaybackService : MediaLibraryService() {
             repository = playbackStatsRepository,
             scope = serviceScope,
             onPlayCountChanged = {
-                scheduleStatsLibraryRefresh()
+                playbackStatsSync.scheduleStatsLibraryRefresh()
             },
         ).also { tracker ->
             tracker.start()
@@ -299,6 +299,30 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /** 起播/在线刷新/统计同步三个协作类的接线；依赖 onCreate 里先建好的曲库、仓库与 executor。 */
+    private fun createPlaybackCollaborators() {
+        onlinePlaybackUrlRefresher = OnlinePlaybackUrlRefresher(
+            scope = serviceScope,
+            onlineMusicRepository = onlineMusicRepository,
+            playerProvider = { player },
+        )
+        playbackStartCoordinator = PlaybackStartCoordinator(
+            scope = serviceScope,
+            onlineMusicRepository = onlineMusicRepository,
+            playerProvider = { player },
+            loadLocalItemsByIds = { mediaIds -> getAudioItemsByIds(mediaIds) },
+            fadeController = playbackStartFadeController,
+        )
+        playbackStatsSync = PlaybackStatsSync(
+            scope = serviceScope,
+            libraryRefreshExecutor = libraryRefreshExecutor,
+            statsRepository = playbackStatsRepository,
+            localAudioLibrary = localAudioLibrary,
+            playerProvider = { player },
+            librarySessionProvider = { mediaLibrarySession },
+        )
+    }
+
     override fun onGetSession(
         controllerInfo: MediaSession.ControllerInfo,
     ): MediaLibrarySession? = mediaLibrarySession
@@ -319,13 +343,10 @@ class PlaybackService : MediaLibraryService() {
             runBlocking { tracker.stopAndFlush() }
         }
         playbackPlayCountTracker = null
-        pendingStatsLibraryRefreshJob?.cancel()
-        pendingStatsLibraryRefreshJob = null
-        pendingRatingLibraryRefreshJob?.cancel()
-        pendingRatingLibraryRefreshJob = null
+        playbackStatsSync.cancelPendingRefreshes()
         playbackMetadataPreloader?.stop()
         playbackMetadataPreloader = null
-        cancelPendingPlaybackStart()
+        playbackStartCoordinator.cancelPendingPlaybackStart()
         serviceScope.cancel()
         PlaybackSleepTimer.cancel()
         player?.removeListener(audioFxPlayerListener)
@@ -339,8 +360,7 @@ class PlaybackService : MediaLibraryService() {
         superLyricPublisher?.tryUnregister()
         superLyricPublisher = null
         playbackStartFadeController.release(player)
-        onlineMediaRefreshJob?.cancel()
-        onlineMediaRefreshJob = null
+        onlinePlaybackUrlRefresher.cancel()
         playbackAudioFxController?.release()
         playbackAudioFxController = null
         mediaLibrarySession?.release()
@@ -468,131 +488,6 @@ class PlaybackService : MediaLibraryService() {
         return resultFuture
     }
 
-    private fun resolveSessionPlaybackMediaItems(mediaItems: List<MediaItem>): MutableList<MediaItem> {
-        mediaItems.resolveDirectSessionPlaybackItemsOrNull()?.let { directItems ->
-            return directItems
-        }
-        val localItemsById = getAudioItemsByIds(
-            mediaItems
-                .filterNot(MediaItem::canResolveDirectSessionPlaybackItem)
-                .map(MediaItem::mediaId),
-        ).associateBy(MediaItem::mediaId)
-        return mediaItems.mapNotNullTo(mutableListOf()) { item ->
-            item.toDirectSessionPlaybackItemOrNull() ?: localItemsById[item.mediaId]
-        }
-    }
-
-    /**
-     * 起播前的解析：仅对「即将播放」的在线条目同步解析出真实 URL（15 分钟有效期），
-     * 队列其余在线条目保持占位 URI，轮到播放时再按需解析，避免一次性打爆接口。
-     */
-    private suspend fun resolveSessionPlaybackMediaItemsForPlaybackStart(
-        mediaItems: List<MediaItem>,
-        startIndex: Int,
-    ): MutableList<MediaItem> {
-        val resolvedItems = resolveSessionPlaybackMediaItems(mediaItems)
-        val startItem = resolvedItems.getOrNull(startIndex) ?: return resolvedItems
-        if (!startItem.isOnlineMediaItem() || !startItem.shouldRefreshOnlinePlaybackUrl()) {
-            return resolvedItems
-        }
-        val playableStartItem = onlineMusicRepository.resolvePlayableMediaItem(
-            mediaItem = startItem,
-            includeLyrics = false,
-            forceRefresh = false,
-        ) ?: return resolvedItems
-        resolvedItems[startIndex] = playableStartItem
-        return resolvedItems
-    }
-
-    private fun replaceResolvedQueueAndPlay(
-        mediaItems: List<MediaItem>,
-        startIndex: Int,
-        shuffleModeEnabled: Boolean,
-    ): SessionResult {
-        val safeStartIndex = playbackQueueStartIndex(
-            itemCount = mediaItems.size,
-            startIndex = startIndex,
-        ) ?: return SessionResult(SessionError.ERROR_BAD_VALUE)
-        val playbackPlayer = player ?: return SessionResult(SessionError.ERROR_UNKNOWN)
-        playbackStartFadeController.protectNextPlayback(playbackPlayer)
-        playbackPlayer.replaceQueueAndPlayDirect(
-            mediaItems = mediaItems,
-            startIndex = safeStartIndex,
-            shuffleModeEnabled = shuffleModeEnabled,
-        )
-        return SessionResult(SessionResult.RESULT_SUCCESS)
-    }
-
-    private fun replaceQueueAndPlayFromSessionCommand(args: Bundle): ListenableFuture<SessionResult> {
-        val mediaItems = args.decodeReplaceQueueAndPlayMediaItems()
-        val startIndex = args.getInt(ReplaceQueueStartIndexKey, 0)
-        val shuffleModeEnabled = args.getBoolean(ReplaceQueueShuffleModeKey, false)
-        val safeStartIndex = playbackQueueStartIndex(
-            itemCount = mediaItems.size,
-            startIndex = startIndex,
-        ) ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
-        val requestGeneration = playbackStartRequestGeneration.incrementAndGet()
-        cancelPendingPlaybackStart()
-
-        val resultFuture = SettableFuture.create<SessionResult>()
-        pendingPlaybackStartFuture = resultFuture
-        lateinit var startJob: Job
-        startJob = serviceScope.launch {
-            val result = try {
-                val resolvedItems = withContext(AppDispatchers.IO) {
-                    resolveSessionPlaybackMediaItemsForPlaybackStart(
-                        mediaItems = mediaItems,
-                        startIndex = safeStartIndex,
-                    )
-                }
-                if (playbackStartRequestGeneration.get() != requestGeneration) {
-                    SessionResult(SessionResult.RESULT_SUCCESS)
-                } else {
-                    replaceResolvedQueueAndPlay(
-                        mediaItems = resolvedItems,
-                        startIndex = safeStartIndex,
-                        shuffleModeEnabled = shuffleModeEnabled,
-                    )
-                }
-            } catch (_: CancellationException) {
-                SessionResult(SessionResult.RESULT_SUCCESS)
-            } catch (error: Exception) {
-                Log.w(
-                    PlaybackDiagnosticsTag,
-                    "Playback start resolution failed type=${error.javaClass.simpleName} " +
-                        "message=${error.message}",
-                )
-                SessionResult(SessionError.ERROR_UNKNOWN)
-            }
-            if (!resultFuture.isDone) {
-                resultFuture.set(result)
-            }
-            if (pendingPlaybackStartJob === startJob) {
-                pendingPlaybackStartJob = null
-                pendingPlaybackStartFuture = null
-            }
-        }
-        pendingPlaybackStartJob = startJob
-        resultFuture.addListener(
-            {
-                if (resultFuture.isCancelled) {
-                    startJob.cancel()
-                }
-            },
-            MoreExecutors.directExecutor(),
-        )
-        return resultFuture
-    }
-
-    private fun cancelPendingPlaybackStart() {
-        pendingPlaybackStartJob?.cancel()
-        pendingPlaybackStartJob = null
-        pendingPlaybackStartFuture
-            ?.takeUnless(SettableFuture<SessionResult>::isDone)
-            ?.set(SessionResult(SessionResult.RESULT_SUCCESS))
-        pendingPlaybackStartFuture = null
-    }
-
     private suspend fun getAudioItemsByQueueKeys(queueKeys: List<PlaybackQueueSnapshotItem>): List<MediaItem> {
         if (queueKeys.isEmpty()) {
             return emptyList()
@@ -677,708 +572,10 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /**
-     * 在线条目播放出错（URL 过期/解析失败）后强制重解析；
-     * 解析仍失败则按队列情况自动跳下一首。
-     */
-    private fun refreshCurrentOnlineMediaUrlAfterError() {
-        val playbackPlayer = player ?: return
-        val currentItem = playbackPlayer.currentMediaItem ?: return
-        if (!currentItem.isOnlineMediaItem()) {
-            return
-        }
-
-        val refreshKey = currentItem.mediaId.takeIf(String::isNotBlank) ?: return
-        if (!recordOnlineMediaRefreshAttempt(refreshKey)) {
-            return
-        }
-
-        resolveOnlineMediaItemAt(
-            item = currentItem,
-            itemIndex = playbackPlayer.currentMediaItemIndex,
-            resumePositionMs = playbackPlayer.currentPosition.coerceAtLeast(0L),
-            resumePlayback = playbackPlayer.playWhenReady,
-            prepareAfterReplace = true,
-            forceRefresh = true,
-            skipOnFailure = true,
-        )
-    }
-
-    /** 试听片段播完时按完整曲目重新解析（试听时长命中网易云预览特征才触发）。 */
-    private fun refreshCurrentOnlineMediaUrlAfterPreviewEnd() {
-        val playbackPlayer = player ?: return
-        val currentItem = playbackPlayer.currentMediaItem ?: return
-        if (!currentItem.isOnlineMediaItem()) {
-            return
-        }
-        val originalDurationMs = currentItem.mediaMetadata.durationMs ?: return
-        val playedDurationMs = playbackPlayer.duration
-            .takeIf { duration -> duration > 0L && duration != C.TIME_UNSET }
-            ?: playbackPlayer.currentPosition.coerceAtLeast(0L)
-        if (!isNeteasePreviewDuration(playedDurationMs, originalDurationMs)) {
-            return
-        }
-        val refreshKey = currentItem.mediaId.takeIf(String::isNotBlank) ?: return
-        if (!recordOnlineMediaRefreshAttempt(refreshKey)) {
-            return
-        }
-        resolveOnlineMediaItemAt(
-            item = currentItem,
-            itemIndex = playbackPlayer.currentMediaItemIndex,
-            resumePositionMs = 0L,
-            resumePlayback = true,
-            prepareAfterReplace = true,
-            forceRefresh = true,
-        )
-    }
-
-    /** 切歌时检查当前/下一首在线条目的 URL 是否已过期（15 分钟），过期则提前重新解析。 */
-    private fun resolveAdjacentOnlineMediaItem() {
-        val playbackPlayer = player ?: return
-        val currentIndex = playbackPlayer.currentMediaItemIndex
-        if (currentIndex == C.INDEX_UNSET) {
-            return
-        }
-        val currentItem = playbackPlayer.currentMediaItem
-        if (
-            currentItem?.isOnlineMediaItem() == true &&
-            currentItem.shouldRefreshOnlinePlaybackUrl()
-        ) {
-            if (currentItem.localConfiguration?.uri != null) {
-                val refreshKey = currentItem.mediaId.takeIf(String::isNotBlank) ?: return
-                if (!recordOnlineMediaRefreshAttempt(refreshKey)) {
-                    return
-                }
-            }
-            resolveOnlineMediaItemAt(
-                item = currentItem,
-                itemIndex = currentIndex,
-                resumePositionMs = playbackPlayer.currentPosition.coerceAtLeast(0L),
-                resumePlayback = playbackPlayer.playWhenReady,
-                prepareAfterReplace = true,
-                forceRefresh = false,
-            )
-            return
-        }
-
-        val nextIndex = currentIndex + 1
-        if (nextIndex !in 0 until playbackPlayer.mediaItemCount) {
-            return
-        }
-        val nextItem = playbackPlayer.getMediaItemAt(nextIndex)
-        if (!nextItem.isOnlineMediaItem() || !nextItem.shouldRefreshOnlinePlaybackUrl()) {
-            return
-        }
-        resolveOnlineMediaItemAt(
-            item = nextItem,
-            itemIndex = nextIndex,
-            resumePositionMs = 0L,
-            resumePlayback = false,
-            prepareAfterReplace = false,
-            forceRefresh = false,
-        )
-    }
-
-    /**
-     * 重新解析在线条目并原位替换队列里的 MediaItem；若是当前曲目则恢复进度并续播，
-     * 完成后继续预解析下一首。带 30 秒冷却（[recordOnlineMediaRefreshAttempt]）防错误风暴。
-     */
-    private fun resolveOnlineMediaItemAt(
-        item: MediaItem,
-        itemIndex: Int,
-        resumePositionMs: Long,
-        resumePlayback: Boolean,
-        prepareAfterReplace: Boolean,
-        forceRefresh: Boolean,
-        skipOnFailure: Boolean = false,
-    ) {
-        val activeRefreshJob = onlineMediaRefreshJob
-        if (activeRefreshJob?.isActive == true) {
-            if (!forceRefresh || onlineMediaRefreshJobForceRefresh) {
-                return
-            }
-            activeRefreshJob.cancel()
-        }
-        if (!item.isOnlineMediaItem()) {
-            return
-        }
-        if (!forceRefresh && !item.shouldRefreshOnlinePlaybackUrl()) {
-            return
-        }
-        var resolveAdjacentAfterCompletion = false
-        val refreshJob = serviceScope.launch {
-            val refreshedItem = try {
-                onlineMusicRepository.resolvePlayableMediaItem(
-                    mediaItem = item,
-                    includeLyrics = false,
-                    forceRefresh = forceRefresh,
-                )
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                Log.w(
-                    PlaybackDiagnosticsTag,
-                    "Online media refresh failed type=${error.javaClass.simpleName} " +
-                        "message=${error.message}",
-                )
-                null
-            }
-            if (refreshedItem == null) {
-                if (skipOnFailure) {
-                    skipCurrentOnlineMediaItemAfterError(item.mediaId)
-                }
-                return@launch
-            }
-            val activePlayer = player ?: return@launch
-            val targetIndex = itemIndex.takeIf { it in 0 until activePlayer.mediaItemCount }
-                ?: return@launch
-            if (activePlayer.getMediaItemAt(targetIndex).mediaId != item.mediaId) {
-                return@launch
-            }
-            activePlayer.replaceMediaItem(targetIndex, refreshedItem)
-            if (activePlayer.currentMediaItemIndex == targetIndex) {
-                val targetPositionMs = if (prepareAfterReplace) {
-                    resumePositionMs
-                } else {
-                    activePlayer.currentPosition.coerceAtLeast(0L)
-                }
-                val targetPlayWhenReady = if (prepareAfterReplace) {
-                    resumePlayback
-                } else {
-                    activePlayer.playWhenReady
-                }
-                activePlayer.seekTo(targetIndex, targetPositionMs)
-                activePlayer.prepare()
-                activePlayer.playWhenReady = targetPlayWhenReady
-                if (targetPlayWhenReady) {
-                    activePlayer.play()
-                }
-                resolveAdjacentAfterCompletion = true
-            }
-        }
-        onlineMediaRefreshJob = refreshJob
-        onlineMediaRefreshJobForceRefresh = forceRefresh
-        refreshJob.invokeOnCompletion {
-            if (onlineMediaRefreshJob === refreshJob) {
-                onlineMediaRefreshJob = null
-                onlineMediaRefreshJobForceRefresh = false
-            }
-            if (resolveAdjacentAfterCompletion) {
-                serviceScope.launch {
-                    resolveAdjacentOnlineMediaItem()
-                }
-            }
-        }
-    }
-
-    /** 在线条目重解析失败后自动跳到下一首（非单曲循环且有下一首时）。 */
-    private fun skipCurrentOnlineMediaItemAfterError(mediaId: String) {
-        val playbackPlayer = player ?: return
-        val currentItem = playbackPlayer.currentMediaItem ?: return
-        if (currentItem.mediaId != mediaId) {
-            return
-        }
-        if (
-            !shouldSkipOnlinePlaybackError(
-                isCurrentOnline = currentItem.isOnlineMediaItem(),
-                hasNextMediaItem = playbackPlayer.hasNextMediaItem(),
-                repeatMode = playbackPlayer.repeatMode,
-            )
-        ) {
-            return
-        }
-        val resumePlayback = playbackPlayer.playWhenReady
-        playbackPlayer.seekToNextMediaItem()
-        playbackPlayer.prepare()
-        if (resumePlayback) {
-            playbackPlayer.play()
-        }
-    }
-
-    private fun recordOnlineMediaRefreshAttempt(refreshKey: String): Boolean {
-        val now = SystemClock.elapsedRealtime()
-        if (
-            lastOnlineMediaRefreshKey == refreshKey &&
-            now - lastOnlineMediaRefreshAtMs < OnlineMediaRefreshCooldownMs
-        ) {
-            return false
-        }
-        lastOnlineMediaRefreshKey = refreshKey
-        lastOnlineMediaRefreshAtMs = now
-        return true
-    }
-
-    private inner class PlaybackLibrarySessionCallback : MediaLibrarySession.Callback {
-
-        override fun onConnect(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo,
-        ): MediaSession.ConnectionResult {
-            // 仅放行系统可信控制器（系统 UI/蓝牙/车机）与本应用自身，其余第三方一律拒绝，
-            // 防止任意 App 遍历曲库并劫持播放。
-            val isSelf = controller.packageName == this@PlaybackService.packageName
-            if (!controller.isTrusted && !isSelf) {
-                return MediaSession.ConnectionResult.reject()
-            }
-            val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
-                .buildUpon()
-                .add(ScratchSeekModeCommand)
-                .add(StartSleepTimerCommand)
-                .add(CancelSleepTimerCommand)
-                .add(RefreshLibraryCommand)
-                .add(InvalidateLibraryCommand)
-                .add(SetTrackRatingCommand)
-                .add(ReplaceQueueAndPlayCommand)
-                .build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                .setAvailableSessionCommands(sessionCommands)
-                .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
-                .build()
-        }
-
-        override fun onGetLibraryRoot(
-            session: MediaLibrarySession,
-            browser: MediaSession.ControllerInfo,
-            params: LibraryParams?,
-        ): ListenableFuture<LibraryResult<MediaItem>> {
-            return Futures.immediateFuture(
-                LibraryResult.ofItem(localAudioLibrary.getRootItem(), params),
-            )
-        }
-
-        override fun onGetChildren(
-            session: MediaLibrarySession,
-            browser: MediaSession.ControllerInfo,
-            parentId: String,
-            page: Int,
-            pageSize: Int,
-            params: LibraryParams?,
-        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            return libraryExecutor.submit<LibraryResult<ImmutableList<MediaItem>>> {
-                if (parentId != LocalAudioLibrary.ROOT_ID) {
-                    return@submit LibraryResult.ofError(SessionError.ERROR_BAD_VALUE, params)
-                }
-
-                val items = getAudioItems()
-                if (items.isEmpty() && !hasAudioPermission()) {
-                    return@submit LibraryResult.ofError(
-                        SessionError.ERROR_PERMISSION_DENIED,
-                        params,
-                    )
-                }
-
-                val fromIndex = (page * pageSize).coerceAtMost(items.size)
-                val toIndex = (fromIndex + pageSize).coerceAtMost(items.size)
-                LibraryResult.ofItemList(items.subList(fromIndex, toIndex), params)
-            }
-        }
-
-        override fun onGetItem(
-            session: MediaLibrarySession,
-            browser: MediaSession.ControllerInfo,
-            mediaId: String,
-        ): ListenableFuture<LibraryResult<MediaItem>> {
-            // 在线条目不依赖本地媒体库权限，直接经 Router 拉取。
-            // 它是一次网络调用，不能进 libraryExecutor：该 executor 只有一条线程，
-            // 同步取详情会把排在后面的 onGetChildren/onAddMediaItems 全部堵住。
-            mediaId.onlineTrackIdentityOrNull()?.let { identity ->
-                return getOnlineLibraryItemFuture(identity)
-            }
-            return libraryExecutor.submit<LibraryResult<MediaItem>> {
-                if (!hasAudioPermission() && mediaId != LocalAudioLibrary.ROOT_ID) {
-                    return@submit LibraryResult.ofError(SessionError.ERROR_PERMISSION_DENIED)
-                }
-
-                val item = if (mediaId == LocalAudioLibrary.ROOT_ID) {
-                    localAudioLibrary.getRootItem()
-                } else {
-                    getAudioItemsByIds(listOf(mediaId)).firstOrNull()
-                }
-                if (item == null) {
-                    LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
-                } else {
-                    LibraryResult.ofItem(item, null)
-                }
-            }
-        }
-
-        override fun onAddMediaItems(
-            mediaSession: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            mediaItems: MutableList<MediaItem>,
-        ): ListenableFuture<MutableList<MediaItem>> {
-            mediaItems.resolveDirectSessionPlaybackItemsOrNull()?.let { resolvedItems ->
-                return Futures.immediateFuture(resolvedItems)
-            }
-            return libraryExecutor.submit<MutableList<MediaItem>> {
-                resolveSessionPlaybackMediaItems(mediaItems)
-            }
-        }
-
-        override fun onCustomCommand(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            customCommand: androidx.media3.session.SessionCommand,
-            args: Bundle,
-        ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == ScratchSeekModeAction) {
-                val enabled = args.getBoolean(ScratchSeekModeEnabledKey, false)
-                player?.setSeekParameters(
-                    if (enabled) SeekParameters.EXACT else SeekParameters.DEFAULT,
-                )
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-            }
-            if (customCommand.customAction == StartSleepTimerAction) {
-                val durationMs = args.getLong(SleepTimerDurationMsKey, 0L)
-                if (durationMs <= 0L) {
-                    return Futures.immediateFuture(
-                        SessionResult(SessionError.ERROR_BAD_VALUE),
-                    )
-                }
-                PlaybackSleepTimer.start(durationMs) {
-                    player?.pause()
-                }
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-            }
-            if (customCommand.customAction == CancelSleepTimerAction) {
-                PlaybackSleepTimer.cancel()
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-            }
-            if (customCommand.customAction == ReplaceQueueAndPlayAction) {
-                return replaceQueueAndPlayFromSessionCommand(args)
-            }
-            if (customCommand.customAction == RefreshLibraryAction) {
-                return libraryRefreshExecutor.submit<SessionResult> {
-                    if (!hasAudioPermission()) {
-                        return@submit SessionResult(SessionError.ERROR_PERMISSION_DENIED)
-                    }
-
-                    val result = localAudioLibrary.refreshAudioItems()
-                    mediaLibrarySession?.notifyChildrenChanged(
-                        LocalAudioLibrary.ROOT_ID,
-                        result.items.size,
-                        null,
-                    )
-                    serviceScope.launch {
-                        playbackSessionStateCoordinator?.restoreIfQueueEmpty()
-                    }
-                    SessionResult(
-                        if (result.successful) {
-                            SessionResult.RESULT_SUCCESS
-                        } else {
-                            SessionError.ERROR_UNKNOWN
-                        },
-                    )
-                }
-            }
-            if (customCommand.customAction == InvalidateLibraryAction) {
-                return libraryRefreshExecutor.submit<SessionResult> {
-                    if (!hasAudioPermission()) {
-                        return@submit SessionResult(SessionError.ERROR_PERMISSION_DENIED)
-                    }
-
-                    val items = getAudioItems(forceRefresh = true)
-                    mediaLibrarySession?.notifyChildrenChanged(
-                        LocalAudioLibrary.ROOT_ID,
-                        items.size,
-                        null,
-                    )
-                    serviceScope.launch {
-                        playbackSessionStateCoordinator?.restoreIfQueueEmpty()
-                    }
-                    SessionResult(SessionResult.RESULT_SUCCESS)
-                }
-            }
-            if (customCommand.customAction == SetTrackRatingAction) {
-                val mediaId = args.getString(TrackRatingMediaIdKey)?.trim().orEmpty()
-                val score = args.getInt(TrackRatingScoreKey, -1)
-                if (mediaId.isBlank() || score !in TrackRatingMinScore..TrackRatingMaxScore) {
-                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
-                }
-                return setTrackRatingFromSessionCommand(mediaId, score)
-            }
-            return super.onCustomCommand(session, controller, customCommand, args)
-        }
-    }
-
-    /**
-     * 评分写入仍在 `libraryRefreshExecutor` 上排队，保持迁移前的 FIFO 串行：连点评分时后一次的意图
-     * 一定覆盖前一次。若把 Room 写丢给共享 IO 调度器，两条命令的提交顺序不确定，DB 终值可能停在
-     * 上一次点击，而 UI 侧 `ratingOverrides` 只是乐观覆盖，进程重启后就再也兜不住。
-     *
-     * 这里去掉的只有「工作线程 `runBlocking(Dispatchers.Main.immediate)` 等主线程」这一跳：主线程在
-     * onDestroy 里同步落盘、在 media3 的 OnHandler 上逐个执行 session 回调，两边交错会让整条刷新链
-     * 停摆。改成把主线程那一跳交给 serviceScope，用 Future 的完成时机取代线程 park。
-     */
-    private fun setTrackRatingFromSessionCommand(
-        mediaId: String,
-        score: Int,
-    ): ListenableFuture<SessionResult> {
-        val submitted = libraryRefreshExecutor.submit<ListenableFuture<SessionResult>> {
-            val savedScore = runBlocking { playbackStatsRepository.setScore(mediaId, score) }
-            if (savedScore == null) {
-                Futures.immediateFuture(SessionResult(SessionError.ERROR_UNKNOWN))
-            } else {
-                val resultFuture = SettableFuture.create<SessionResult>()
-                serviceScope
-                    .launch {
-                        // 改队列 MediaItem 与去抖刷新都要碰 ExoPlayer，只能在主线程做。
-                        val sessionResult = runCatching {
-                            updateQueuedTrackRating(mediaId, savedScore)
-                            scheduleRatingLibraryRefresh()
-                            SessionResult(SessionResult.RESULT_SUCCESS)
-                        }.getOrElse { SessionResult(SessionError.ERROR_UNKNOWN) }
-                        resultFuture.set(sessionResult)
-                    }
-                    .invokeOnCompletion { cause ->
-                        // 作用域已取消导致协程体根本没跑时，给出确定结果码而不是取消 Future。
-                        if (cause != null) {
-                            resultFuture.set(SessionResult(SessionError.ERROR_UNKNOWN))
-                        }
-                    }
-                resultFuture
-            }
-        }
-        return Futures.transformAsync(submitted, { it }, MoreExecutors.directExecutor())
-    }
-
-    private fun scheduleStatsLibraryRefresh() {
-        serviceScope.launch(Dispatchers.Main.immediate) {
-            pendingStatsLibraryRefreshJob?.cancel()
-            pendingStatsLibraryRefreshJob = serviceScope.launch(Dispatchers.Main.immediate) {
-                delay(StatsLibraryRefreshDebounceMs)
-                refreshStatsLibrary()
-            }
-        }
-    }
-
-    private fun scheduleRatingLibraryRefresh() {
-        pendingRatingLibraryRefreshJob?.cancel()
-        pendingRatingLibraryRefreshJob = serviceScope.launch(Dispatchers.Main.immediate) {
-            delay(RatingLibraryRefreshDebounceMs)
-            pendingStatsLibraryRefreshJob?.cancel()
-            pendingStatsLibraryRefreshJob = null
-            refreshStatsLibrary()
-        }
-    }
-
-    private fun refreshStatsLibrary() {
-        localAudioLibrary.invalidateAudioItems()
-        mediaLibrarySession?.notifyChildrenChanged(
-            LocalAudioLibrary.ROOT_ID,
-            Int.MAX_VALUE,
-            null,
-        )
-    }
-
-    private fun updateQueuedTrackRating(mediaId: String, score: Int) {
-        val playbackPlayer = player ?: return
-        for (index in 0 until playbackPlayer.mediaItemCount) {
-            val item = playbackPlayer.getMediaItemAt(index)
-            if (item.mediaId == mediaId) {
-                playbackPlayer.replaceMediaItem(index, item.withPlaybackRating(score))
-            }
-        }
-    }
-
     private companion object {
         private const val PlaybackSessionActivityRequestCode = 1001
-        private const val StatsLibraryRefreshDebounceMs = 600L
-        private const val RatingLibraryRefreshDebounceMs = 250L
-        private const val OnlineMediaRefreshCooldownMs = 30_000L
         private const val PlaylistPreloadDurationUs = 12_000_000L
     }
 }
 
-private class PlaybackStartFadePlayer(
-    private val playbackPlayer: Player,
-    private val fadeController: PlaybackStartFadeController,
-) : ForwardingPlayer(playbackPlayer) {
-
-    override fun play() {
-        fadeController.protectResumeIfNeeded(playbackPlayer)
-        super.play()
-    }
-
-    override fun setPlayWhenReady(playWhenReady: Boolean) {
-        if (playWhenReady) {
-            fadeController.protectResumeIfNeeded(playbackPlayer)
-        }
-        super.setPlayWhenReady(playWhenReady)
-    }
-}
-
-private class PlaybackStartFadeController(
-    private val scope: CoroutineScope,
-) {
-    private var fadeJob: Job? = null
-    private var fadeArmTimeoutJob: Job? = null
-    private var fadeArmed = false
-    private var lastPausedAtMs: Long = 0L
-    private var lastPausedMediaId: String? = null
-    private var hasPlayed = false
-
-    fun onPlayWhenReadyChanged(playbackPlayer: Player, playWhenReady: Boolean) {
-        if (playWhenReady) {
-            protectResumeIfNeeded(playbackPlayer)
-            return
-        }
-        cancel(playbackPlayer, resetVolumeToFull = true)
-        val currentMediaItem = playbackPlayer.currentMediaItem
-        if (hasPlayed && currentMediaItem != null) {
-            lastPausedAtMs = SystemClock.elapsedRealtime()
-            lastPausedMediaId = currentMediaItem.mediaId
-        }
-    }
-
-    fun onIsPlayingChanged(playbackPlayer: Player, isPlaying: Boolean) {
-        if (isPlaying) {
-            hasPlayed = true
-            startFadeIfArmed(playbackPlayer)
-        }
-    }
-
-    fun protectResumeIfNeeded(playbackPlayer: Player) {
-        if (fadeJob != null || fadeArmed || !shouldProtectResume(playbackPlayer)) {
-            return
-        }
-        lastPausedAtMs = 0L
-        lastPausedMediaId = null
-        armFade(playbackPlayer, startImmediatelyIfPlaying = true)
-    }
-
-    fun protectNextPlayback(playbackPlayer: Player) {
-        lastPausedAtMs = 0L
-        lastPausedMediaId = null
-        hasPlayed = false
-        armFade(playbackPlayer, startImmediatelyIfPlaying = false)
-    }
-
-    fun release(playbackPlayer: Player?) {
-        cancel(playbackPlayer, resetVolumeToFull = true)
-    }
-
-    private fun shouldProtectResume(playbackPlayer: Player): Boolean {
-        val currentMediaItem = playbackPlayer.currentMediaItem ?: return false
-        if (lastPausedAtMs <= 0L) {
-            return false
-        }
-        val pausedMediaId = lastPausedMediaId
-        if (!pausedMediaId.isNullOrBlank() && currentMediaItem.mediaId != pausedMediaId) {
-            return false
-        }
-        return SystemClock.elapsedRealtime() - lastPausedAtMs >= ResumeFadeThresholdMs
-    }
-
-    private fun armFade(
-        playbackPlayer: Player,
-        startImmediatelyIfPlaying: Boolean,
-    ) {
-        cancel(playbackPlayer = null, resetVolumeToFull = false)
-        fadeArmed = true
-        playbackPlayer.volume = 0f
-        fadeArmTimeoutJob = scope.launch {
-            delay(StartFadeArmTimeoutMs)
-            if (fadeArmed && fadeJob == null) {
-                playbackPlayer.volume = 1f
-                fadeArmed = false
-                fadeArmTimeoutJob = null
-            }
-        }
-        if (startImmediatelyIfPlaying && playbackPlayer.isPlaying) {
-            startFadeIfArmed(playbackPlayer)
-        }
-    }
-
-    private fun startFadeIfArmed(playbackPlayer: Player) {
-        if (!fadeArmed || fadeJob != null) {
-            return
-        }
-        fadeArmTimeoutJob?.cancel()
-        fadeArmTimeoutJob = null
-        val steps = (ResumeFadeDurationMs / ResumeFadeStepIntervalMs)
-            .toInt()
-            .coerceIn(ResumeFadeMinSteps, ResumeFadeMaxSteps)
-        val stepDelay = (ResumeFadeDurationMs / steps).coerceAtLeast(1L)
-        fadeJob = scope.launch {
-            repeat(steps) { step ->
-                delay(stepDelay)
-                playbackPlayer.volume = ((step + 1).toFloat() / steps).coerceAtMost(1f)
-            }
-            playbackPlayer.volume = 1f
-            fadeJob = null
-            fadeArmed = false
-            lastPausedMediaId = null
-        }
-    }
-
-    private fun cancel(
-        playbackPlayer: Player?,
-        resetVolumeToFull: Boolean,
-    ) {
-        val shouldRestoreVolume = resetVolumeToFull &&
-            (fadeArmed || fadeJob?.isActive == true || fadeArmTimeoutJob?.isActive == true)
-        fadeJob?.cancel()
-        fadeJob = null
-        fadeArmTimeoutJob?.cancel()
-        fadeArmTimeoutJob = null
-        fadeArmed = false
-        if (shouldRestoreVolume) {
-            playbackPlayer?.volume = 1f
-        }
-    }
-
-    private companion object {
-        private const val ResumeFadeThresholdMs = 800L
-        private const val ResumeFadeDurationMs = 120L
-        private const val ResumeFadeStepIntervalMs = 40L
-        private const val StartFadeArmTimeoutMs = 5_000L
-        private const val ResumeFadeMinSteps = 4
-        private const val ResumeFadeMaxSteps = 30
-    }
-}
-
-private const val PlaybackDiagnosticsTag = "SmartisanPlayback"
-
-/**
- * 占位 URI 的数据源级解析器：ExoPlayer 取数据前把 smartisan-online://source/trackId
- * 解析为短期有效的 http URL。解析失败（未登录/仅试听/下架）时抛出
- * OnlinePlaybackResolutionException，经 PlaybackException 的 cause 链传给错误处理。
- */
-private class OnlinePlaybackDataSpecResolver(
-    private val onlineMusicRepository: OnlineMusicRepositoryRouter,
-) : ResolvingDataSource.Resolver {
-
-    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
-        val identity = dataSpec.uri.onlinePlaybackUriIdentityOrNull() ?: return dataSpec
-        return dataSpec.withUri(resolvePlaybackUri(identity))
-    }
-
-    override fun resolveReportedUri(uri: Uri): Uri {
-        return uri
-    }
-
-    private fun resolvePlaybackUri(identity: OnlineTrackIdentity): Uri {
-        // resolveDataSpec 的 API 契约本身就是同步的（ExoPlayer 取数据前同步等结果），只能就地阻塞。
-        // 超时只是兜底：正常慢路径由 OkHttp 自己的 15s connect/read 逐次封顶，
-        // 只有协程/合并加载彻底挂死时才会走到这里。超时只放弃本次等待，
-        // 不会取消按 key 合并的在途加载（那是 loadScope 的 Deferred，await 取消不影响其他等待者），
-        // 解析结果仍会照常写入内存缓存供下次起播命中。
-        return runBlocking(AppDispatchers.IO) {
-            withTimeoutOrNull(OnlinePlaybackUriResolveTimeoutMs) {
-                onlineMusicRepository.resolvePlaybackUri(identity)
-            }
-        } ?: throw OnlinePlaybackResolutionException(
-            reason = OnlinePlaybackFailureReason.Unavailable,
-            message = "Timed out resolving online playback uri for " +
-                "${identity.source}/${identity.trackId}",
-        )
-    }
-}
-
-/**
- * 正常路径靠 15 分钟 URL 新鲜度直接内存命中、零网络，45s 只用于截断真正挂死的解析链。
- * 慢网下走满「9 档音质回退 × 每档会话重试 × 单请求 15s」会超过这个预算，此时沿用既有的
- * 「无法播放该在线音乐」提示与跳曲行为，与 HEAD 的无上限阻塞相比是更早放弃而非新增失败模式。
- */
-private const val OnlinePlaybackUriResolveTimeoutMs = 45_000L
+internal const val PlaybackDiagnosticsTag = "SmartisanPlayback"

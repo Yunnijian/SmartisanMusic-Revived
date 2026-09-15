@@ -1,13 +1,7 @@
 package com.smartisan.music.ui.playlist
 
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,17 +27,13 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import com.smartisan.music.R
-import com.smartisan.music.data.playlist.PlaylistCreateResult
-import com.smartisan.music.data.playlist.PlaylistRenameResult
 import com.smartisan.music.data.playlist.PlaylistRepository
 import com.smartisan.music.data.playlist.UserPlaylistDetail
 import com.smartisan.music.playback.LocalPlaybackBrowser
 import com.smartisan.music.playback.replaceQueueAndPlay
 import com.smartisan.music.playback.replaceQueueAndPlayShuffled
-import com.smartisan.music.ui.components.withSelection
 import com.smartisan.music.ui.shell.PageStackTransition
 import com.smartisan.music.ui.shell.titlebar.TitleBarShadow
-import com.smartisan.music.ui.songs.SongsPage
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
@@ -60,7 +48,7 @@ internal data class PlaylistTarget(
     val title: String,
 )
 
-private data class PlaylistDetailSnapshot(
+internal data class PlaylistDetailSnapshot(
     val playlistId: String,
     val playlist: UserPlaylistDetail?,
     val title: String,
@@ -118,14 +106,7 @@ internal fun PlaylistPage(
         }
 
     var target by remember { mutableStateOf<PlaylistTarget?>(null) }
-    var rootEditMode by remember { mutableStateOf(false) }
-    var selectedPlaylistIds by remember { mutableStateOf(emptySet<String>()) }
-    var detailEditMode by remember { mutableStateOf(false) }
-    var selectedTrackIds by remember { mutableStateOf(emptySet<String>()) }
-    var addMode by remember { mutableStateOf(false) }
-    var addModeTarget by remember { mutableStateOf<PlaylistTarget?>(null) }
-    var addModeReturnsToRoot by remember { mutableStateOf(false) }
-    var selectedAddSongIds by remember { mutableStateOf(emptySet<String>()) }
+    val selection = remember { PlaylistSelectionController() }
     var nameDialogRequest by remember { mutableStateOf<PlaylistNameDialogRequest?>(null) }
     var deleteRequest by remember { mutableStateOf<PlaylistDeleteRequest?>(null) }
 
@@ -149,8 +130,8 @@ internal fun PlaylistPage(
             (activePlaylist == null && (activeSummary?.songCount ?: 0) > 0)
     val detailLibraryLoading = target != null && !libraryLoaded && detailPlaylistHasKnownTracks
     val addModeExistingIds =
-        remember(addModeTarget, activePlaylistId, activePlaylist) {
-            if (addModeTarget?.playlistId == activePlaylistId) {
+        remember(selection.addModeTarget, activePlaylistId, activePlaylist) {
+            if (selection.addModeTarget?.playlistId == activePlaylistId) {
                 activePlaylist?.mediaIds?.toSet().orEmpty()
             } else {
                 emptySet()
@@ -159,77 +140,31 @@ internal fun PlaylistPage(
     var retainedDetailSnapshot by remember {
         mutableStateOf<PlaylistDetailSnapshot?>(null)
     }
-    val addModeVisible = addMode && addModeTarget != null
+    val addModeVisible = selection.addModeVisible
 
     fun closeAddMode() {
-        addMode = false
-        selectedAddSongIds = emptySet()
-        if (addModeReturnsToRoot) {
+        if (selection.closeAddMode()) {
             target = null
-        }
-        addModeReturnsToRoot = false
-    }
-
-    LaunchedEffect(activePlaylistId, activePlaylist, playlists) {
-        if (
-            activePlaylistId != null &&
-                activePlaylist == null &&
-                playlists.none { it.id == activePlaylistId }
-        ) {
-            target = null
-            detailEditMode = false
-            addMode = false
-            addModeTarget = null
-            addModeReturnsToRoot = false
-            selectedTrackIds = emptySet()
-            selectedAddSongIds = emptySet()
-        }
-    }
-    LaunchedEffect(
-        activePlaylistId,
-        activePlaylist,
-        detailTitle,
-        detailTracks,
-        detailLibraryLoading,
-    ) {
-        val playlistId = activePlaylistId ?: return@LaunchedEffect
-        retainedDetailSnapshot =
-            PlaylistDetailSnapshot(
-                playlistId = playlistId,
-                playlist = activePlaylist,
-                title = detailTitle,
-                tracks = detailTracks,
-                libraryLoading = detailLibraryLoading,
-            )
-    }
-    LaunchedEffect(addModeVisible) {
-        onAddModeActiveChanged(addModeVisible)
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            onAddModeActiveChanged(false)
         }
     }
 
-    BackHandler(enabled = addModeVisible) {
-        closeAddMode()
-    }
-    BackHandler(enabled = !addModeVisible && detailEditMode) {
-        detailEditMode = false
-        selectedTrackIds = emptySet()
-    }
-    BackHandler(enabled = target == null && rootEditMode) {
-        rootEditMode = false
-        selectedPlaylistIds = emptySet()
-    }
-    if (onClose != null) {
-        BackHandler(enabled = active && target == null && !rootEditMode && !addModeVisible) {
-            onClose()
-        }
-    }
-    BackHandler(enabled = !addModeVisible && !detailEditMode && target != null) {
-        target = null
-    }
+    PlaylistPageEffects(
+        active = active,
+        onClose = onClose,
+        target = target,
+        selection = selection,
+        playlists = playlists,
+        activePlaylistId = activePlaylistId,
+        activePlaylist = activePlaylist,
+        detailTitle = detailTitle,
+        detailTracks = detailTracks,
+        detailLibraryLoading = detailLibraryLoading,
+        addModeVisible = addModeVisible,
+        onTargetChange = { next -> target = next },
+        onRetainedDetailSnapshotChange = { snapshot -> retainedDetailSnapshot = snapshot },
+        onAddModeActiveChanged = onAddModeActiveChanged,
+        onCloseAddMode = ::closeAddMode,
+    )
 
     val titleAreaHeight =
         WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
@@ -238,42 +173,17 @@ internal fun PlaylistPage(
 
     Box(modifier = modifier.fillMaxSize().background(colorResource(R.color.page_background))) {
         Column(modifier = Modifier.fillMaxSize()) {
-            PlaylistTitleArea(
+            PlaylistTitleSection(
                 target = target,
                 detailTitle = detailTitle,
-                rootEditMode = rootEditMode,
-                rootSelectedCount = selectedPlaylistIds.size,
-                detailEditMode = detailEditMode,
-                onRootEnterEdit = {
-                    rootEditMode = true
-                    selectedPlaylistIds = emptySet()
-                },
-                onRootExitEdit = {
-                    rootEditMode = false
-                    selectedPlaylistIds = emptySet()
-                },
-                onRootDeleteSelected = {
-                    if (selectedPlaylistIds.isNotEmpty()) {
-                        deleteRequest = PlaylistDeleteRequest.RootSelected
-                    }
-                },
+                selection = selection,
                 onRootBack = onClose,
                 onDetailBack = {
                     target = null
-                    detailEditMode = false
-                    addMode = false
-                    addModeTarget = null
-                    addModeReturnsToRoot = false
-                    selectedTrackIds = emptySet()
-                    selectedAddSongIds = emptySet()
+                    selection.resetDetail()
                 },
-                onDetailEnterEdit = {
-                    detailEditMode = true
-                    selectedTrackIds = emptySet()
-                },
-                onDetailExitEdit = {
-                    detailEditMode = false
-                    selectedTrackIds = emptySet()
+                onRequestDeleteRootSelected = {
+                    deleteRequest = PlaylistDeleteRequest.RootSelected
                 },
                 onSearchClick = onSearchClick,
                 modifier = Modifier.fillMaxWidth(),
@@ -284,11 +194,10 @@ internal fun PlaylistPage(
                     modifier = Modifier.fillMaxSize(),
                     label = "playlist transition",
                     primaryContent = {
-                        PlaylistRootPage(
+                        PlaylistRootSection(
                             active = active,
                             playlists = playlists,
-                            editMode = rootEditMode,
-                            selectedPlaylistIds = selectedPlaylistIds,
+                            selection = selection,
                             onCreatePlaylist = {
                                 scope.launch {
                                     nameDialogRequest =
@@ -305,89 +214,38 @@ internal fun PlaylistPage(
                                         initialName = playlist.name,
                                     )
                             },
-                            onPlaylistClick = { playlist ->
-                                if (rootEditMode) {
-                                    selectedPlaylistIds =
-                                        selectedPlaylistIds.togglePlaylistSelection(playlist.id)
-                                } else {
-                                    target =
-                                        PlaylistTarget(
-                                            playlistId = playlist.id,
-                                            title = playlist.name,
-                                        )
-                                }
-                            },
-                            onPlaylistSelectionChange = { playlist, selected ->
-                                selectedPlaylistIds =
-                                    selectedPlaylistIds.withSelection(playlist.id, selected)
+                            onOpenPlaylist = { playlist ->
+                                target =
+                                    PlaylistTarget(
+                                        playlistId = playlist.id,
+                                        title = playlist.name,
+                                    )
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
                     },
                     secondaryContent = { playlistTarget ->
-                        val detailSnapshot =
-                            if (playlistTarget == target) {
-                                PlaylistDetailSnapshot(
-                                    playlistId = playlistTarget.playlistId,
-                                    playlist = activePlaylist,
-                                    title = detailTitle,
-                                    tracks = detailTracks,
-                                    libraryLoading = detailLibraryLoading,
-                                )
-                            } else {
-                                retainedDetailSnapshot?.takeIf { snapshot ->
-                                    snapshot.playlistId == playlistTarget.playlistId
-                                }
-                                    ?: PlaylistDetailSnapshot(
-                                        playlistId = playlistTarget.playlistId,
-                                        playlist = activePlaylist,
-                                        title = playlistTarget.title,
-                                        tracks = detailTracks,
-                                        libraryLoading = detailLibraryLoading,
-                                    )
-                            }
-                        PlaylistDetailPage(
-                            active = active && !addModeVisible,
-                            playlist = detailSnapshot.playlist,
-                            title = detailSnapshot.title,
-                            tracks = detailSnapshot.tracks,
-                            libraryLoading = detailSnapshot.libraryLoading,
-                            editMode = detailEditMode,
-                            selectedTrackIds = selectedTrackIds,
+                        PlaylistDetailSection(
+                            active = active,
+                            target = target,
+                            playlistTarget = playlistTarget,
+                            activePlaylist = activePlaylist,
+                            title = detailTitle,
+                            tracks = detailTracks,
+                            libraryLoading = detailLibraryLoading,
+                            retainedDetailSnapshot = retainedDetailSnapshot,
+                            selection = selection,
                             browser = browser,
-                            onShuffle = {
-                                if (detailSnapshot.tracks.isEmpty()) {
-                                    return@PlaylistDetailPage
-                                }
-                                browser.replaceQueueAndPlayShuffled(detailSnapshot.tracks)
+                            onShuffle = { tracks ->
+                                browser.replaceQueueAndPlayShuffled(tracks)
                             },
                             onDeletePlaylist = {
                                 deleteRequest = PlaylistDeleteRequest.DetailPlaylist
                             },
-                            onEditModeChange = { enabled ->
-                                detailEditMode = enabled
-                                selectedTrackIds = emptySet()
+                            onRequestDeleteTracks = {
+                                deleteRequest = PlaylistDeleteRequest.DetailTracks
                             },
-                            onAddOrRemoveClick = {
-                                if (selectedTrackIds.isEmpty()) {
-                                    addModeTarget = target
-                                    addModeReturnsToRoot = false
-                                    addMode = true
-                                    selectedAddSongIds = emptySet()
-                                } else {
-                                    deleteRequest = PlaylistDeleteRequest.DetailTracks
-                                }
-                            },
-                            onToggleAll = { checked ->
-                                selectedTrackIds =
-                                    if (checked) {
-                                        detailSnapshot.tracks.map(MediaItem::mediaId).toSet()
-                                    } else {
-                                        emptySet()
-                                    }
-                            },
-                            onReorderTracks = { orderedMediaIds ->
-                                val playlistId = target?.playlistId ?: return@PlaylistDetailPage
+                            onReorderTracks = { playlistId, orderedMediaIds ->
                                 scope.launch {
                                     playlistRepository.reorderVisibleMediaIds(
                                         playlistId,
@@ -395,16 +253,8 @@ internal fun PlaylistPage(
                                     )
                                 }
                             },
-                            onTrackSelectionChange = { mediaId, selected ->
-                                selectedTrackIds = selectedTrackIds.withSelection(mediaId, selected)
-                            },
-                            onTrackClick = { item, index ->
-                                if (detailEditMode) {
-                                    selectedTrackIds =
-                                        selectedTrackIds.togglePlaylistSelection(item.mediaId)
-                                    return@PlaylistDetailPage
-                                }
-                                browser.replaceQueueAndPlay(detailSnapshot.tracks, index)
+                            onPlayTrack = { tracks, index ->
+                                browser.replaceQueueAndPlay(tracks, index)
                             },
                             onTrackMoreClick = onTrackMoreClick,
                             modifier = Modifier.fillMaxSize(),
@@ -423,168 +273,31 @@ internal fun PlaylistPage(
                         .zIndex(1f)
             )
         }
-        androidx.compose.animation.AnimatedVisibility(
-            visible = addModeVisible,
-            modifier = Modifier.fillMaxSize().zIndex(2f),
-            enter =
-                slideInVertically(
-                    animationSpec =
-                        tween(
-                            durationMillis = PlaylistAddModeSlideMillis,
-                            easing = PlaylistAddModeEasing,
-                        ),
-                    initialOffsetY = { it },
-                ),
-            exit =
-                slideOutVertically(
-                    animationSpec =
-                        tween(
-                            durationMillis = PlaylistAddModeSlideMillis,
-                            easing = PlaylistAddModeEasing,
-                        ),
-                    targetOffsetY = { it },
-                ),
-        ) {
-            val currentAddModeTarget = addModeTarget ?: return@AnimatedVisibility
-            Column(
-                modifier = Modifier.fillMaxSize().background(colorResource(R.color.page_background))
-            ) {
-                PlaylistAddModeTitleArea(
-                    target = currentAddModeTarget,
-                    onConfirm = {
-                        val playlistId =
-                            addModeTarget?.playlistId ?: return@PlaylistAddModeTitleArea
-                        val mediaIds = selectedAddSongIds.toList()
-                        if (mediaIds.isEmpty()) {
-                            closeAddMode()
-                            return@PlaylistAddModeTitleArea
-                        }
-                        scope.launch {
-                            playlistRepository.addMediaIds(playlistId, mediaIds)
-                            closeAddMode()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                SongsPage(
-                    mediaItems = visibleSongs,
-                    libraryLoaded = libraryLoaded,
-                    active = active && addModeVisible,
-                    editMode = true,
-                    selectedSongIds = selectedAddSongIds,
-                    hiddenMediaIds = addModeExistingIds,
-                    onSongSelectionChange = { mediaId, selected ->
-                        selectedAddSongIds = selectedAddSongIds.withSelection(mediaId, selected)
-                    },
-                    onTrackMoreClick = {},
-                    onRequestSongDeleteConfirmation = { _, onDismiss ->
-                        onDismiss?.invoke()
-                    },
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                )
-            }
-        }
+        PlaylistAddModeOverlay(
+            selection = selection,
+            visibleSongs = visibleSongs,
+            libraryLoaded = libraryLoaded,
+            active = active,
+            addModeExistingIds = addModeExistingIds,
+            playlistRepository = playlistRepository,
+            scope = scope,
+            onCloseAddMode = ::closeAddMode,
+        )
     }
 
-    PlaylistNameDialogOverlay(
-        request = nameDialogRequest,
-        onDismiss = {
-            nameDialogRequest = null
-        },
-        onConfirm = { request, name ->
-            scope.launch {
-                when (request) {
-                    is PlaylistNameDialogRequest.Create -> {
-                        when (val result = playlistRepository.createPlaylist(name)) {
-                            is PlaylistCreateResult.Success -> {
-                                nameDialogRequest = null
-                                val createdTarget =
-                                    PlaylistTarget(
-                                        playlistId = result.playlistId,
-                                        title = name.trim(),
-                                    )
-                                target = createdTarget
-                                detailEditMode = false
-                                selectedTrackIds = emptySet()
-                                if (visibleSongs.isNotEmpty() || !libraryLoaded) {
-                                    addModeTarget = createdTarget
-                                    addModeReturnsToRoot = true
-                                    target = null
-                                    addMode = true
-                                    selectedAddSongIds = emptySet()
-                                }
-                            }
-                            PlaylistCreateResult.DuplicateName -> {
-                                Toast.makeText(
-                                        context,
-                                        R.string.playlist_duplicate_name,
-                                        Toast.LENGTH_SHORT,
-                                    )
-                                    .show()
-                            }
-                            PlaylistCreateResult.EmptyName -> Unit
-                        }
-                    }
-                    is PlaylistNameDialogRequest.Rename -> {
-                        when (playlistRepository.renamePlaylist(request.playlistId, name)) {
-                            PlaylistRenameResult.Success -> {
-                                nameDialogRequest = null
-                                if (target?.playlistId == request.playlistId) {
-                                    target = target?.copy(title = name.trim())
-                                }
-                            }
-                            PlaylistRenameResult.DuplicateName -> {
-                                Toast.makeText(
-                                        context,
-                                        R.string.playlist_duplicate_name,
-                                        Toast.LENGTH_SHORT,
-                                    )
-                                    .show()
-                            }
-                            PlaylistRenameResult.EmptyName,
-                            PlaylistRenameResult.MissingPlaylist -> Unit
-                        }
-                    }
-                }
-            }
-        },
-    )
-
-    PlaylistDeleteDialog(
-        request = deleteRequest,
-        onDismiss = {
-            deleteRequest = null
-        },
-        onConfirm = { request ->
-            scope.launch {
-                when (request) {
-                    PlaylistDeleteRequest.RootSelected -> {
-                        playlistRepository.deletePlaylists(selectedPlaylistIds)
-                        selectedPlaylistIds = emptySet()
-                        rootEditMode = false
-                    }
-                    PlaylistDeleteRequest.DetailPlaylist -> {
-                        val playlistId = target?.playlistId
-                        if (playlistId != null) {
-                            playlistRepository.deletePlaylists(setOf(playlistId))
-                        }
-                        target = null
-                        detailEditMode = false
-                        addMode = false
-                        selectedTrackIds = emptySet()
-                    }
-                    PlaylistDeleteRequest.DetailTracks -> {
-                        val playlistId = target?.playlistId
-                        if (playlistId != null) {
-                            playlistRepository.removeMediaIds(playlistId, selectedTrackIds)
-                        }
-                        selectedTrackIds = emptySet()
-                        detailEditMode = false
-                    }
-                }
-                deleteRequest = null
-            }
-        },
+    PlaylistPageDialogs(
+        context = context,
+        playlistRepository = playlistRepository,
+        scope = scope,
+        selection = selection,
+        target = target,
+        nameDialogRequest = nameDialogRequest,
+        deleteRequest = deleteRequest,
+        visibleSongs = visibleSongs,
+        libraryLoaded = libraryLoaded,
+        onNameDialogRequestChange = { request -> nameDialogRequest = request },
+        onDeleteRequestChange = { request -> deleteRequest = request },
+        onTargetChange = { next -> target = next },
     )
 }
 
