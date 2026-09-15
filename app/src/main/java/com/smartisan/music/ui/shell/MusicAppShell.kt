@@ -584,8 +584,11 @@ private fun MusicAppShellContent(
             secondaryKey = uiState.currentDestination.takeIf { uiState.presentedFromMore },
             modifier = Modifier.fillMaxSize(),
             label = "more destination stack",
-            projectTitles = !uiState.playlistAddModeActive,
-            titleProjectionEnabled = !uiState.moreSettingsPageActive,
+            // 加歌模式只隐藏壳栏并让页面内联标题，不能切 projectTitles：那会把标题出口换成
+            // parent 并拆掉注册，恢复时导航位移已停在终值、与槽位不匹配，标题被平移出裁切框。
+            // titleProjectionEnabled 才是覆盖层用的旋钮（moreSettingsPageActive 同），不拆出口。
+            projectTitles = true,
+            titleProjectionEnabled = !uiState.moreSettingsPageActive && !uiState.playlistAddModeActive,
             primaryContent = {
                 destinationSurface(uiState.stackDestination, false)
             },

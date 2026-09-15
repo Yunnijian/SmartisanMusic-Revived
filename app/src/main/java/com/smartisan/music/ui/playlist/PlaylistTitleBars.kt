@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.colorResource
@@ -14,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import com.smartisan.music.R
 import com.smartisan.music.ui.components.*
+import com.smartisan.music.ui.navigation.LocalProjectedNavigationTitle
 import com.smartisan.music.ui.shell.titlebar.TitleBarTransition
 
 @Composable
@@ -149,33 +151,37 @@ internal fun PlaylistAddModeTitleArea(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier.fillMaxWidth().background(colorResource(R.color.title_bar_background))) {
-        Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars))
-        Box(
-            Modifier.fillMaxWidth().height(dimensionResource(R.dimen.status_bar_height)),
-            contentAlignment = Alignment.Center,
-        ) {
-            BasicText(
-                stringResource(R.string.add_track_to) + " \"${target.title.ellipsizeMiddle(8)}\"",
-                style =
-                    TextStyle(
-                        color = colorResource(R.color.title_color),
-                        fontSize = smartisanTextSize(R.dimen.text_size_act_title),
-                        platformStyle = PlatformTextStyle(includeFontPadding = true),
+    // 加歌模式头部是全屏覆盖层自己的标题，必须纯内联：若让它注册进壳层投影出口，
+    // 关闭加歌模式它离开组合时会 detach 清空出口内容，壳层标题栏随即变白。
+    CompositionLocalProvider(LocalProjectedNavigationTitle provides null) {
+        Column(modifier.fillMaxWidth().background(colorResource(R.color.title_bar_background))) {
+            Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars))
+            Box(
+                Modifier.fillMaxWidth().height(dimensionResource(R.dimen.status_bar_height)),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(
+                    stringResource(R.string.add_track_to) + " \"${target.title.ellipsizeMiddle(8)}\"",
+                    style =
+                        TextStyle(
+                            color = colorResource(R.color.title_color),
+                            fontSize = smartisanTextSize(R.dimen.text_size_act_title),
+                            platformStyle = PlatformTextStyle(includeFontPadding = true),
+                        ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            SmartisanTitleBar(
+                stringResource(R.string.name_tracks),
+                includeStatusBar = false,
+                action =
+                    SmartisanTitleBarAction(
+                        R.drawable.standard_icon_hignlight_confirm_selector,
+                        stringResource(R.string.done),
+                        onConfirm,
                     ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
-        SmartisanTitleBar(
-            stringResource(R.string.name_tracks),
-            includeStatusBar = false,
-            action =
-                SmartisanTitleBarAction(
-                    R.drawable.standard_icon_hignlight_confirm_selector,
-                    stringResource(R.string.done),
-                    onConfirm,
-                ),
-        )
     }
 }
