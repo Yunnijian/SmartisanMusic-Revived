@@ -909,6 +909,12 @@ class PlaybackService : MediaLibraryService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
+            // 仅放行系统可信控制器（系统 UI/蓝牙/车机）与本应用自身，其余第三方一律拒绝，
+            // 防止任意 App 遍历曲库并劫持播放。
+            val isSelf = controller.packageName == this@PlaybackService.packageName
+            if (!controller.isTrusted && !isSelf) {
+                return MediaSession.ConnectionResult.reject()
+            }
             val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(ScratchSeekModeCommand)

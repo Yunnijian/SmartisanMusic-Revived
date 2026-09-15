@@ -138,7 +138,8 @@ internal class NeteaseOnlineMusicRepository(
      */
     private fun onAccountCacheScopeChanged(previousScope: String) {
         val previousPrefix = "netease:$previousScope:"
-        cancelPendingPageCacheRefreshes(previousPrefix)
+        // 旧账号域的内存+磁盘页缓存整体作废，避免换号/登出后读到旧账号残留数据。
+        invalidatePageCache(previousPrefix)
         NeteaseOnlineMemoryCache.cancelInFlightLoads { key ->
             key.startsWith(previousPrefix) &&
                 PlaybackResolutionNamespaces.none { namespace -> key.contains(":$namespace:") }

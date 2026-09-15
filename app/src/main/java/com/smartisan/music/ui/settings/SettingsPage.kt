@@ -2,6 +2,7 @@ package com.smartisan.music.ui.settings
 
 import android.app.Activity
 import android.util.Log
+import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -234,6 +235,9 @@ internal fun SettingsPage(
             onDismiss = { logoutConfirmationVisible = false },
             onConfirm = {
                 authStore.clear()
+                // 登出必须一并抹掉 WebView 落盘的明文 cookie（含 MUSIC_U），避免第三方读到。
+                CookieManager.getInstance().removeAllCookies(null)
+                CookieManager.getInstance().flush()
                 neteaseSignedIn = false
                 logoutConfirmationVisible = false
                 Toast.makeText(context, R.string.netease_logout_success, Toast.LENGTH_SHORT).show()
