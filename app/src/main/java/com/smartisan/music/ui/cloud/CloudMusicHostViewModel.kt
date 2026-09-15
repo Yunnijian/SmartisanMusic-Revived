@@ -114,6 +114,8 @@ internal class CloudMusicHostViewModel(
         artistsVisible = false
         artistAlbumsTarget = null
         selectedAccountPlaylistId = null
+        // 详情层压在内容区上，点入口必须一并关掉，否则只有高亮变、页面不切。
+        selectedDetail = null
         when (entry) {
             CloudHomeEntry.Mine -> subPage = CloudSubPage.Mine
             CloudHomeEntry.Recommend -> subPage = CloudSubPage.Home
