@@ -54,7 +54,7 @@ internal suspend fun NeteaseCloudMusicClient.getUserRadios(userId: Long, limit: 
     val safeLimit = limit.coerceIn(1, AccountRadioLimit)
     val response = requestWithLoginRetry {
         callWeApi(
-            path = "/user/djradio/get/subed",
+            path = "/djradio/get/subed",
             params = mapOf(
                 "uid" to userId.toString(),
                 "offset" to "0",

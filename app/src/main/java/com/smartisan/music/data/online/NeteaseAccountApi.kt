@@ -2,6 +2,13 @@ package com.smartisan.music.data.online
 
 /** 账号域：个人资料、歌单/收藏读、收藏与歌单增删改、账号页聚合。 */
 
+/** 登录失效（业务码 301）按「未登录」返回 null，其余异常照常上抛，避免账号库误显「加载失败」。 */
+private suspend fun <T> accountRequiresLoginOrNull(block: suspend () -> T): T? = try {
+    block()
+} catch (e: NeteaseApiException) {
+    if (e.reason == NeteaseApiFailureReason.RequiresLogin) null else throw e
+}
+
 internal suspend fun NeteaseOnlineMusicRepository.currentUserProfile(): NeteaseAccountProfile? {
     val state = authStore?.load() ?: return null
     if (!state.isLoggedIn) {
@@ -225,23 +232,25 @@ internal suspend fun NeteaseOnlineMusicRepository.accountPlaylistsPage(): List<O
         return null
     }
     val profile = currentUserProfile() ?: state.profile ?: return null
-    return cachedPage(
-        key = cacheKey("account:playlists"),
-        ttlMs = NeteaseAccountCacheTtlMs,
-        codec = OnlinePageCacheCodecs.AccountPlaylists,
-    ) {
-        client.getUserPlaylists(
-            userId = profile.userId,
-            limit = AccountPlaylistLimit,
-        ).map { playlist ->
-            OnlineAccountPlaylist(
-                provider = provider,
-                playlistId = playlist.playlistId,
-                title = playlist.name,
-                trackCount = playlist.trackCount,
-                isLikedSongs = playlist.isLikedSongs,
-                isEditable = playlist.isEditableBy(profile.userId),
-            )
+    return accountRequiresLoginOrNull {
+        cachedPage(
+            key = cacheKey("account:playlists"),
+            ttlMs = NeteaseAccountCacheTtlMs,
+            codec = OnlinePageCacheCodecs.AccountPlaylists,
+        ) {
+            client.getUserPlaylists(
+                userId = profile.userId,
+                limit = AccountPlaylistLimit,
+            ).map { playlist ->
+                OnlineAccountPlaylist(
+                    provider = provider,
+                    playlistId = playlist.playlistId,
+                    title = playlist.name,
+                    trackCount = playlist.trackCount,
+                    isLikedSongs = playlist.isLikedSongs,
+                    isEditable = playlist.isEditableBy(profile.userId),
+                )
+            }
         }
     }
 }
@@ -252,15 +261,17 @@ internal suspend fun NeteaseOnlineMusicRepository.accountAlbumsPage(): List<Onli
         return null
     }
     val profile = currentUserProfile() ?: state.profile ?: return null
-    return cachedPage(
-        key = cacheKey("account:albums"),
-        ttlMs = NeteaseAccountCacheTtlMs,
-        codec = OnlinePageCacheCodecs.Albums,
-    ) {
-        client.getUserAlbums(
-            userId = profile.userId,
-            limit = AccountAlbumLimit,
-        )
+    return accountRequiresLoginOrNull {
+        cachedPage(
+            key = cacheKey("account:albums"),
+            ttlMs = NeteaseAccountCacheTtlMs,
+            codec = OnlinePageCacheCodecs.Albums,
+        ) {
+            client.getUserAlbums(
+                userId = profile.userId,
+                limit = AccountAlbumLimit,
+            )
+        }
     }
 }
 
@@ -270,15 +281,17 @@ internal suspend fun NeteaseOnlineMusicRepository.accountRadiosPage(): List<Onli
         return null
     }
     val profile = currentUserProfile() ?: state.profile ?: return null
-    return cachedPage(
-        key = cacheKey("account:radios"),
-        ttlMs = NeteaseAccountCacheTtlMs,
-        codec = OnlinePageCacheCodecs.Radios,
-    ) {
-        client.getUserRadios(
-            userId = profile.userId,
-            limit = AccountRadioLimit,
-        )
+    return accountRequiresLoginOrNull {
+        cachedPage(
+            key = cacheKey("account:radios"),
+            ttlMs = NeteaseAccountCacheTtlMs,
+            codec = OnlinePageCacheCodecs.Radios,
+        ) {
+            client.getUserRadios(
+                userId = profile.userId,
+                limit = AccountRadioLimit,
+            )
+        }
     }
 }
 
