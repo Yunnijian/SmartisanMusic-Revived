@@ -9,11 +9,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,12 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,7 +30,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -46,8 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -59,7 +50,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -69,58 +59,53 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisan.music.R
-import com.smartisan.music.ui.components.smartisanPressedTextColor
-import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.data.library.LibraryExclusionsStore
 import com.smartisan.music.data.search.SearchHistoryStore
 import com.smartisan.music.data.settings.ArtistSettings
 import com.smartisan.music.playback.LocalPlaybackBrowser
-import com.smartisan.music.playback.artworkRequestKey
 import com.smartisan.music.playback.await
 import com.smartisan.music.playback.replaceQueueAndPlay
-import com.smartisan.music.ui.album.AlbumSummary
-import com.smartisan.music.ui.artist.ArtistSummary
 import com.smartisan.music.ui.components.GlobalPlaybackBar
 import com.smartisan.music.ui.components.SmartisanDrawableBackground
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.hasAudioPermission
-import com.smartisan.music.ui.components.loadArtworkThumbnail
 import com.smartisan.music.ui.shell.titlebar.TitleBarShadow
 import kotlinx.coroutines.launch
 
-private val SearchPageBackground: Color
+internal val SearchPageBackground: Color
     @Composable get() = colorResource(R.color.page_background)
-private val SearchFieldTextColor: Color
+internal val SearchFieldTextColor: Color
     @Composable get() = colorResource(R.color.text_primary)
-private val SearchSectionTitleColor: Color
+internal val SearchSectionTitleColor: Color
     @Composable get() = colorResource(R.color.text_tertiary)
-private val SearchDividerColor: Color
+internal val SearchDividerColor: Color
     @Composable get() = colorResource(R.color.divider_soft)
-private val SearchSongTitleColor: Color
+internal val SearchSongTitleColor: Color
     @Composable get() = colorResource(R.color.text_primary)
-private val SearchSongPlayingColor: Color
+internal val SearchSongPlayingColor: Color
     @Composable get() = colorResource(R.color.playing_red)
-private val SearchResultHighlightColor: Color
+internal val SearchResultHighlightColor: Color
     @Composable get() = colorResource(R.color.highlight_red)
-private val SearchSubtitleColor: Color
+internal val SearchSubtitleColor: Color
     @Composable get() = colorResource(R.color.text_tertiary)
-private val SearchEmptyTextColor: Color
+internal val SearchEmptyTextColor: Color
     @Composable get() = colorResource(R.color.text_placeholder)
 
-private val SearchFieldTextStyle: TextStyle
+internal val SearchFieldTextStyle: TextStyle
     @Composable
     get() =
         TextStyle(
             fontSize = 15.sp,
             color = SearchFieldTextColor,
         )
-private val SearchSectionTitleStyle: TextStyle
+internal val SearchSectionTitleStyle: TextStyle
     @Composable
     get() =
         TextStyle(
             fontSize = 15.sp,
             color = SearchSongTitleColor,
         )
-private val SearchPrimaryTextStyle: TextStyle
+internal val SearchPrimaryTextStyle: TextStyle
     @Composable
     get() =
         TextStyle(
@@ -128,7 +113,7 @@ private val SearchPrimaryTextStyle: TextStyle
             fontWeight = FontWeight.Medium,
             color = SearchSongTitleColor,
         )
-private val SearchSecondaryTextStyle: TextStyle
+internal val SearchSecondaryTextStyle: TextStyle
     @Composable
     get() =
         TextStyle(
@@ -136,36 +121,36 @@ private val SearchSecondaryTextStyle: TextStyle
             color = SearchSubtitleColor,
         )
 
-private val SearchTopBarHeight = 50.dp
-private val SearchFieldHeight = 32.dp
-private val SearchTopBarItemSpacing = 12.dp
-private val SearchCancelButtonSize = 36.dp
-private val SearchCancelIconSize = 36.dp
-private val SearchClearButtonSize = 30.dp
-private val SearchClearIconSize = 30.dp
-private val SearchFieldInnerEdgePadding = 6.dp
-private val SearchLeftIconWidth = 24.dp
-private val SearchLeftIconHeight = 30.dp
-private val SearchTextStartPadding = 36.dp
-private val SearchHistoryTopPadding = 19.dp
-private val SearchSectionHorizontalPadding = 21.dp
-private val SearchHistoryRowSpacing = 10.dp
-private val SearchHistoryChipHeight = 30.dp
-private val SearchSectionHeaderHeight = 45.dp
-private val SearchSectionHeaderStartPadding = 11.dp
-private val SearchResultRowHeight = 60.dp
-private val SearchResultArtworkFrameWidth = 48.dp
-private val SearchResultArtworkSize = 38.dp
-private val SearchResultActionWidth = 34.dp
-private val SearchResultMoreIconSize = 30.dp
-private val SearchResultSourceIconSize = 14.dp
-private val SearchPlaybackBarReservedHeight = 67.dp
-private val SearchTopHorizontalPadding = 6.dp
-private val SearchNoResultTopPadding = 85.dp
-private val SearchNoResultArtworkSize = 140.dp
-private val SearchArtworkDecodeSize = Size(128, 128)
+internal val SearchTopBarHeight = 50.dp
+internal val SearchFieldHeight = 32.dp
+internal val SearchTopBarItemSpacing = 12.dp
+internal val SearchCancelButtonSize = 36.dp
+internal val SearchCancelIconSize = 36.dp
+internal val SearchClearButtonSize = 30.dp
+internal val SearchClearIconSize = 30.dp
+internal val SearchFieldInnerEdgePadding = 6.dp
+internal val SearchLeftIconWidth = 24.dp
+internal val SearchLeftIconHeight = 30.dp
+internal val SearchTextStartPadding = 36.dp
+internal val SearchHistoryTopPadding = 19.dp
+internal val SearchSectionHorizontalPadding = 21.dp
+internal val SearchHistoryRowSpacing = 10.dp
+internal val SearchHistoryChipHeight = 30.dp
+internal val SearchSectionHeaderHeight = 45.dp
+internal val SearchSectionHeaderStartPadding = 11.dp
+internal val SearchResultRowHeight = 60.dp
+internal val SearchResultArtworkFrameWidth = 48.dp
+internal val SearchResultArtworkSize = 38.dp
+internal val SearchResultActionWidth = 34.dp
+internal val SearchResultMoreIconSize = 30.dp
+internal val SearchResultSourceIconSize = 14.dp
+internal val SearchPlaybackBarReservedHeight = 67.dp
+internal val SearchTopHorizontalPadding = 6.dp
+internal val SearchNoResultTopPadding = 85.dp
+internal val SearchNoResultArtworkSize = 140.dp
+internal val SearchArtworkDecodeSize = Size(128, 128)
 
-private enum class SearchEntityAction {
+internal enum class SearchEntityAction {
     More,
     Source,
 }
@@ -536,436 +521,5 @@ private fun SearchCancelButton(onDismiss: () -> Unit) {
             contentDescription = stringResource(R.string.cancel),
             modifier = Modifier.size(SearchCancelIconSize),
         )
-    }
-}
-
-@Composable
-private fun SearchHistoryPage(
-    history: List<String>,
-    onHistoryClick: (String) -> Unit,
-    onClearHistory: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (history.isEmpty()) {
-        Box(modifier = modifier.fillMaxSize()) {
-            SmartisanDrawableBackground(
-                drawableRes = R.drawable.account_background,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
-        return
-    }
-
-    Box(modifier = modifier.fillMaxSize()) {
-        SmartisanDrawableBackground(
-            drawableRes = R.drawable.account_background,
-            modifier = Modifier.matchParentSize(),
-        )
-        Column(
-            modifier =
-                Modifier.fillMaxSize()
-                    .padding(
-                        start = SearchSectionHorizontalPadding,
-                        top = SearchHistoryTopPadding,
-                        end = 20.dp,
-                    )
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(R.string.search_history),
-                    style = SearchSectionTitleStyle,
-                    modifier = Modifier.padding(start = 7.dp),
-                )
-                Image(
-                    painter = painterResource(R.drawable.search_clear),
-                    contentDescription = stringResource(R.string.clear_history),
-                    modifier =
-                        Modifier.size(20.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onClearHistory,
-                            ),
-                )
-            }
-            FlowRow(
-                modifier = Modifier.padding(top = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
-                verticalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
-            ) {
-                history.forEach { entry ->
-                    SearchHistoryChip(
-                        text = entry,
-                        onClick = { onHistoryClick(entry) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchResultsPage(
-    results: SearchResults,
-    currentMediaId: String?,
-    showPlaybackBar: Boolean,
-    onSongClick: (MediaItem) -> Unit,
-    onAlbumClick: (AlbumSummary) -> Unit,
-    onArtistClick: (ArtistSummary) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier = modifier.fillMaxSize()) {
-        SmartisanDrawableBackground(
-            drawableRes = R.drawable.account_background,
-            modifier = Modifier.matchParentSize(),
-        )
-        if (!results.hasResults) {
-            SearchNoResultState(modifier = Modifier.fillMaxSize())
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding =
-                    PaddingValues(
-                        bottom =
-                            if (showPlaybackBar) SearchPlaybackBarReservedHeight + 16.dp else 16.dp
-                    ),
-            ) {
-                appendSuggestedResults(
-                    songs = results.songs.take(2),
-                    currentMediaId = currentMediaId,
-                    onSongClick = onSongClick,
-                )
-                appendAlbumResults(
-                    albums = results.albums,
-                    onAlbumClick = onAlbumClick,
-                )
-                appendArtistResults(
-                    artists = results.artists,
-                    onArtistClick = onArtistClick,
-                )
-            }
-        }
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.appendSuggestedResults(
-    songs: List<MediaItem>,
-    currentMediaId: String?,
-    onSongClick: (MediaItem) -> Unit,
-) {
-    if (songs.isEmpty()) return
-    item(key = "suggested-header") { SearchSectionHeader(title = R.string.suggestion) }
-    items(
-        items = songs,
-        key = { item -> "suggested-${item.mediaId}" },
-    ) { item ->
-        SearchSongRow(
-            mediaItem = item,
-            selected = item.mediaId == currentMediaId,
-            onClick = { onSongClick(item) },
-        )
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.appendAlbumResults(
-    albums: List<AlbumSummary>,
-    onAlbumClick: (AlbumSummary) -> Unit,
-) {
-    if (albums.isEmpty()) return
-    item(key = "albums-header") { SearchSectionHeader(title = R.string.search_tab_albums) }
-    items(
-        items = albums,
-        key = { album -> "album-${album.id}" },
-    ) { album ->
-        SearchEntityRow(
-            title = album.title,
-            subtitle = album.artist,
-            representative = album.representative,
-            titleColor = SearchResultHighlightColor,
-            subtitleColor = SearchResultHighlightColor,
-            action = SearchEntityAction.Source,
-            onClick = { onAlbumClick(album) },
-        )
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.appendArtistResults(
-    artists: List<ArtistSummary>,
-    onArtistClick: (ArtistSummary) -> Unit,
-) {
-    if (artists.isEmpty()) return
-    item(key = "artists-header") { SearchSectionHeader(title = R.string.search_tab_artists) }
-    items(
-        items = artists,
-        key = { artist -> "artist-${artist.id}" },
-    ) { artist ->
-        SearchEntityRow(
-            title = artist.name,
-            subtitle = null,
-            representative = artist.representative,
-            titleColor = SearchResultHighlightColor,
-            action = SearchEntityAction.Source,
-            onClick = { onArtistClick(artist) },
-        )
-    }
-}
-
-@Composable
-private fun SearchSectionHeader(title: Int) {
-    Box(modifier = Modifier.fillMaxWidth().height(SearchSectionHeaderHeight)) {
-        SmartisanDrawableBackground(
-            drawableRes = R.drawable.home_recommend_title_noline_bg,
-            modifier = Modifier.matchParentSize(),
-        )
-        Text(
-            text = stringResource(title),
-            style = TextStyle(fontSize = 15.sp, color = SearchSectionTitleColor),
-            modifier =
-                Modifier.align(Alignment.CenterStart)
-                    .padding(start = SearchSectionHeaderStartPadding),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Box(
-            modifier =
-                Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(SearchDividerColor)
-        )
-    }
-}
-
-@Composable
-private fun SearchSongRow(
-    mediaItem: MediaItem,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    SearchEntityRow(
-        title =
-            mediaItem.mediaMetadata.title?.toString()
-                ?: mediaItem.mediaMetadata.displayTitle?.toString()
-                ?: stringResource(R.string.unknown_song_title),
-        subtitle =
-            mediaItem.mediaMetadata.artist?.toString() ?: stringResource(R.string.unknown_artist),
-        representative = mediaItem,
-        titleColor = if (selected) SearchSongPlayingColor else SearchSongTitleColor,
-        onClick = onClick,
-    )
-}
-
-@Composable
-private fun SearchEntityRow(
-    title: String,
-    subtitle: String?,
-    representative: MediaItem,
-    onClick: () -> Unit,
-    titleColor: Color = SearchSongTitleColor,
-    subtitleColor: Color = SearchSubtitleColor,
-    action: SearchEntityAction = SearchEntityAction.More,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectSmartisanPressedAsState()
-
-    Box(
-        modifier =
-            Modifier.fillMaxWidth()
-                .height(SearchResultRowHeight)
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick,
-                )
-    ) {
-        SmartisanDrawableBackground(
-            drawableRes =
-                if (pressed) R.drawable.list_item_bgwithoutphoto_down else R.color.surface_card,
-            modifier = Modifier.matchParentSize(),
-        )
-        Row(
-            modifier = Modifier.fillMaxSize().padding(end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier =
-                    Modifier.width(SearchResultArtworkFrameWidth)
-                        .height(SearchResultRowHeight)
-                        .padding(start = 12.dp, top = 5.dp, bottom = 5.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                SearchArtwork(
-                    mediaItem = representative,
-                    modifier = Modifier.size(SearchResultArtworkSize),
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f).padding(start = 12.dp, end = 10.dp),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = title,
-                    style = SearchPrimaryTextStyle.copy(color = smartisanPressedTextColor(titleColor, pressed)),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!subtitle.isNullOrEmpty()) {
-                    Text(
-                        text = subtitle,
-                        style = SearchSecondaryTextStyle.copy(color = smartisanPressedTextColor(subtitleColor, pressed)),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier.width(SearchResultActionWidth).height(SearchResultRowHeight),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                val iconRes =
-                    when (action) {
-                        SearchEntityAction.More ->
-                            if (pressed) R.drawable.btn_more_white else R.drawable.btn_more
-                        SearchEntityAction.Source ->
-                            if (pressed) {
-                                R.drawable.local_phone_icon_white
-                            } else {
-                                R.drawable.local_phone_icon
-                            }
-                    }
-                Image(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    modifier =
-                        Modifier.size(
-                            if (action == SearchEntityAction.More) {
-                                SearchResultMoreIconSize
-                            } else {
-                                SearchResultSourceIconSize
-                            }
-                        ),
-                )
-            }
-        }
-    }
-    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(SearchDividerColor))
-}
-
-@Composable
-private fun SearchHistoryChip(
-    text: String,
-    onClick: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectSmartisanPressedAsState()
-
-    Box(
-        modifier =
-            Modifier.height(SearchHistoryChipHeight)
-                .defaultMinSize(minWidth = 48.dp)
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick,
-                ),
-        contentAlignment = Alignment.Center,
-    ) {
-        SmartisanDrawableBackground(
-            drawableRes =
-                if (pressed) R.drawable.search_badge_grey_p else R.drawable.search_badge_grey,
-            modifier = Modifier.matchParentSize(),
-        )
-        Text(
-            text = text,
-            style =
-                TextStyle(
-                    color = colorResource(R.color.text_tertiary),
-                    fontSize = 13.5.sp,
-                ),
-            modifier = Modifier.padding(horizontal = 14.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun SearchNoResultState(modifier: Modifier = Modifier) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(colorResource(R.color.page_background))
-                .padding(top = SearchNoResultTopPadding),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Image(
-            painter = painterResource(R.drawable.blank_search),
-            contentDescription = null,
-            modifier = Modifier.size(SearchNoResultArtworkSize),
-        )
-        Text(
-            text = stringResource(R.string.search_no_result),
-            style = TextStyle(fontSize = 23.sp, color = SearchEmptyTextColor),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 25.dp),
-        )
-    }
-}
-
-@Composable
-private fun SearchArtwork(
-    mediaItem: MediaItem,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val artworkRequestKey = mediaItem.artworkRequestKey()
-    val artwork by
-        produceState<ImageBitmap?>(
-            initialValue = null,
-            artworkRequestKey,
-        ) {
-            value = loadArtworkThumbnail(context, mediaItem, SearchArtworkDecodeSize)
-        }
-
-    if (artwork != null) {
-        Box(modifier = modifier) {
-            Image(
-                bitmap = artwork!!,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-            )
-            Image(
-                painter = painterResource(R.drawable.mask_albumcover_list),
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
-    } else {
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.noalbumcover_120),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-            )
-            Image(
-                painter = painterResource(R.drawable.mask_albumcover_list),
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
     }
 }
