@@ -102,6 +102,7 @@ class PlaybackService : MediaLibraryService() {
     private var superLyricPublisher: SuperLyricPublisher? = null
     private var superLyricPublishJob: Job? = null
     private var superLyricLyrics: EmbeddedLyrics? = null
+    private var superLyricLoadJob: Job? = null
     private val audioFxPlayerListener = object : Player.Listener {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             playbackAudioFxController?.setAudioSessionId(audioSessionId)
@@ -143,6 +144,8 @@ class PlaybackService : MediaLibraryService() {
     }
     private val superLyricPlayerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // 新歌先取消上一首还在跑的歌词加载任务，避免慢的旧结果回头覆盖新歌歌词。
+            superLyricLoadJob?.cancel()
             superLyricLyrics = null
             val item = mediaItem
             if (item == null) {
@@ -155,7 +158,7 @@ class PlaybackService : MediaLibraryService() {
                 return
             }
             // 歌词异步加载（含在线拉取/磁盘缓存），加载完成立即补发一帧。
-            serviceScope.launch {
+            superLyricLoadJob = serviceScope.launch {
                 superLyricLyrics = loadEmbeddedLyrics(this@PlaybackService, item)
                 publishSuperLyricNow()
             }
@@ -331,6 +334,8 @@ class PlaybackService : MediaLibraryService() {
         player?.removeListener(superLyricPlayerListener)
         superLyricPublishJob?.cancel()
         superLyricPublishJob = null
+        superLyricLoadJob?.cancel()
+        superLyricLoadJob = null
         superLyricPublisher?.tryUnregister()
         superLyricPublisher = null
         playbackStartFadeController.release(player)

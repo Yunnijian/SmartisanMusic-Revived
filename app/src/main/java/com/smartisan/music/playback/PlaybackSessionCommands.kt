@@ -24,7 +24,10 @@ internal const val TrackRatingMediaIdKey = "track_rating_media_id"
 internal const val TrackRatingScoreKey = "track_rating_score"
 internal const val TrackRatingMinScore = 0
 internal const val TrackRatingMaxScore = 5
-internal const val ReplaceQueueMediaItemsKey = "replace_queue_media_items"
+internal const val ReplaceQueueEntriesKey = "replace_queue_entries"
+internal const val ReplaceQueueEntryIsFullKey = "replace_queue_entry_is_full"
+internal const val ReplaceQueueEntryItemKey = "replace_queue_entry_item"
+internal const val ReplaceQueueEntryMediaIdKey = "replace_queue_entry_media_id"
 internal const val ReplaceQueueStartIndexKey = "replace_queue_start_index"
 internal const val ReplaceQueueShuffleModeKey = "replace_queue_shuffle_mode"
 
@@ -77,10 +80,26 @@ internal fun MediaController.sendReplaceQueueAndPlayCommand(
         ReplaceQueueAndPlayCommand,
         Bundle().apply {
             putParcelableArrayList(
-                ReplaceQueueMediaItemsKey,
+                ReplaceQueueEntriesKey,
                 ArrayList(
                     mediaItems.map { item ->
-                        item.toBundleIncludeLocalConfiguration(MediaLibraryInfo.INTERFACE_VERSION)
+                        Bundle().apply {
+                            // 本地条目接收侧只按 mediaId 回查本地库，传完整载荷纯属浪费，
+                            // 上千首大队列还会把单个 Bundle 撑过 Binder 1MB 事务上限；
+                            // 仅在线/外部条目随传输带来的完整 bundle 走 isFull 分支。
+                            if (item.canResolveDirectSessionPlaybackItem()) {
+                                putBoolean(ReplaceQueueEntryIsFullKey, true)
+                                putBundle(
+                                    ReplaceQueueEntryItemKey,
+                                    item.toBundleIncludeLocalConfiguration(
+                                        MediaLibraryInfo.INTERFACE_VERSION,
+                                    ),
+                                )
+                            } else {
+                                putBoolean(ReplaceQueueEntryIsFullKey, false)
+                                putString(ReplaceQueueEntryMediaIdKey, item.mediaId)
+                            }
+                        }
                     },
                 ),
             )
@@ -91,13 +110,21 @@ internal fun MediaController.sendReplaceQueueAndPlayCommand(
 }
 
 internal fun Bundle.decodeReplaceQueueAndPlayMediaItems(): List<MediaItem> {
-    val itemBundles = BundleCompat.getParcelableArrayList(
+    val entryBundles = BundleCompat.getParcelableArrayList(
         this,
-        ReplaceQueueMediaItemsKey,
+        ReplaceQueueEntriesKey,
         Bundle::class.java,
     )
         ?: return emptyList()
-    return itemBundles.map { itemBundle ->
-        MediaItem.fromBundle(itemBundle, MediaLibraryInfo.INTERFACE_VERSION)
+    return entryBundles.map { entryBundle ->
+        if (entryBundle.getBoolean(ReplaceQueueEntryIsFullKey)) {
+            val itemBundle = entryBundle.getBundle(ReplaceQueueEntryItemKey)
+                ?: return@map MediaItem.Builder().build()
+            MediaItem.fromBundle(itemBundle, MediaLibraryInfo.INTERFACE_VERSION)
+        } else {
+            MediaItem.Builder()
+                .setMediaId(entryBundle.getString(ReplaceQueueEntryMediaIdKey).orEmpty())
+                .build()
+        }
     }
 }

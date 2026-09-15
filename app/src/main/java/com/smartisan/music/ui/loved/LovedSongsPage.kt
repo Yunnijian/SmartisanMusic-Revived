@@ -106,7 +106,11 @@ internal fun LovedSongsPage(
     LaunchedEffect(entries) {
         selectedIds = selectedIds.intersect(entries.map { it.mediaItem.mediaId }.toSet())
         if (entries.isEmpty()) editMode = false
-        list.scrollToItem(0)
+    }
+    // 仅在重新进入页面时回顶：entries 会随收藏变更/下拉刷新重建，若把回顶挂在它上面，
+    // 在别处收藏或刷新一下就把正在浏览的列表弹回顶部。
+    LaunchedEffect(active) {
+        if (active) list.scrollToItem(0)
     }
     fun exitEdit() {
         editMode = false
