@@ -11,6 +11,15 @@ private const val LyricsCacheDirectoryName = "lyrics_cache"
 private const val LyricsCacheTtlMs = 7L * 24L * 60L * 60L * 1000L
 private const val MaxLyricsCacheFiles = 1_000
 
+/**
+ * 歌词磁盘缓存。
+ *
+ * 缓存键为 `SHA-256("<账号域>:<source>:<trackId>")`，账号域由 Repository 的
+ * `authCacheScope()` 传入：VIP 歌词的译文按账号下发，键里不带账号域会让换号后
+ * 读到上一个账号的译文。
+ *
+ * 键格式相比不含账号域的旧版本已变更，旧文件不会再被命中，由 [trimLocked] 的容量淘汰自然回收。
+ */
 internal class OnlineLyricsDiskCache(
     private val directory: File,
     private val ttlMs: Long = LyricsCacheTtlMs,
@@ -25,9 +34,12 @@ internal class OnlineLyricsDiskCache(
         ttlMs = ttlMs,
     )
 
-    suspend fun get(identity: OnlineTrackIdentity): OnlineLyrics? = withContext(AppDispatchers.IO) {
+    suspend fun get(
+        identity: OnlineTrackIdentity,
+        scope: String,
+    ): OnlineLyrics? = withContext(AppDispatchers.IO) {
         synchronized(lock) {
-            val file = identity.cacheFile()
+            val file = identity.cacheFile(scope)
             if (!file.isFile) {
                 return@synchronized null
             }
@@ -51,17 +63,18 @@ internal class OnlineLyricsDiskCache(
     suspend fun put(
         identity: OnlineTrackIdentity,
         lyrics: OnlineLyrics,
+        scope: String,
     ) {
         withContext(AppDispatchers.IO) {
             synchronized(lock) {
                 if (!lyrics.hasContent()) {
-                    identity.cacheFile().delete()
+                    identity.cacheFile(scope).delete()
                     return@synchronized
                 }
                 if (!directory.exists() && !directory.mkdirs()) {
                     return@synchronized
                 }
-                val file = identity.cacheFile()
+                val file = identity.cacheFile(scope)
                 val tempFile = File(directory, "${file.name}.tmp")
                 val root = JSONObject()
                     .put(CachedAtMsKey, System.currentTimeMillis())
@@ -82,12 +95,12 @@ internal class OnlineLyricsDiskCache(
         }
     }
 
-    private fun OnlineTrackIdentity.cacheFile(): File {
-        return File(directory, "${stableLyricsCacheKey()}.json")
+    private fun OnlineTrackIdentity.cacheFile(scope: String): File {
+        return File(directory, "${stableLyricsCacheKey(scope)}.json")
     }
 
-    private fun OnlineTrackIdentity.stableLyricsCacheKey(): String {
-        val rawKey = "$source:$trackId"
+    private fun OnlineTrackIdentity.stableLyricsCacheKey(scope: String): String {
+        val rawKey = "$scope:$source:$trackId"
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(rawKey.toByteArray(Charsets.UTF_8))
         return digest.joinToString(separator = "") { byte ->

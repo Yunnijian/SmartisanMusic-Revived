@@ -33,7 +33,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun searchSongs(query: String, limit: Int): List<OnlineTrack> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, SearchLimit)
-        val response = JSONObject(
+        val response = parseNeteaseApiResponse(
             callWeApi(
                 path = "/cloudsearch/get/web",
                 params = mapOf(
@@ -64,7 +64,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun searchArtists(query: String, limit: Int): List<OnlineArtist> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, ArtistSearchLimit)
-        val response = JSONObject(
+        val response = parseNeteaseApiResponse(
             callWeApi(
                 path = "/cloudsearch/get/web",
                 params = mapOf(
@@ -85,7 +85,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun searchAlbums(query: String, limit: Int): List<OnlineAlbum> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, AlbumSearchLimit)
-        val response = JSONObject(
+        val response = parseNeteaseApiResponse(
             callWeApi(
                 path = "/cloudsearch/get/web",
                 params = mapOf(
@@ -106,7 +106,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun searchPlaylists(query: String, limit: Int): List<OnlinePlaylist> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, PlaylistSearchLimit)
-        val response = JSONObject(
+        val response = parseNeteaseApiResponse(
             callWeApi(
                 path = "/cloudsearch/get/web",
                 params = mapOf(
@@ -132,7 +132,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun getHotSearchKeywords(limit: Int): List<OnlineSearchHotKeyword> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, HotSearchLimit)
-        val response = JSONObject(callWeApi("/hotsearchlist/get", emptyMap()))
+        val response = parseNeteaseApiResponse(callWeApi("/hotsearchlist/get", emptyMap()))
         response.optJSONArray("data")
             ?.toJsonObjects()
             ?.mapNotNull(::parseHotSearchKeyword)
@@ -143,7 +143,7 @@ internal class NeteaseCloudMusicClient(
     suspend fun getTopArtists(limit: Int): List<OnlineArtist> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedArtistLimit)
         val url = "https://music.163.com/api/artist/top?limit=$safeLimit&offset=0"
-        val response = JSONObject(readText(url))
+        val response = parseNeteaseApiResponse(readText(url))
         response.optJSONArray("artists")
             ?.toJsonObjects()
             ?.mapNotNull(::parseArtist)
@@ -153,7 +153,7 @@ internal class NeteaseCloudMusicClient(
     suspend fun getBanners(limit: Int): List<OnlineBanner> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedBannerLimit)
         val url = "https://music.163.com/api/v2/banner/get?clientType=pc"
-        val response = JSONObject(readText(url))
+        val response = parseNeteaseApiResponse(readText(url))
         response.optJSONArray("banners")
             ?.toJsonObjects()
             ?.mapIndexedNotNull { index, banner -> parseBanner(banner, index) }
@@ -163,7 +163,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun getPersonalizedPlaylists(limit: Int): List<OnlinePlaylist> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedPlaylistLimit)
-        val response = JSONObject(
+        val response = parseNeteaseApiResponse(
             callWeApi(
                 path = "/personalized/playlist",
                 params = mapOf(
@@ -188,7 +188,7 @@ internal class NeteaseCloudMusicClient(
     suspend fun getToplists(limit: Int): List<OnlinePlaylist> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedChartLimit)
         val url = "https://music.163.com/api/toplist/detail"
-        val response = JSONObject(readText(url))
+        val response = parseNeteaseApiResponse(readText(url))
         response.optJSONArray("list")
             ?.toJsonObjects()
             ?.mapNotNull { playlist ->
@@ -204,7 +204,7 @@ internal class NeteaseCloudMusicClient(
     suspend fun getNewAlbums(limit: Int): List<OnlineAlbum> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedAlbumLimit)
         val url = "https://music.163.com/api/album/new?area=ALL&limit=$safeLimit&offset=0"
-        val response = JSONObject(readText(url))
+        val response = parseNeteaseApiResponse(readText(url))
         response.optJSONArray("albums")
             ?.toJsonObjects()
             ?.mapNotNull(::parseAlbum)
@@ -215,7 +215,7 @@ internal class NeteaseCloudMusicClient(
         val id = artistId.trim().takeIf(String::isNotEmpty) ?: return@withContext emptyList()
         val safeLimit = limit.coerceIn(1, ArtistTopTracksLimit)
         val url = "https://music.163.com/api/artist/${id.urlEncoded()}"
-        val response = JSONObject(readText(url))
+        val response = parseNeteaseApiResponse(readText(url))
         response.optJSONArray("hotSongs")
             ?.toJsonObjects()
             ?.mapNotNull(::parseSong)
@@ -233,7 +233,7 @@ internal class NeteaseCloudMusicClient(
         while (more) {
             val url = "https://music.163.com/api/artist/albums/${id.urlEncoded()}" +
                 "?limit=$ArtistAlbumPageSize&offset=$offset"
-            val response = JSONObject(readText(url))
+            val response = parseNeteaseApiResponse(readText(url))
             val rawAlbums = response.optJSONArray("hotAlbums") ?: break
             val rawCount = rawAlbums.length()
             if (rawCount == 0) {
@@ -272,7 +272,7 @@ internal class NeteaseCloudMusicClient(
     suspend fun getArtistIntroduction(artistId: String): List<OnlineArtistIntroduction> = withContext(AppDispatchers.IO) {
         val id = artistId.trim().takeIf(String::isNotEmpty) ?: return@withContext emptyList()
         val url = "https://music.163.com/api/artist/introduction?id=${id.urlEncoded()}"
-        val response = JSONObject(readText(url))
+        val response = parseNeteaseApiResponse(readText(url))
         buildList {
             response.optNonBlankString("briefDesc")?.let { briefDesc ->
                 add(
@@ -292,7 +292,7 @@ internal class NeteaseCloudMusicClient(
     suspend fun getRecommendedRadioPrograms(limit: Int): List<OnlineTrack> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedRadioTrackLimit)
         val response = runSuspendCatching {
-            JSONObject(readText("https://music.163.com/api/program/recommend/v1?limit=$safeLimit&offset=0"))
+            parseNeteaseApiResponse(readText("https://music.163.com/api/program/recommend/v1?limit=$safeLimit&offset=0"))
         }.getOrNull()
         val recommendedPrograms = response
             ?.optJSONArray("programs")
@@ -302,7 +302,7 @@ internal class NeteaseCloudMusicClient(
         if (recommendedPrograms.isNotEmpty()) {
             return@withContext recommendedPrograms.take(safeLimit)
         }
-        val fallbackResponse = JSONObject(readText("https://music.163.com/api/personalized/djprogram"))
+        val fallbackResponse = parseNeteaseApiResponse(readText("https://music.163.com/api/personalized/djprogram"))
         fallbackResponse.optJSONArray("result")
             ?.toJsonObjects()
             ?.mapNotNull { item -> item.optJSONObject("program") }
@@ -313,7 +313,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun getRecommendedRadios(limit: Int): List<OnlineRadio> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedRadioLimit)
-        val response = JSONObject(readText("https://music.163.com/api/djradio/recommend/v1"))
+        val response = parseNeteaseApiResponse(readText("https://music.163.com/api/djradio/recommend/v1"))
         response.optJSONArray("djRadios")
             ?.toJsonObjects()
             ?.mapNotNull(::parseRadio)
@@ -326,11 +326,7 @@ internal class NeteaseCloudMusicClient(
         val safeLimit = limit.coerceIn(1, RadioTracksLimit)
         val url = "https://music.163.com/api/dj/program/byradio" +
             "?radioId=${id.urlEncoded()}&limit=$safeLimit&offset=0&asc=false"
-        val response = JSONObject(readText(url))
-        val code = response.optInt("code", 200)
-        if (code != 200) {
-            throw IOException("NetEase radio programs unavailable: code $code")
-        }
+        val response = parseNeteaseApiResponse(readText(url))
         response.optJSONArray("programs")
             ?.toJsonObjects()
             ?.mapNotNull(::parseProgramSong)
@@ -341,7 +337,7 @@ internal class NeteaseCloudMusicClient(
     suspend fun getAlbumSongs(albumId: String, limit: Int): List<OnlineTrack> = withContext(AppDispatchers.IO) {
         val id = albumId.trim().takeIf(String::isNotEmpty) ?: return@withContext emptyList()
         val safeLimit = limit.coerceIn(1, AlbumTracksLimit)
-        val response = JSONObject(
+        val response = parseNeteaseApiResponse(
             callWeApi(
                 path = "/v1/album/${id.urlEncoded()}",
                 params = mapOf(
@@ -458,7 +454,7 @@ internal class NeteaseCloudMusicClient(
         if (ids.isEmpty()) {
             return@withContext emptyList()
         }
-        val response = JSONObject(requestSongDetails(ids))
+        val response = parseNeteaseApiResponse(requestSongDetails(ids))
         response.optJSONArray("songs")
             ?.toJsonObjects()
             ?.mapNotNull(::parseSong)
@@ -718,8 +714,10 @@ internal class NeteaseCloudMusicClient(
             }
             val location = getHeaderField("Location")?.takeIf(String::isNotBlank)
                 ?: return@useResponse null
+            val playbackUrl = location.normalizedPlayableUrl()
+                ?: return@useResponse null
             OnlinePlaybackUrl(
-                url = location.normalizedPlayableUrl(),
+                url = playbackUrl,
                 mimeType = "audio/mpeg",
             )
         }

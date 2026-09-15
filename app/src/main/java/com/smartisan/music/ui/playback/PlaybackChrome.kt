@@ -238,7 +238,7 @@ internal fun PlaybackControlButtons(
     repeatMode: Int,
     shuffleEnabled: Boolean,
     controlWidth: Dp,
-    entranceTimeMillis: Float,
+    entranceTimeMillis: () -> Float,
     onRepeatClick: () -> Unit,
     onPreviousClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
@@ -415,24 +415,24 @@ private const val PlaybackControlButtonBaseHeightDp = 87f
 
 @Composable
 private fun Modifier.playbackControlEntrance(
-    timeMillis: Float,
+    timeMillis: () -> Float,
     delayMillis: Int,
     durationMillis: Int,
     offsetY: Dp,
     animateY: Boolean = true,
 ): Modifier {
     val density = LocalDensity.current
-    val progress =
-        playbackEntranceProgress(
-            timeMillis = timeMillis,
-            delayMillis = delayMillis,
-            durationMillis = durationMillis,
-        )
     val offsetYPx =
         with(density) {
             offsetY.roundToPx().toFloat()
         }
     return graphicsLayer {
+        val progress =
+            playbackEntranceProgress(
+                timeMillis = timeMillis(),
+                delayMillis = delayMillis,
+                durationMillis = durationMillis,
+            )
         if (animateY) {
             translationY = (1f - progress) * offsetYPx
         }

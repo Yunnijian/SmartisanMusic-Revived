@@ -255,15 +255,13 @@ internal class LocalAudioLibrary(
                 .toList()
 
         libraryIndexDatabase.runInTransaction {
-            if (existingIndexes.isEmpty()) {
-                libraryIndexDao.deleteAllIndexes()
-            }
             if (nextIndexes.isNotEmpty()) {
                 libraryIndexDao.upsertIndexes(nextIndexes)
             }
             invalidStableKeys.chunked(SqlBindParameterChunkSize).forEach { chunk ->
                 libraryIndexDao.markInvalid(chunk, indexedAt)
             }
+            libraryIndexDao.purgeInvalidBefore(indexedAt - InvalidIndexGraceMillis)
             libraryIndexDao.upsertSnapshot(
                 LibraryIndexSnapshotEntity(
                     snapshotKey = currentSnapshot.storageKey,
@@ -600,6 +598,9 @@ internal class LocalAudioLibrary(
         const val AudioQualityBadgeCue = "cue"
         private const val MediaScannerWaitTimeoutSeconds = 30L
         private const val MediaStoreIdSelectionChunkSize = 500
+        // 失效索引的宽限期：暂时读不到的曲目（存储卸载、扫描抖动）会先软删，
+        // 只有超过宽限期仍未回到 MediaStore 才算真正删除，此时才物理清理。
+        private const val InvalidIndexGraceMillis = 24L * 60L * 60L * 1000L
         private const val SqlBindParameterChunkSize = 900
         private const val ExternalVolumeName = "external"
         private const val MediaStoreFingerprintSeed = 1_125_899_906_842_597L

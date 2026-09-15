@@ -15,6 +15,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+private const val TestLyricsCacheScope = "user:test"
+
 class OnlineCacheBehaviorTest {
 
     @Test
@@ -142,6 +144,7 @@ class OnlineCacheBehaviorTest {
                     wordLyric = "[1000,500](1000,250,0)第一(1250,250,0)句",
                     translatedWordLyric = "[1000,500](1000,500,0)Translated",
                 ),
+                scope = TestLyricsCacheScope,
             )
 
             assertEquals(
@@ -151,8 +154,41 @@ class OnlineCacheBehaviorTest {
                     wordLyric = "[1000,500](1000,250,0)第一(1250,250,0)句",
                     translatedWordLyric = "[1000,500](1000,500,0)Translated",
                 ),
-                cache.get(identity),
+                cache.get(identity, TestLyricsCacheScope),
             )
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun lyricsDiskCachePartitionsEntriesByAccountScope() = runBlocking {
+        val directory = createTempCacheDirectory()
+        try {
+            val cache = OnlineLyricsDiskCache(
+                directory = directory,
+                ttlMs = 60_000L,
+            )
+            val identity = OnlineTrackIdentity(
+                source = OnlineMusicProvider.Netease.sourceId,
+                trackId = "vip-track",
+            )
+
+            cache.put(
+                identity = identity,
+                lyrics = OnlineLyrics(
+                    lyric = "[00:01.00]同一句",
+                    translatedLyric = "Account A translation",
+                ),
+                scope = "user:account-a",
+            )
+
+            assertEquals(
+                "Account A translation",
+                cache.get(identity, "user:account-a")?.translatedLyric,
+            )
+            assertNull(cache.get(identity, "user:account-b"))
+            assertNull(cache.get(identity, "anon"))
         } finally {
             directory.deleteRecursively()
         }
@@ -176,9 +212,10 @@ class OnlineCacheBehaviorTest {
                     lyric = "[00:01.00]旧歌词",
                     translatedLyric = null,
                 ),
+                scope = TestLyricsCacheScope,
             )
 
-            assertNull(expiredWriter.get(identity))
+            assertNull(expiredWriter.get(identity, TestLyricsCacheScope))
         } finally {
             directory.deleteRecursively()
         }
@@ -203,9 +240,10 @@ class OnlineCacheBehaviorTest {
                     lyric = null,
                     translatedLyric = null,
                 ),
+                scope = TestLyricsCacheScope,
             )
 
-            assertNull(cache.get(identity))
+            assertNull(cache.get(identity, TestLyricsCacheScope))
         } finally {
             directory.deleteRecursively()
         }

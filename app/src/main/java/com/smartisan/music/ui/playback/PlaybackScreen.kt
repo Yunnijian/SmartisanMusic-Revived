@@ -48,6 +48,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisan.music.R
 import com.smartisan.music.data.favorite.FavoriteSongsRepository
+import com.smartisan.music.data.playback.PlaybackStatsRepository
 import com.smartisan.music.data.playlist.PlaylistRepository
 import com.smartisan.music.data.settings.PlaybackSettings
 import com.smartisan.music.isExternalAudioLaunchItem
@@ -106,6 +107,10 @@ fun PlaybackScreen(
     val playlistRepository =
         remember(context.applicationContext) {
             PlaylistRepository.getInstance(context.applicationContext)
+        }
+    val playbackStatsRepository =
+        remember(context.applicationContext) {
+            PlaybackStatsRepository.getInstance(context.applicationContext)
         }
     val entranceTimeMillis = remember { Animatable(0f) }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
@@ -168,6 +173,9 @@ fun PlaybackScreen(
                     }
                     runCatching {
                         playlistRepository.removeMediaIdsFromAll(mediaIds)
+                    }
+                    runCatching {
+                        playbackStatsRepository.deleteByIds(mediaIds)
                     }
                     runCatching {
                         controller?.invalidateLibrary()?.await(context)
@@ -853,7 +861,9 @@ fun PlaybackScreen(
                 width = bottomControlsWidth,
                 bottomInset = bottomInset,
                 state = state.copy(volume = volume),
-                entranceTimeMillis = entranceTimeMillis.value,
+                // 与 PlaybackVisualStage 的入场位移一致：进度只在绘制阶段读，
+                // 组合期读动画值会让入场期间整个播放页每帧重组。
+                entranceTimeMillis = { entranceTimeMillis.value },
                 onRepeatClick = {
                     val nextRepeatMode = nextPlaybackRepeatMode(state.repeatMode)
                     controller?.repeatMode = nextRepeatMode

@@ -88,6 +88,16 @@ class PlaybackStatsRepository private constructor(
         }
     }
 
+    suspend fun deleteByIds(mediaIds: Set<String>) {
+        mediaIds
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+            .chunked(PlaybackStatsQueryChunkSize)
+            .forEach { chunk -> playbackStatsDao.deleteByIds(chunk) }
+    }
+
     companion object {
         @Volatile
         private var instance: PlaybackStatsRepository? = null

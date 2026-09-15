@@ -90,6 +90,13 @@ internal interface LibraryIndexDao {
     @Query("UPDATE library_index SET valid = 0, indexedAt = :indexedAt WHERE stableKey IN (:stableKeys)")
     fun markInvalid(stableKeys: List<String>, indexedAt: Long)
 
+    /**
+     * 物理清理超过宽限期仍未回到 MediaStore 的软删行；否则 `valid = 0` 的行会随每次增删永久累积。
+     * 返回删除行数，便于调用方取证。
+     */
+    @Query("DELETE FROM library_index WHERE valid = 0 AND indexedAt < :cutoff")
+    fun purgeInvalidBefore(cutoff: Long): Int
+
     @Query("DELETE FROM library_index")
     fun deleteAllIndexes()
 }

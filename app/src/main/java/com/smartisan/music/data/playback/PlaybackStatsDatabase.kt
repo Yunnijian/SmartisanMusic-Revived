@@ -64,6 +64,10 @@ internal interface PlaybackStatsDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(entity: PlaybackStatsEntity): Long
+
+    /** 曲目从资料库移除后清掉其统计行，避免孤儿行随增删无界累积。 */
+    @Query("DELETE FROM playback_stats WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteByIds(mediaIds: List<String>)
 }
 
 @Database(
@@ -91,7 +95,7 @@ internal abstract class PlaybackStatsDatabase : RoomDatabase() {
             }
         }
 
-        private val Migration1To2 = object : Migration(1, 2) {
+        internal val Migration1To2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE playback_stats ADD COLUMN score INTEGER NOT NULL DEFAULT 0",

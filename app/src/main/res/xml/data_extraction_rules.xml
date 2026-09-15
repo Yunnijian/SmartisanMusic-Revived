@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 31 起的备份/迁移规则，排除项与 backup_rules.xml 对齐：网易云登录态、
+  在线页/歌词缓存与本地资料库的 4 个 Room 库都不参与云备份与设备间直传。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="netease_auth.xml" />
+        <exclude domain="root" path="cache/online_page_cache/" />
+        <exclude domain="root" path="cache/lyrics_cache/" />
+        <exclude domain="database" path="playback_stats.db" />
+        <exclude domain="database" path="library_index.db" />
+        <exclude domain="database" path="user_playlists.db" />
+        <exclude domain="database" path="favorite_songs.db" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="netease_auth.xml" />
+        <exclude domain="root" path="cache/online_page_cache/" />
+        <exclude domain="root" path="cache/lyrics_cache/" />
+        <exclude domain="database" path="playback_stats.db" />
+        <exclude domain="database" path="library_index.db" />
+        <exclude domain="database" path="user_playlists.db" />
+        <exclude domain="database" path="favorite_songs.db" />
+    </device-transfer>
+</data-extraction-rules>

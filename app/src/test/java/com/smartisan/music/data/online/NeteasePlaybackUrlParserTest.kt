@@ -3,6 +3,7 @@ package com.smartisan.music.data.online
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -430,10 +431,13 @@ class NeteasePlaybackUrlParserTest {
     }
 
     @Test
-    fun accountAlbumsResponseRejectsNonSuccessCode() {
-        val albums = parseNeteaseAccountAlbumsResponse("""{"code":301}""")
+    fun accountAlbumsResponseReportsLoginRequiredForNonSuccessCode() {
+        val error = assertThrows(NeteaseApiException::class.java) {
+            parseNeteaseAccountAlbumsResponse("""{"code":301}""")
+        }
 
-        assertTrue(albums.isEmpty())
+        assertEquals(301, error.code)
+        assertEquals(NeteaseApiFailureReason.RequiresLogin, error.reason)
     }
 
     @Test
@@ -468,10 +472,47 @@ class NeteasePlaybackUrlParserTest {
     }
 
     @Test
-    fun accountRadiosResponseRejectsNonSuccessCode() {
-        val radios = parseNeteaseAccountRadiosResponse("""{"code":301}""")
+    fun accountRadiosResponseReportsLoginRequiredForNonSuccessCode() {
+        val error = assertThrows(NeteaseApiException::class.java) {
+            parseNeteaseAccountRadiosResponse("""{"code":301}""")
+        }
 
-        assertTrue(radios.isEmpty())
+        assertEquals(301, error.code)
+        assertEquals(NeteaseApiFailureReason.RequiresLogin, error.reason)
+    }
+
+    @Test
+    fun apiResponseMapsBusinessCodeToFailureReason() {
+        assertEquals(
+            NeteaseApiFailureReason.RiskControl,
+            assertThrows(NeteaseApiException::class.java) {
+                parseNeteaseApiResponse("""{"code":460,"msg":"cheating"}""")
+            }.reason,
+        )
+        assertEquals(
+            NeteaseApiFailureReason.Unknown,
+            assertThrows(NeteaseApiException::class.java) {
+                parseNeteaseApiResponse("""{"code":400}""")
+            }.reason,
+        )
+    }
+
+    @Test
+    fun apiResponseTreatsMissingCodeAsSuccess() {
+        assertEquals(
+            "ok",
+            parseNeteaseApiResponse("""{"data":"ok"}""").optString("data"),
+        )
+    }
+
+    @Test
+    fun playableUrlRejectsNonHttpSchemes() {
+        assertEquals("https://host/song.mp3", "http://host/song.mp3".normalizedPlayableUrl())
+        assertEquals("https://host/song.mp3", "HTTP://host/song.mp3".normalizedPlayableUrl())
+        assertEquals("https://host/song.mp3", "https://host/song.mp3".normalizedPlayableUrl())
+        assertNull("file:///sdcard/song.mp3".normalizedPlayableUrl())
+        assertNull("content://media/external/audio/media/1".normalizedPlayableUrl())
+        assertNull("song.mp3".normalizedPlayableUrl())
     }
 
     @Test

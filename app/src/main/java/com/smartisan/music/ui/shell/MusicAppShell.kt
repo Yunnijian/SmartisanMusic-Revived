@@ -39,6 +39,7 @@ import com.smartisan.music.data.library.LibraryExclusionsStore
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
 import com.smartisan.music.data.online.onlineTrackIdentityOrNull
+import com.smartisan.music.data.playback.PlaybackStatsRepository
 import com.smartisan.music.data.playlist.PlaylistRepository
 import com.smartisan.music.data.settings.ArtistSettings
 import com.smartisan.music.data.settings.ArtistSettingsStore
@@ -128,6 +129,8 @@ private fun MusicAppShellContent(
         remember(appContext) { LovedSongsCloudSync.getInstance(appContext) }
     val playlistRepository =
         remember(appContext) { PlaylistRepository.getInstance(appContext) }
+    val playbackStatsRepository =
+        remember(appContext) { PlaybackStatsRepository.getInstance(appContext) }
     val libraryExclusionsStore =
         remember(appContext) { LibraryExclusionsStore(appContext) }
     val playbackSettingsStore =
@@ -260,6 +263,7 @@ private fun MusicAppShellContent(
             }
             favoriteRepository.removeAll(mediaIds)
             playlistRepository.removeMediaIdsFromAll(mediaIds)
+            playbackStatsRepository.deleteByIds(mediaIds)
             runCatching {
                 controller?.invalidateLibrary()?.await(context)
             }

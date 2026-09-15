@@ -1298,6 +1298,7 @@ internal class NeteaseOnlineMusicRepository(
     }
 
     private suspend fun cachedLyrics(identity: OnlineTrackIdentity): OnlineLyrics {
+        val scope = authCacheScope()
         val lyricsKey = cacheKey("lyrics", identity.trackId)
         NeteaseOnlineMemoryCache.getFresh<OnlineLyrics>(
             key = lyricsKey,
@@ -1311,7 +1312,7 @@ internal class NeteaseOnlineMusicRepository(
             return OnlineLyrics(lyric = null, translatedLyric = null)
         }
 
-        lyricsDiskCache?.get(identity)
+        lyricsDiskCache?.get(identity, scope)
             ?.takeIf(OnlineLyrics::hasContent)
             ?.let { lyrics ->
                 NeteaseOnlineMemoryCache.put(lyricsKey, lyrics)
@@ -1321,7 +1322,7 @@ internal class NeteaseOnlineMusicRepository(
         return client.getLyrics(identity.trackId).also { lyrics ->
             if (lyrics.hasContent()) {
                 NeteaseOnlineMemoryCache.put(lyricsKey, lyrics)
-                lyricsDiskCache?.put(identity, lyrics)
+                lyricsDiskCache?.put(identity, lyrics, scope)
             } else {
                 NeteaseOnlineMemoryCache.put(emptyLyricsKey, true)
             }

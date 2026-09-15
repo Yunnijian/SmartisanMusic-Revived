@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 30 及以下的 Auto Backup 规则。默认备份会带上 shared_prefs、databases 与 cache，
+  这里排除网易云登录态（加密 Prefs）、在线页/歌词缓存与本地资料库的 4 个 Room 库，
+  避免凭据与账号相关内容跟着备份落到其它设备。
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="netease_auth.xml" />
+    <exclude domain="root" path="cache/online_page_cache/" />
+    <exclude domain="root" path="cache/lyrics_cache/" />
+    <exclude domain="database" path="playback_stats.db" />
+    <exclude domain="database" path="library_index.db" />
+    <exclude domain="database" path="user_playlists.db" />
+    <exclude domain="database" path="favorite_songs.db" />
+</full-backup-content>

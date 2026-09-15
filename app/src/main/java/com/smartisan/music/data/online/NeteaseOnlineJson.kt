@@ -7,6 +7,7 @@ import androidx.media3.common.MediaMetadata
 import com.smartisan.music.playback.LocalAudioLibrary
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.net.URLEncoder
 import java.util.Locale
 
@@ -14,21 +15,58 @@ private const val CompletePlaylistTrackRequestLimit = 100_000
 private const val MinSongDurationForPreviewDetectionMs = 60_000L
 private const val MaxKnownPreviewDurationMs = 45_000L
 private const val MaxPreviewDurationRatio = 0.5
+private const val NeteaseApiSuccessCode = 200
+private const val NeteaseApiLoginRequiredCode = 301
+
+/** 网易云风控拦截的业务码（HTTP 仍为 200）。 */
+private val NeteaseApiRiskControlCodes = setOf(460)
+
+/** 业务码失败分类，供上层区分「请先登录」/「风控拦截」/通用失败。 */
+internal enum class NeteaseApiFailureReason {
+    RequiresLogin,
+    RiskControl,
+    Unknown,
+}
+
+internal class NeteaseApiException(
+    val code: Int,
+    val reason: NeteaseApiFailureReason,
+) : IOException("NetEase API failed: code=$code ($reason)")
+
+/**
+ * 解析并校验响应体的业务码。
+ *
+ * 网易云的登录态失效与风控都是 HTTP 200 + JSON `code`（如 301 / 460），只校验 HTTP 状态会把
+ * 这类响应当成空结果，上层只能显示空白列表。缺省 `code` 时按成功处理：部分老接口不返回该字段。
+ */
+internal fun parseNeteaseApiResponse(response: String): JSONObject {
+    return requireNeteaseApiSuccess(JSONObject(response))
+}
+
+internal fun requireNeteaseApiSuccess(root: JSONObject): JSONObject {
+    val code = root.optInt("code", NeteaseApiSuccessCode)
+    if (code != NeteaseApiSuccessCode) {
+        throw NeteaseApiException(code, neteaseApiFailureReason(code))
+    }
+    return root
+}
+
+private fun neteaseApiFailureReason(code: Int): NeteaseApiFailureReason {
+    return when (code) {
+        NeteaseApiLoginRequiredCode -> NeteaseApiFailureReason.RequiresLogin
+        in NeteaseApiRiskControlCodes -> NeteaseApiFailureReason.RiskControl
+        else -> NeteaseApiFailureReason.Unknown
+    }
+}
 
 internal fun parseNeteaseAccountProfileResponse(response: String): NeteaseAccountProfile? {
-    val root = JSONObject(response)
-    if (root.optInt("code", -1) != 200) {
-        return null
-    }
+    val root = requireNeteaseApiSuccess(JSONObject(response))
     val profile = root.optJSONObject("profile") ?: return null
     return parseNeteaseAccountProfileJson(profile.toString())
 }
 
 internal fun parseNeteaseUserPlaylistsResponse(response: String): List<NeteasePlaylistSummary> {
-    val root = JSONObject(response)
-    if (root.has("code") && root.optInt("code", 200) != 200) {
-        return emptyList()
-    }
+    val root = requireNeteaseApiSuccess(JSONObject(response))
     return root.optJSONArray("playlist")
         ?.toJsonObjects()
         ?.mapNotNull(::parseNeteasePlaylistSummary)
@@ -36,10 +74,7 @@ internal fun parseNeteaseUserPlaylistsResponse(response: String): List<NeteasePl
 }
 
 internal fun parseNeteaseAccountAlbumsResponse(response: String): List<OnlineAlbum> {
-    val root = JSONObject(response)
-    if (root.has("code") && root.optInt("code", 200) != 200) {
-        return emptyList()
-    }
+    val root = requireNeteaseApiSuccess(JSONObject(response))
     val albums = root.optJSONArray("playlist")
         ?: root.optJSONObject("data")
             ?.optJSONObject("mainCollectInfo")
@@ -54,10 +89,7 @@ internal fun parseNeteaseAccountAlbumsResponse(response: String): List<OnlineAlb
 }
 
 internal fun parseNeteaseAccountRadiosResponse(response: String): List<OnlineRadio> {
-    val root = JSONObject(response)
-    if (root.has("code") && root.optInt("code", 200) != 200) {
-        return emptyList()
-    }
+    val root = requireNeteaseApiSuccess(JSONObject(response))
     val radios = root.optJSONArray("djRadios")
         ?: root.optJSONObject("data")?.optJSONArray("djRadios")
         ?: root.optJSONObject("data")?.optJSONArray("radios")
@@ -69,9 +101,7 @@ internal fun parseNeteaseAccountRadiosResponse(response: String): List<OnlineRad
 }
 
 internal fun parseNeteasePlaylistDetailResponse(response: String): NeteasePlaylistDetail {
-    val root = JSONObject(response)
-    val code = root.optInt("code", 200)
-    require(code == 200) { "NetEase playlist detail unavailable: code $code" }
+    val root = requireNeteaseApiSuccess(JSONObject(response))
     val playlist = root.optJSONObject("playlist")
         ?: error("NetEase playlist detail response missing playlist")
     return NeteasePlaylistDetail(
@@ -467,15 +497,16 @@ internal fun parseNeteasePlaybackUrlResponse(
         } else {
             NeteasePlaybackParseResult(NeteasePlaybackParseStatus.Unavailable)
         }
-    return OnlinePlaybackUrl(
-        url = streamUrl.normalizedPlayableUrl(),
-        mimeType = item.optNonBlankString("type")?.toAudioMimeType(),
-    ).let { playbackUrl ->
-        NeteasePlaybackParseResult(
-            status = NeteasePlaybackParseStatus.Success,
-            playbackUrl = playbackUrl,
-        )
-    }
+    val playableUrl = streamUrl.normalizedPlayableUrl()
+        ?: return NeteasePlaybackParseResult(NeteasePlaybackParseStatus.Unavailable)
+    return NeteasePlaybackParseResult(
+        status = NeteasePlaybackParseStatus.Success,
+        playbackUrl =
+            OnlinePlaybackUrl(
+                url = playableUrl,
+                mimeType = item.optNonBlankString("type")?.toAudioMimeType(),
+            ),
+    )
 }
 
 internal fun parseNeteaseAccountActionResponse(response: String): NeteaseAccountActionResult {
@@ -687,12 +718,26 @@ internal fun String.urlEncoded(): String {
     return URLEncoder.encode(this, Charsets.UTF_8.name())
 }
 
-internal fun String.normalizedPlayableUrl(): String {
-    return replaceFirst("http://", "https://")
+/**
+ * 归一化播放/封面地址：只放行 http(s)，并把 http 大小写不敏感地升级为 https。
+ *
+ * 该值会直接交给 `DefaultDataSource`，因此非 http(s) 的 scheme（`file://`、`content://` 等）
+ * 一律返回 null，避免响应被篡改后把本地路径喂给数据源解析。
+ */
+internal fun String.normalizedPlayableUrl(): String? {
+    val schemeEndIndex = indexOf(':')
+    if (schemeEndIndex <= 0) {
+        return null
+    }
+    return when (substring(0, schemeEndIndex).lowercase(Locale.ROOT)) {
+        "http" -> "https${substring(schemeEndIndex)}"
+        "https" -> this
+        else -> null
+    }
 }
 
-private fun String.normalizedArtworkUrl(): String {
-    val httpsUrl = normalizedPlayableUrl()
+private fun String.normalizedArtworkUrl(): String? {
+    val httpsUrl = normalizedPlayableUrl() ?: return null
     if (httpsUrl.contains("?param=")) {
         return httpsUrl
     }

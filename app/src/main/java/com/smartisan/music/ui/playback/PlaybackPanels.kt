@@ -97,7 +97,7 @@ internal fun PlaybackBottomControls(
     width: Dp,
     bottomInset: Dp,
     state: PlaybackScreenState,
-    entranceTimeMillis: Float,
+    entranceTimeMillis: () -> Float,
     onRepeatClick: () -> Unit,
     onPreviousClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
@@ -107,12 +107,6 @@ internal fun PlaybackBottomControls(
 ) {
     val density = LocalDensity.current
     val bottomSpacing = playbackBottomControlsBottomSpacing(bottomInset)
-    val volumeEntranceProgress =
-        playbackEntranceProgress(
-            timeMillis = entranceTimeMillis,
-            delayMillis = PlaybackVolumeEntranceDelayMillis,
-            durationMillis = PlaybackControlEntranceDurationMillis,
-        )
     val controlEntranceOffsetPx =
         with(density) {
             PlaybackControlEntranceOffset.roundToPx().toFloat()
@@ -142,6 +136,12 @@ internal fun PlaybackBottomControls(
             PlaybackVolumeBar(
                 modifier =
                     Modifier.padding(top = PlaybackBottomControlsVolumeTopPadding).graphicsLayer {
+                        val volumeEntranceProgress =
+                            playbackEntranceProgress(
+                                timeMillis = entranceTimeMillis(),
+                                delayMillis = PlaybackVolumeEntranceDelayMillis,
+                                durationMillis = PlaybackControlEntranceDurationMillis,
+                            )
                         translationY = (1f - volumeEntranceProgress) * controlEntranceOffsetPx
                     },
                 width = width,
