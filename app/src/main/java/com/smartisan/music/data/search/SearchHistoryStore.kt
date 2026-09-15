@@ -1,27 +1,35 @@
 package com.smartisan.music.data.search
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import java.io.IOException
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 
 private const val SearchHistoryStoreName = "search_history"
 private const val MaxHistoryEntries = 10
 
 private val Context.searchHistoryDataStore by preferencesDataStore(
     name = SearchHistoryStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
 class SearchHistoryStore(
     private val context: Context,
 ) {
     val history: Flow<List<String>> = context.searchHistoryDataStore.data
+        .catch { error ->
+            if (error is IOException) emit(emptyPreferences()) else throw error
+        }
         .map { preferences ->
             decodeHistoryEntries(preferences[SearchHistoryEntriesKey].orEmpty())
         }

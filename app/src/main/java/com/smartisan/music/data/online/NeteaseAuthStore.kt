@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONObject
 
 private const val NeteaseAuthPrefsName = "netease_auth"
@@ -66,6 +67,7 @@ internal class NeteaseAuthStore(context: Context) {
             .putLong(NeteaseAuthSavedAtKey, savedAt)
             .remove(NeteaseAuthProfileJsonKey)
             .apply()
+        bumpAuthScopeRevision()
         return true
     }
 
@@ -85,6 +87,23 @@ internal class NeteaseAuthStore(context: Context) {
             .remove(NeteaseAuthSavedAtKey)
             .remove(NeteaseAuthProfileJsonKey)
             .apply()
+        bumpAuthScopeRevision()
+    }
+
+    companion object {
+        /**
+         * 账号态写入序号：进程级单调递增。凭据存在 EncryptedSharedPreferences 后面，
+         * 每次 [load] 都要 Keystore 解密 + JSON 解析，而缓存键构造（账号缓存域）发生在主线程调用路径上；
+         * [NeteaseOnlineMusicRepository] 用本序号判定自己缓存的账号域快照是否还新鲜（读序号只是一次 get）。
+         * 只有会改变登录态/账号的写入（[saveCookies]、[clear]）才递增。
+         */
+        private val authScopeRevision = AtomicLong(0L)
+
+        internal fun authScopeRevision(): Long = authScopeRevision.get()
+
+        private fun bumpAuthScopeRevision() {
+            authScopeRevision.incrementAndGet()
+        }
     }
 }
 

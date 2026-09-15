@@ -39,6 +39,9 @@ internal fun SmartisanSwipeDeleteRow(
     content: @Composable () -> Unit,
 ) {
     val shift = remember { Animatable(0f) }
+    // 组合期只关心"是否已偏移"这个布尔量：derivedStateOf 会在结果翻转时才通知重组，
+    // 拖拽/回弹期间 shift 每帧变化但不再带动整行重组。
+    val shiftVisible by remember { derivedStateOf { shift.value > 0f } }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val resources = LocalResources.current
@@ -147,7 +150,7 @@ internal fun SmartisanSwipeDeleteRow(
             }
         }
     ) {
-        if (shift.value > 0f) {
+        if (shiftVisible) {
             val interaction = remember { MutableInteractionSource() }
             val pressed by interaction.collectSmartisanPressedAsState()
             Box(Modifier.matchParentSize()) {

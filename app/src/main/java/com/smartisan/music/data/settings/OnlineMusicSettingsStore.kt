@@ -1,11 +1,15 @@
 package com.smartisan.music.data.settings
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -14,6 +18,7 @@ private const val OnlineMusicSettingsStoreName = "online_music_settings"
 
 private val Context.onlineMusicSettingsDataStore by preferencesDataStore(
     name = OnlineMusicSettingsStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
 data class OnlineMusicSettings(
@@ -66,11 +71,19 @@ class OnlineMusicSettingsStore(
 ) {
 
     val settings: Flow<OnlineMusicSettings> = context.onlineMusicSettingsDataStore.data
+        .catch { error ->
+            if (error is IOException) emit(emptyPreferences()) else throw error
+        }
         .map(Preferences::toOnlineMusicSettings)
         .distinctUntilChanged()
 
     suspend fun readSettings(): OnlineMusicSettings {
-        return context.onlineMusicSettingsDataStore.data.first().toOnlineMusicSettings()
+        return context.onlineMusicSettingsDataStore.data
+            .catch { error ->
+                if (error is IOException) emit(emptyPreferences()) else throw error
+            }
+            .first()
+            .toOnlineMusicSettings()
     }
 
     suspend fun setNeteasePlaybackQuality(quality: NeteaseAudioQuality) {

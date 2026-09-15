@@ -1,10 +1,12 @@
 package com.smartisan.music.data.settings
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -13,15 +15,19 @@ import com.smartisan.music.ui.navigation.MusicDestination
 import com.smartisan.music.ui.navigation.NavigationLayout
 import com.smartisan.music.ui.navigation.navigationLayoutFromHiddenTabs
 import com.smartisan.music.ui.navigation.normalizedNavigationLayout
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 private const val NavigationSettingsStoreName = "navigation_settings"
 private const val RouteSeparator = "|"
 
-private val Context.navigationSettingsDataStore by
-    preferencesDataStore(name = NavigationSettingsStoreName)
+private val Context.navigationSettingsDataStore by preferencesDataStore(
+    name = NavigationSettingsStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
 
 data class NavigationSettings(
     val layout: NavigationLayout = NavigationLayout(),
@@ -33,6 +39,9 @@ class NavigationSettingsStore(private val context: Context) {
 
     val settings: Flow<NavigationSettings> =
         context.navigationSettingsDataStore.data
+            .catch { error ->
+                if (error is IOException) emit(emptyPreferences()) else throw error
+            }
             .map(Preferences::toNavigationSettings)
             .distinctUntilChanged()
 

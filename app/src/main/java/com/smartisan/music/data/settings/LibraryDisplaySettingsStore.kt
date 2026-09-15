@@ -1,12 +1,16 @@
 package com.smartisan.music.data.settings
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.smartisan.music.ui.album.AlbumViewMode
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -14,6 +18,7 @@ private const val LibraryDisplaySettingsStoreName = "library_display_settings"
 
 private val Context.libraryDisplaySettingsDataStore by preferencesDataStore(
     name = LibraryDisplaySettingsStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
 data class LibraryDisplaySettings(
@@ -26,6 +31,9 @@ class LibraryDisplaySettingsStore(
 ) {
 
     val settings: Flow<LibraryDisplaySettings> = context.libraryDisplaySettingsDataStore.data
+        .catch { error ->
+            if (error is IOException) emit(emptyPreferences()) else throw error
+        }
         .map { preferences ->
             LibraryDisplaySettings(
                 albumViewMode = preferences[AlbumViewModeKey].toAlbumViewMode(),

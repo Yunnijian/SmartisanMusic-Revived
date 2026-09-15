@@ -28,11 +28,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -392,22 +394,29 @@ private fun PlaybackCoverPage(
         needleLiftHeldAfterSeek = false
     }
 
-    val needleLiftFraction by
+    val needleLiftFraction =
         animateFloatAsState(
             targetValue = if (needleSeekDragging || needleLiftHeldAfterSeek) 1f else 0f,
             animationSpec = tween(if (needleSeekDragging || needleLiftHeldAfterSeek) 125 else 250),
             label = "needleLiftFraction",
         )
 
-    LaunchedEffect(mediaId, targetNeedleRotation, needleSeekDragging) {
-        if (needleSeekDragging) {
-            needleAnimatable.snapTo(targetNeedleRotation)
-        } else {
-            needleAnimatable.animateTo(targetNeedleRotation, animationSpec = tween(220))
+    // 播放位置约每 250ms 推进一次，与 tween(220) 同量级：位置派生目标不进 key（否则每次位置更新
+    // 都会重建协程并取消在途补间），只按切歌/拖拽态建一次协程，目标变化交给 snapshotFlow 追踪。
+    val latestTargetNeedleRotation by rememberUpdatedState(targetNeedleRotation)
+    LaunchedEffect(mediaId, needleSeekDragging) {
+        snapshotFlow { latestTargetNeedleRotation }.collect { target ->
+            if (needleSeekDragging) {
+                needleAnimatable.snapTo(target)
+            } else {
+                needleAnimatable.animateTo(target, animationSpec = tween(220))
+            }
         }
     }
 
-    val needleRotation = needleAnimatable.value
+    // 组合期不读动画值：以 State 形式下传到绘制阶段（Canvas / graphicsLayer）再读 .value，
+    // 否则补间的每一帧都会重组整棵封面页。
+    val needleRotation = remember { derivedStateOf { needleAnimatable.value } }
     val density = LocalDensity.current
     val densityPxPerDp = density.density
     var discSize by remember { mutableStateOf(IntSize.Zero) }
@@ -416,7 +425,6 @@ private fun PlaybackCoverPage(
     val scratchAvailable by rememberUpdatedState(scratchEnabled && durationMs > 0L)
     val needleSeekAvailable by
         rememberUpdatedState(scratchEnabled && hasMediaItem && durationMs > 0L)
-    val latestNeedleRotation by rememberUpdatedState(needleRotation)
     val latestPositionMs by rememberUpdatedState(currentPositionMs)
     val latestDurationMs by rememberUpdatedState(durationMs)
     val latestDiscScratchStart by rememberUpdatedState(onDiscScratchStart)
@@ -465,7 +473,7 @@ private fun PlaybackCoverPage(
                                         containerSize = size,
                                         densityPxPerDp = densityPxPerDp,
                                         turntableScale = scale,
-                                        rotationDegrees = latestNeedleRotation,
+                                        rotationDegrees = needleAnimatable.value,
                                     )
                             val withinScratchRegion =
                                 scratchAvailable &&
@@ -652,7 +660,7 @@ private fun PlaybackCoverPage(
                                     val initialPosition = down.position
                                     var maxMoveDistance = 0f
                                     var needleRotationDegrees =
-                                        latestNeedleRotation.coerceIn(
+                                        needleAnimatable.value.coerceIn(
                                             NeedleRestRotationDegrees,
                                             NeedlePlaybackEndRotationDegrees,
                                         )
@@ -954,8 +962,8 @@ private data class OriginalNeedleLayoutPx(
 
 @Composable
 private fun OriginalNeedleStack(
-    needleRotation: Float,
-    needleLiftFraction: Float,
+    needleRotation: State<Float>,
+    needleLiftFraction: State<Float>,
     scale: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -983,9 +991,11 @@ private fun OriginalNeedleStack(
     val top = rememberSmartisanDrawablePainter(R.drawable.playing_stylus_lp_top_original)
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Canvas(modifier) {
+        val rotationDegrees = needleRotation.value
+        val liftFraction = needleLiftFraction.value
         val needleSize = Size(layout.needleWidthPx.toFloat(), layout.needleHeightPx.toFloat())
         val pivot = Offset(layout.needlePivotXPx, layout.needlePivotYPx)
-        val liftedScaleY = 1f - ((1f - NeedleLiftScaleY) * needleLiftFraction)
+        val liftedScaleY = 1f - ((1f - NeedleLiftScaleY) * liftFraction)
         fun left(width: Int, margin: Int): Float =
             if (rtl) margin.toFloat() else size.width - width - margin
         fun androidx.compose.ui.graphics.drawscope.DrawScope.layer(
@@ -1026,7 +1036,7 @@ private fun OriginalNeedleStack(
             shadow,
             layout.needleWidthPx,
             layout.needleShadowRightMarginPx,
-            needleRotation - NeedleLiftShadowRotationOffsetDegrees * needleLiftFraction,
+            rotationDegrees - NeedleLiftShadowRotationOffsetDegrees * liftFraction,
             liftedScaleY,
             fit = 1,
         )
@@ -1034,7 +1044,7 @@ private fun OriginalNeedleStack(
             needle,
             layout.needleWidthPx,
             layout.needleRightMarginPx,
-            needleRotation,
+            rotationDegrees,
             liftedScaleY,
         )
         layer(top, layout.needleTopWidthPx, layout.needleRightMarginPx, fit = -1)

@@ -1,14 +1,18 @@
 package com.smartisan.music.playback
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.media3.common.Player
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
@@ -19,8 +23,10 @@ private const val MediaIdSeparator = "\n"
 private const val QueueItemSeparator = "\n"
 private const val QueueItemFieldSeparator = "\t"
 
-private val Context.playbackSessionStateDataStore by
-    preferencesDataStore(name = PlaybackSessionStateStoreName)
+private val Context.playbackSessionStateDataStore by preferencesDataStore(
+    name = PlaybackSessionStateStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
 
 internal data class PlaybackSessionSnapshot(
     val mediaIds: List<String> = emptyList(),
@@ -47,22 +53,28 @@ internal data class PlaybackQueueSnapshotItem(
 internal class PlaybackSessionStateStore(private val context: Context) {
 
     val snapshot: Flow<PlaybackSessionSnapshot> =
-        context.playbackSessionStateDataStore.data.map { preferences ->
-            val mediaIds = preferences[MediaIdsKey].orEmpty().decodeMediaIds()
-            PlaybackSessionSnapshot(
-                mediaIds = mediaIds,
-                queueItems =
-                    preferences[QueueItemsKey]
-                        ?.decodeQueueItemsFromStore()
-                        ?.takeIf(List<PlaybackQueueSnapshotItem>::isNotEmpty)
-                        ?: mediaIds.map { mediaId -> PlaybackQueueSnapshotItem(mediaId = mediaId) },
-                currentMediaId = preferences[CurrentMediaIdKey]?.takeIf(String::isNotBlank),
-                currentIndex = preferences[CurrentIndexKey] ?: 0,
-                positionMs = preferences[PositionMsKey] ?: 0L,
-                repeatMode = preferences[RepeatModeKey] ?: Player.REPEAT_MODE_OFF,
-                shuffleModeEnabled = preferences[ShuffleModeEnabledKey] ?: false,
-            )
-        }
+        context.playbackSessionStateDataStore.data
+            .catch { error ->
+                if (error is IOException) emit(emptyPreferences()) else throw error
+            }
+            .map { preferences ->
+                val mediaIds = preferences[MediaIdsKey].orEmpty().decodeMediaIds()
+                PlaybackSessionSnapshot(
+                    mediaIds = mediaIds,
+                    queueItems =
+                        preferences[QueueItemsKey]
+                            ?.decodeQueueItemsFromStore()
+                            ?.takeIf(List<PlaybackQueueSnapshotItem>::isNotEmpty)
+                            ?: mediaIds.map { mediaId ->
+                                PlaybackQueueSnapshotItem(mediaId = mediaId)
+                            },
+                    currentMediaId = preferences[CurrentMediaIdKey]?.takeIf(String::isNotBlank),
+                    currentIndex = preferences[CurrentIndexKey] ?: 0,
+                    positionMs = preferences[PositionMsKey] ?: 0L,
+                    repeatMode = preferences[RepeatModeKey] ?: Player.REPEAT_MODE_OFF,
+                    shuffleModeEnabled = preferences[ShuffleModeEnabledKey] ?: false,
+                )
+            }
 
     suspend fun load(): PlaybackSessionSnapshot = snapshot.first()
 

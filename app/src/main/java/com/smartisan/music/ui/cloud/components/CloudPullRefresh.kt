@@ -111,13 +111,21 @@ internal fun CloudPullRefresh(
     // 收起补转期间的帧号；0 表示不在补转阶段。
     var spinOutFrame by remember { mutableIntStateOf(0) }
 
+    // 帧资源 id 一次性解析：frameRes 在下拉/补转期间每帧都会被调用，
+    // 每次 getIdentifier + String.format 是纯开销。
+    val frames =
+        remember(context) {
+            IntArray(MailPullFrameTotal) { index ->
+                context.resources.getIdentifier(
+                    String.format("mail_pull_refresh_%02d", index + 1),
+                    "drawable",
+                    context.packageName,
+                )
+            }
+        }
+
     fun frameRes(index: Int): Int {
-        val clamped = index.coerceIn(1, MailPullFrameTotal)
-        return context.resources.getIdentifier(
-            String.format("mail_pull_refresh_%02d", clamped),
-            "drawable",
-            context.packageName,
-        )
+        return frames[index.coerceIn(1, MailPullFrameTotal) - 1]
     }
 
     fun handleRelease() {

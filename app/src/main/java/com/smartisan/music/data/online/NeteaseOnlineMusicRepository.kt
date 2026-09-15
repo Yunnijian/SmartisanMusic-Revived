@@ -45,6 +45,23 @@ internal const val OnlinePlaybackUrlMaxAgeMs = 15 * 60 * 1000L
 internal const val NeteaseLoginCookieName = "MUSIC_U"
 
 /**
+ * [runCatching] 的协程安全替代：只把非取消异常收敛成失败结果，
+ * [CancellationException] 原样重抛，避免取消信号被吞后继续执行后续写缓存等副作用。
+ *
+ * 包裹 suspend 调用（或 [kotlinx.coroutines.withContext] 内的阻塞网络调用）时一律用它；
+ * 纯 CPU 解析（如 JSONObject 构造）继续用 runCatching 即可。
+ */
+internal inline fun <T> runSuspendCatching(block: () -> T): Result<T> {
+    return try {
+        Result.success(block())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Result.failure(e)
+    }
+}
+
+/**
  * 播放地址解析链路用到的缓存命名空间。
  * 登录/换号中止旧会话在途加载时必须整体跳过这些 key：它们正被播放链路 await，
  * 取消会直接导致本次播放失败。
@@ -80,6 +97,15 @@ internal class NeteaseOnlineMusicRepository(
     private val authScopeLock = Any()
     private var lastObservedAuthCacheScope: String? = null
 
+    /**
+     * 账号缓存域的内存快照与生成它时的 [NeteaseAuthStore] 写入序号。
+     *
+     * 缓存键构造（search/featured 取键）发生在主线程调用路径上，而 `authStore.load()` 每次都要
+     * Keystore 解密 + JSON 解析；序号未变时直接复用快照，只有登录/登出等写清除才重新加载。
+     */
+    private var authScopeSnapshot: String? = null
+    private var authScopeSnapshotRevision: Long = -1L
+
     constructor(context: Context) : this(
         authStore = NeteaseAuthStore(context.applicationContext),
         playbackQualityProvider = {
@@ -109,16 +135,27 @@ internal class NeteaseOnlineMusicRepository(
         return "netease:${authCacheScope()}:$namespace"
     }
 
-    private fun authCacheScope(): String {
+    private fun loadAuthCacheScope(): String {
         val state = authStore?.load()
-        val scope = when {
+        return when {
             state == null || !state.isLoggedIn -> "anon"
             else -> "user:${state.savedAt}:${state.cookies[NeteaseLoginCookieName]?.hashCode() ?: 0}"
         }
-        val previousScope = synchronized(authScopeLock) {
+    }
+
+    private fun authCacheScope(): String {
+        val (scope, previousScope) = synchronized(authScopeLock) {
+            val revision = NeteaseAuthStore.authScopeRevision()
+            val currentScope =
+                authScopeSnapshot
+                    ?.takeIf { authScopeSnapshotRevision == revision }
+                    ?: loadAuthCacheScope().also { loadedScope ->
+                        authScopeSnapshot = loadedScope
+                        authScopeSnapshotRevision = revision
+                    }
             val previous = lastObservedAuthCacheScope
-            lastObservedAuthCacheScope = scope
-            if (previous != null && previous != scope) previous else null
+            lastObservedAuthCacheScope = currentScope
+            currentScope to previous?.takeIf { it != currentScope }
         }
         if (previousScope != null) {
             onAccountCacheScopeChanged(previousScope)
@@ -679,10 +716,10 @@ internal class NeteaseOnlineMusicRepository(
             codec = OnlinePageCacheCodecs.RadioHome,
         ) {
             OnlineRadioHome(
-                tracks = runCatching {
+                tracks = runSuspendCatching {
                     featuredRadioTracks()
                 }.getOrDefault(emptyList()),
-                radios = runCatching {
+                radios = runSuspendCatching {
                     featuredRadios()
                 }.getOrDefault(emptyList()),
             )
@@ -731,7 +768,7 @@ internal class NeteaseOnlineMusicRepository(
             key = cacheKey("account:profile"),
             ttlMs = NeteaseAccountCacheTtlMs,
         ) {
-            val profile = runCatching {
+            val profile = runSuspendCatching {
                 client.getCurrentUserProfile()
             }.getOrNull()
             if (profile != null) {
@@ -778,7 +815,7 @@ internal class NeteaseOnlineMusicRepository(
             ttlMs = NeteaseFeaturedCacheTtlMs,
             codec = OnlinePageCacheCodecs.Tracks,
         ) {
-            val result = runCatching {
+            val result = runSuspendCatching {
                 client.getDailyRecommendedSongs(limit = limit)
             }.getOrDefault(NeteaseDailyRecommendedTracksResult(NeteaseAccountActionStatus.Failed))
             result.tracks.takeIf { result.status == NeteaseAccountActionStatus.Success }
@@ -791,13 +828,13 @@ internal class NeteaseOnlineMusicRepository(
             return null
         }
         val profile = currentUserProfile() ?: state.profile ?: return null
-        val result = runCatching {
+        val result = runSuspendCatching {
             client.getUserLikedTrackIds(profile.userId)
         }.getOrDefault(NeteaseLikedTrackIdsResult(NeteaseAccountActionStatus.Failed))
         if (result.status == NeteaseAccountActionStatus.Success && result.trackIds.isNotEmpty()) {
             return result.trackIds
         }
-        val playlistTrackIds = runCatching {
+        val playlistTrackIds = runSuspendCatching {
             currentUserLikedPlaylistTrackIds(profile.userId)
         }.getOrNull()
         return resolveNeteaseLikedTrackIds(result, playlistTrackIds)
@@ -821,7 +858,7 @@ internal class NeteaseOnlineMusicRepository(
         if (state?.isLoggedIn != true) {
             return NeteaseAccountActionResult(NeteaseAccountActionStatus.RequiresLogin, code = 301)
         }
-        return runCatching {
+        return runSuspendCatching {
             client.setSongLiked(
                 trackId = normalizedTrackId,
                 liked = liked,
@@ -850,7 +887,7 @@ internal class NeteaseOnlineMusicRepository(
         if (state?.isLoggedIn != true) {
             return NeteaseAccountActionResult(NeteaseAccountActionStatus.RequiresLogin, code = 301)
         }
-        return runCatching {
+        return runSuspendCatching {
             client.manipulatePlaylistTracks(
                 playlistId = normalizedPlaylistId,
                 trackIds = normalizedTrackIds,
@@ -879,7 +916,7 @@ internal class NeteaseOnlineMusicRepository(
         if (state?.isLoggedIn != true) {
             return NeteaseAccountActionResult(NeteaseAccountActionStatus.RequiresLogin, code = 301)
         }
-        return runCatching {
+        return runSuspendCatching {
             client.manipulatePlaylistTracks(
                 playlistId = normalizedPlaylistId,
                 trackIds = normalizedTrackIds,
@@ -901,7 +938,7 @@ internal class NeteaseOnlineMusicRepository(
         if (state?.isLoggedIn != true) {
             return NeteaseAccountActionResult(NeteaseAccountActionStatus.RequiresLogin, code = 301)
         }
-        return runCatching {
+        return runSuspendCatching {
             client.deletePlaylist(normalizedPlaylistId)
         }.getOrDefault(NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed))
             .also { result ->
@@ -919,7 +956,7 @@ internal class NeteaseOnlineMusicRepository(
         if (state?.isLoggedIn != true) {
             return OnlineAccountPlaylistCreateResult(NeteaseAccountActionStatus.RequiresLogin, code = 301)
         }
-        return runCatching {
+        return runSuspendCatching {
             client.createPlaylist(normalizedName)
         }.getOrDefault(OnlineAccountPlaylistCreateResult(NeteaseAccountActionStatus.Failed))
     }
@@ -1186,7 +1223,7 @@ internal class NeteaseOnlineMusicRepository(
         val identity = OnlineTrackIdentity(source = track.source, trackId = track.trackId)
         val playbackUrl = cachedPlaybackResult(track, forceRefresh).playbackUrl ?: return null
         val lyrics = if (includeLyrics) {
-            runCatching { cachedLyrics(identity) }.getOrNull()
+            runSuspendCatching { cachedLyrics(identity) }.getOrNull()
         } else {
             null
         }

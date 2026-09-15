@@ -629,7 +629,7 @@ fun PlaybackScreen(
         val density = LocalDensity.current
         val screenHeightPx =
             with(density) {
-                maxHeight.roundToPx()
+                maxHeight.roundToPx().toFloat()
             }
         val topInset =
             with(density) {
@@ -646,12 +646,6 @@ fun PlaybackScreen(
         val bottomControlsMinimumWidth = PlaybackBottomControlsMinimumWidth.coerceAtMost(maxWidth)
         val bottomControlsWidth =
             turntableWidth?.coerceIn(bottomControlsMinimumWidth, maxWidth) ?: maxWidth
-        val turntableEntranceProgress =
-            playbackEntranceProgress(
-                timeMillis = entranceTimeMillis.value,
-                delayMillis = 0,
-                durationMillis = PlaybackTurntableEntranceDurationMillis,
-            )
 
         SmartisanTouchShield()
         Column(modifier = Modifier.fillMaxSize()) {
@@ -677,9 +671,15 @@ fun PlaybackScreen(
                     Modifier.fillMaxWidth()
                         .weight(1f)
                         .padding(top = PlaybackVisualStageTopPadding)
+                        // 入场进度只在绘制阶段读：组合期读动画值会让入场动画每帧重组整个播放页。
                         .graphicsLayer {
-                            translationY =
-                                (1f - turntableEntranceProgress) * screenHeightPx.toFloat()
+                            val entranceProgress =
+                                playbackEntranceProgress(
+                                    timeMillis = entranceTimeMillis.value,
+                                    delayMillis = 0,
+                                    durationMillis = PlaybackTurntableEntranceDurationMillis,
+                                )
+                            translationY = (1f - entranceProgress) * screenHeightPx
                         },
                 contentAlignment = Alignment.TopCenter,
             ) {

@@ -36,11 +36,25 @@ internal object PlaybackStreamingCache {
         upstreamFactory: DataSource.Factory,
     ): DataSource.Factory {
         val appContext = context.applicationContext
-        val cache = runCatching {
-            getOrCreateCache(appContext)
-        }.getOrNull() ?: return upstreamFactory
+        // SimpleCache 的构造要建库并读索引，而本方法是 PlaybackService.onCreate 在主线程同步调用的，
+        // 所以推迟到 ExoPlayer 在加载线程首次 createDataSource() 时再建；建不起来（磁盘满/库损坏）
+        // 就地回退上游工厂，语义与原 runCatching 兜底一致。
+        return DefaultDataSource.Factory(
+            appContext,
+            DataSource.Factory {
+                createCacheDataSourceFactory(appContext, upstreamFactory)
+                    ?.createDataSource()
+                    ?: upstreamFactory.createDataSource()
+            },
+        )
+    }
 
-        val cacheDataSourceFactory = CacheDataSource.Factory()
+    private fun createCacheDataSourceFactory(
+        context: Context,
+        upstreamFactory: DataSource.Factory,
+    ): CacheDataSource.Factory? {
+        val cache = runCatching { getOrCreateCache(context) }.getOrNull() ?: return null
+        return CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstreamFactory)
             .setCacheKeyFactory(SmartisanPlaybackCacheKeyFactory)
@@ -48,7 +62,6 @@ internal object PlaybackStreamingCache {
                 CacheDataSource.FLAG_BLOCK_ON_CACHE or
                     CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR,
             )
-        return DefaultDataSource.Factory(appContext, cacheDataSourceFactory)
     }
 
     fun getOrCreateCache(context: Context): Cache {

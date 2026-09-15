@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -194,21 +195,33 @@ class MainActivity : AppCompatActivity() {
 private fun RequestAudioPermissionOnLaunch() {
     val context = LocalContext.current
     val permission = audioPermission()
-    // 结果回调不在这里同步任何状态：被拒绝后由资料库空状态按 checkSelfPermission 展示引导入口，
+    // 首装时两个系统权限弹窗同帧 launch 会互相顶掉，所以串行：音频结果落定后再申请通知。
+    var audioPermissionSettled by rememberSaveable {
+        mutableStateOf(hasAudioPermission(context))
+    }
+    // 结果回调不在这里同步权限状态：被拒绝后由资料库空状态按 checkSelfPermission 展示引导入口，
     // 用户从系统弹窗或系统详情页授权返回后，由 rememberAudioPermissionState 统一触发资料库刷新。
+    // 授权与被拒都要放行通知权限请求，否则拒绝音频权限会连带通知权限永远不申请。
     val permissionLauncher =
-        rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) {}
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) {
+            audioPermissionSettled = true
+        }
 
     LaunchedEffect(permission) {
-        if (!hasAudioPermission(context)) {
-            permissionLauncher.launch(permission)
+        if (hasAudioPermission(context)) {
+            audioPermissionSettled = true
+            return@LaunchedEffect
         }
+        permissionLauncher.launch(permission)
     }
 
     // Android 13+ 媒体通知必须运行时申请；被拒不影响播放，仅失去通知栏/锁屏控制入口，结果无需同步。
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) {}
-    LaunchedEffect(Unit) {
+    LaunchedEffect(audioPermissionSettled) {
+        if (!audioPermissionSettled) {
+            return@LaunchedEffect
+        }
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 ContextCompat.checkSelfPermission(

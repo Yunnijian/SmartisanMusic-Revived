@@ -1,12 +1,16 @@
 package com.smartisan.music.data.settings
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -14,6 +18,7 @@ private const val PlaybackSettingsStoreName = "playback_settings"
 
 private val Context.playbackSettingsDataStore by preferencesDataStore(
     name = PlaybackSettingsStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
 data class PlaybackSettings(
@@ -87,6 +92,9 @@ class PlaybackSettingsStore(
 ) {
 
     val settings: Flow<PlaybackSettings> = context.playbackSettingsDataStore.data
+        .catch { error ->
+            if (error is IOException) emit(emptyPreferences()) else throw error
+        }
         .map { preferences ->
             PlaybackSettings(
                 scratchEnabled = preferences[ScratchEnabledKey] ?: true,

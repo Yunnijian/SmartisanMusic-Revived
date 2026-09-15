@@ -1,10 +1,14 @@
 package com.smartisan.music.data.library
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -12,6 +16,7 @@ private const val LibraryExclusionsStoreName = "library_exclusions"
 
 private val Context.libraryExclusionsDataStore by preferencesDataStore(
     name = LibraryExclusionsStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
 data class LibraryExclusions(
@@ -48,6 +53,9 @@ class LibraryExclusionsStore(
 ) {
 
     val exclusions: Flow<LibraryExclusions> = context.libraryExclusionsDataStore.data
+        .catch { error ->
+            if (error is IOException) emit(emptyPreferences()) else throw error
+        }
         .map { preferences ->
             LibraryExclusions(
                 hiddenMediaIds = preferences[HiddenMediaIdsKey].orEmpty(),

@@ -291,7 +291,7 @@ internal class NeteaseCloudMusicClient(
 
     suspend fun getRecommendedRadioPrograms(limit: Int): List<OnlineTrack> = withContext(AppDispatchers.IO) {
         val safeLimit = limit.coerceIn(1, FeaturedRadioTrackLimit)
-        val response = runCatching {
+        val response = runSuspendCatching {
             JSONObject(readText("https://music.163.com/api/program/recommend/v1?limit=$safeLimit&offset=0"))
         }.getOrNull()
         val recommendedPrograms = response
@@ -573,12 +573,12 @@ internal class NeteaseCloudMusicClient(
     }
 
     private fun requestLyricsWithSessionRetry(request: () -> String): String {
-        var response = runCatching { request() }.getOrNull() ?: ""
+        var response = runSuspendCatching { request() }.getOrNull() ?: ""
         // 已登录且接口返回 code=301（登录态/csrf 过期）时，预热会话后重试一次。
         // 注意网易云返回的是 HTTP 200 + JSON code=301，不会抛异常，必须解析响应体判断。
         if (hasLogin() && responseJsonRequiresLogin(response)) {
             ensureWeapiSession()
-            response = runCatching { request() }.getOrNull() ?: ""
+            response = runSuspendCatching { request() }.getOrNull() ?: ""
         }
         return response
     }
@@ -737,7 +737,7 @@ internal class NeteaseCloudMusicClient(
     }
 
     private fun ensureWeapiSession() {
-        runCatching {
+        runSuspendCatching {
             readText("https://music.163.com/")
         }
     }
@@ -854,7 +854,7 @@ internal class NeteaseCloudMusicClient(
         originalDurationMs: Long,
         request: () -> String,
     ): NeteasePlaybackParseResult {
-        return runCatching {
+        return runSuspendCatching {
             parseNeteasePlaybackUrlResponse(
                 response = request(),
                 originalDurationMs = originalDurationMs,
@@ -876,7 +876,7 @@ internal class NeteaseCloudMusicClient(
     private fun tryParseAccountActionResponse(
         request: () -> String,
     ): NeteaseAccountActionResult {
-        return runCatching {
+        return runSuspendCatching {
             parseNeteaseAccountActionResponse(request())
         }.getOrDefault(NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed))
     }
@@ -895,7 +895,7 @@ internal class NeteaseCloudMusicClient(
     private fun tryParseLikedTrackIdsResponse(
         request: () -> String,
     ): NeteaseLikedTrackIdsResult {
-        return runCatching {
+        return runSuspendCatching {
             parseNeteaseLikedTrackIdsResponse(request())
         }.getOrDefault(NeteaseLikedTrackIdsResult(NeteaseAccountActionStatus.Failed))
     }
@@ -914,7 +914,7 @@ internal class NeteaseCloudMusicClient(
     private fun tryParseDailyRecommendedTracksResponse(
         request: () -> String,
     ): NeteaseDailyRecommendedTracksResult {
-        return runCatching {
+        return runSuspendCatching {
             parseNeteaseDailyRecommendedTracksResponse(request())
         }.getOrDefault(NeteaseDailyRecommendedTracksResult(NeteaseAccountActionStatus.Failed))
     }
@@ -933,7 +933,7 @@ internal class NeteaseCloudMusicClient(
     private fun tryParsePlaylistCreateResponse(
         request: () -> String,
     ): OnlineAccountPlaylistCreateResult {
-        return runCatching {
+        return runSuspendCatching {
             parseNeteasePlaylistCreateResponse(request())
         }.getOrDefault(OnlineAccountPlaylistCreateResult(NeteaseAccountActionStatus.Failed))
     }
@@ -944,10 +944,10 @@ internal class NeteaseCloudMusicClient(
      * getUserAlbums/getUserRadios 等没有专用 Result 类型的读接口。
      */
     private fun requestWithLoginRetry(request: () -> String): String {
-        var response = runCatching { request() }.getOrNull() ?: ""
+        var response = runSuspendCatching { request() }.getOrNull() ?: ""
         if (hasLogin() && responseJsonRequiresLogin(response)) {
             ensureWeapiSession()
-            response = runCatching { request() }.getOrNull() ?: ""
+            response = runSuspendCatching { request() }.getOrNull() ?: ""
         }
         return response
     }
