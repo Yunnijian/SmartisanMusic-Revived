@@ -451,7 +451,7 @@ private fun JSONObject.optIntOrNull(name: String): Int? {
     }
 }
 
-private fun JSONObject.optLongOrNull(name: String): Long? {
+internal fun JSONObject.optLongOrNull(name: String): Long? {
     val value = opt(name)
     return when {
         value == null || value == JSONObject.NULL -> null

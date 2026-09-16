@@ -164,6 +164,11 @@ internal class OnlineMusicRepositoryRouter(
         return runOnlineFetch(null) { neteaseRepository.accountLikedTrackIds() }
     }
 
+    /** 当前登录账号资料；未登录或失败返回 null。 */
+    suspend fun currentUserProfile(): NeteaseAccountProfile? {
+        return runOnlineFetch(null) { neteaseRepository.currentUserProfile() }
+    }
+
     /**
      * 账号「我喜欢」的可展示媒体项。
      *
@@ -224,6 +229,56 @@ internal class OnlineMusicRepositoryRouter(
         playlist: OnlineAccountPlaylist,
     ): NeteaseAccountActionResult {
         return repositoryFor(playlist.provider).deleteAccountPlaylist(playlist)
+    }
+
+    suspend fun createListenTogetherRoom(): ListenTogetherCreateResult {
+        return neteaseRepository.createListenTogetherRoom()
+    }
+
+    suspend fun checkListenTogetherRoom(roomId: String): ListenTogetherCheckResult {
+        return neteaseRepository.checkListenTogetherRoom(roomId)
+    }
+
+    suspend fun acceptListenTogetherInvitation(
+        roomId: String,
+        inviterId: String,
+    ): ListenTogetherCreateResult {
+        return neteaseRepository.acceptListenTogetherInvitation(roomId, inviterId)
+    }
+
+    suspend fun listenTogetherStatus(): ListenTogetherStatusResult {
+        return neteaseRepository.listenTogetherStatus()
+    }
+
+    suspend fun listenTogetherHeartbeat(
+        roomId: String,
+        songId: String,
+        playStatus: String,
+        progressMs: Long,
+    ): NeteaseAccountActionResult {
+        return neteaseRepository.listenTogetherHeartbeat(roomId, songId, playStatus, progressMs)
+    }
+
+    suspend fun syncListenTogether(roomId: String): ListenTogetherSyncResult {
+        return neteaseRepository.syncListenTogether(roomId)
+    }
+
+    suspend fun reportListenTogetherCommand(
+        roomId: String,
+        commandInfo: String,
+    ): NeteaseAccountActionResult {
+        return neteaseRepository.reportListenTogetherCommand(roomId, commandInfo)
+    }
+
+    suspend fun reportListenTogetherPlaylist(
+        roomId: String,
+        playlistParam: String,
+    ): NeteaseAccountActionResult {
+        return neteaseRepository.reportListenTogetherPlaylist(roomId, playlistParam)
+    }
+
+    suspend fun endListenTogetherRoom(roomId: String): NeteaseAccountActionResult {
+        return neteaseRepository.endListenTogetherRoom(roomId)
     }
 
     private suspend fun resolveNeteaseItems(

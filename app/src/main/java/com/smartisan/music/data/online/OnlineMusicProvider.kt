@@ -324,6 +324,43 @@ internal interface OnlineMusicProviderRepository {
             )
         }
     }
+
+    suspend fun createListenTogetherRoom(): ListenTogetherCreateResult =
+        ListenTogetherCreateResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun checkListenTogetherRoom(roomId: String): ListenTogetherCheckResult =
+        ListenTogetherCheckResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun acceptListenTogetherInvitation(
+        roomId: String,
+        inviterId: String,
+    ): ListenTogetherCreateResult = ListenTogetherCreateResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun listenTogetherStatus(): ListenTogetherStatusResult =
+        ListenTogetherStatusResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun listenTogetherHeartbeat(
+        roomId: String,
+        songId: String,
+        playStatus: String,
+        progressMs: Long,
+    ): NeteaseAccountActionResult = NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun syncListenTogether(roomId: String): ListenTogetherSyncResult =
+        ListenTogetherSyncResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun reportListenTogetherCommand(
+        roomId: String,
+        commandInfo: String,
+    ): NeteaseAccountActionResult = NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun reportListenTogetherPlaylist(
+        roomId: String,
+        playlistParam: String,
+    ): NeteaseAccountActionResult = NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
+
+    suspend fun endListenTogetherRoom(roomId: String): NeteaseAccountActionResult =
+        NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
 }
 
 internal fun MediaItem.withOnlinePlaybackPlaceholderUri(): MediaItem {

@@ -156,6 +156,7 @@
     <string name="can_not_delete_song">这首歌曲不能删除</string>
     <string name="can_not_delete_cue_file">整轨文件不允许删除单一歌曲</string>
     <string name="share">分享</string>
+    <string name="share_song">分享歌曲</string>
     <string name="can_not_share_song">这首歌曲无法分享</string>
     <string name="sleep_timer">定时关闭播放</string>
     <string name="lyrics">歌词</string>
@@ -341,6 +342,9 @@
     <string name="cloud_music_action_unlike">取消喜欢</string>
     <string name="cloud_music_add_to_queue">添加到播放队列</string>
     <string name="cloud_music_provider_netease">网易云音乐</string>
+
+    <!-- 一起听 -->
+    <string name="listen_together_title">一起听</string>
     <string name="cloud_music_album_total_tracks">共 %1$d 首</string>
     <plurals name="cloud_music_album_count">
         <item quantity="other">%1$d 张专辑</item>

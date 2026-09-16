@@ -329,4 +329,41 @@ internal class NeteaseOnlineMusicRepository(
         mediaItems: List<MediaItem>,
         includeLyrics: Boolean,
     ): List<MediaItem> = resolvePlayableMediaItemsPage(mediaItems, includeLyrics)
+
+    override suspend fun createListenTogetherRoom(): ListenTogetherCreateResult =
+        client.createListenTogetherRoom()
+
+    override suspend fun checkListenTogetherRoom(roomId: String): ListenTogetherCheckResult =
+        client.checkListenTogetherRoom(roomId)
+
+    override suspend fun acceptListenTogetherInvitation(
+        roomId: String,
+        inviterId: String,
+    ): ListenTogetherCreateResult = client.acceptListenTogetherInvitation(roomId, inviterId)
+
+    override suspend fun listenTogetherStatus(): ListenTogetherStatusResult =
+        client.listenTogetherStatus()
+
+    override suspend fun listenTogetherHeartbeat(
+        roomId: String,
+        songId: String,
+        playStatus: String,
+        progressMs: Long,
+    ): NeteaseAccountActionResult = client.listenTogetherHeartbeat(roomId, songId, playStatus, progressMs)
+
+    override suspend fun syncListenTogether(roomId: String): ListenTogetherSyncResult =
+        client.syncListenTogether(roomId)
+
+    override suspend fun reportListenTogetherCommand(
+        roomId: String,
+        commandInfo: String,
+    ): NeteaseAccountActionResult = client.reportListenTogetherCommand(roomId, commandInfo)
+
+    override suspend fun reportListenTogetherPlaylist(
+        roomId: String,
+        playlistParam: String,
+    ): NeteaseAccountActionResult = client.reportListenTogetherPlaylist(roomId, playlistParam)
+
+    override suspend fun endListenTogetherRoom(roomId: String): NeteaseAccountActionResult =
+        client.endListenTogetherRoom(roomId)
 }

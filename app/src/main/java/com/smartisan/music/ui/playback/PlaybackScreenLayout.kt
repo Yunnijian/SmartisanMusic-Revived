@@ -20,7 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import com.smartisan.music.LocalMusicAppContainer
 import com.smartisan.music.R
+import com.smartisan.music.data.online.NeteaseSourceId
+import com.smartisan.music.data.online.onlineIdentityOrNull
 import com.smartisan.music.data.settings.PlaybackSettings
 import com.smartisan.music.playback.cancelSleepTimer
 import com.smartisan.music.playback.setScratchSeekModeEnabled
@@ -95,6 +98,7 @@ private fun PlaybackScreenOverlaysSection(
     playbackSettings: PlaybackSettings,
     bottomInsetPx: Int,
 ) {
+        val listenTogetherStore = LocalMusicAppContainer.current.listenTogetherStore
         PlaybackMoreActionOverlays(
             showMorePanel = host.showMorePanel,
             favoriteEnabled = host.favoriteEnabled,
@@ -102,7 +106,10 @@ private fun PlaybackScreenOverlaysSection(
             scratchEnabled = playbackSettings.scratchEnabled,
             sleepTimerActive = host.sleepTimerState.isActive,
             addToPlaylistEnabled = !host.currentIsExternalAudio,
-            shareEnabled = host.currentMediaItem?.canShareAudio() == true,
+            shareEnabled = host.currentMediaItem != null,
+            showShareOptionsPanel = host.showShareOptionsPanel,
+            listenTogetherEnabled =
+                host.currentMediaItem?.onlineIdentityOrNull()?.source == NeteaseSourceId,
             showSleepTimerDialog = host.showSleepTimerDialog,
             sleepTimerState = host.sleepTimerState,
             bottomInsetPx = bottomInsetPx,
@@ -130,9 +137,30 @@ private fun PlaybackScreenOverlaysSection(
             },
             onShareClick = {
                 host.showMorePanel = false
+                host.showShareOptionsPanel = true
+            },
+            onShareSongClick = {
+                host.showShareOptionsPanel = false
                 val mediaItem = host.state.mediaItem
-                if (mediaItem == null || !host.context.tryShareAudio(mediaItem)) {
-                    host.context.toast(R.string.can_not_share_song)
+                if (mediaItem != null) {
+                    val shared =
+                        if (mediaItem.canShareAudio()) {
+                            host.context.tryShareAudio(mediaItem)
+                        } else {
+                            host.context.tryShareOnlineSong(mediaItem)
+                        }
+                    if (!shared) {
+                        host.context.toast(R.string.can_not_share_song)
+                    }
+                }
+            },
+            onListenTogetherClick = {
+                host.showShareOptionsPanel = false
+                host.scope.launch {
+                    val inviteUrl = listenTogetherStore.createRoomInviteUrl()
+                    if (inviteUrl != null) {
+                        host.context.tryShareText(inviteUrl)
+                    }
                 }
             },
             onSleepTimerClick = {
@@ -174,6 +202,9 @@ private fun PlaybackScreenOverlaysSection(
             },
             onDismissMorePanel = {
                 host.showMorePanel = false
+            },
+            onDismissShareOptions = {
+                host.showShareOptionsPanel = false
             },
             onSleepTimerDismiss = {
                 host.showSleepTimerDialog = false

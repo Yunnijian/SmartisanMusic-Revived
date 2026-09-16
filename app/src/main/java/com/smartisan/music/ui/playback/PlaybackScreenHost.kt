@@ -83,6 +83,7 @@ internal class PlaybackScreenHost(
     livePositionMsState: MutableLongState,
     showMorePanelState: MutableState<Boolean>,
     showSleepTimerDialogState: MutableState<Boolean>,
+    showShareOptionsPanelState: MutableState<Boolean>,
     currentVisualPageState: MutableState<PlaybackVisualPage>,
     keepLyricsScreenAwakeState: MutableState<Boolean>,
     sleepTimerWasActiveState: MutableState<Boolean>,
@@ -100,6 +101,7 @@ internal class PlaybackScreenHost(
     var livePositionMs by livePositionMsState
     var showMorePanel by showMorePanelState
     var showSleepTimerDialog by showSleepTimerDialogState
+    var showShareOptionsPanel by showShareOptionsPanelState
     var currentVisualPage by currentVisualPageState
     var keepLyricsScreenAwake by keepLyricsScreenAwakeState
     var sleepTimerWasActive by sleepTimerWasActiveState
@@ -315,6 +317,7 @@ internal fun rememberPlaybackScreenHost(
         }
     val showMorePanelState = rememberSaveable { mutableStateOf(false) }
     val showSleepTimerDialogState = rememberSaveable { mutableStateOf(false) }
+    val showShareOptionsPanelState = rememberSaveable { mutableStateOf(false) }
     val currentVisualPageState = rememberSaveable { mutableStateOf(PlaybackVisualPage.Cover) }
     val keepLyricsScreenAwakeState = rememberSaveable { mutableStateOf(false) }
     val sleepTimerWasActiveState = remember { mutableStateOf(false) }
@@ -367,6 +370,7 @@ internal fun rememberPlaybackScreenHost(
             livePositionMsState = livePositionMsState,
             showMorePanelState = showMorePanelState,
             showSleepTimerDialogState = showSleepTimerDialogState,
+            showShareOptionsPanelState = showShareOptionsPanelState,
             currentVisualPageState = currentVisualPageState,
             keepLyricsScreenAwakeState = keepLyricsScreenAwakeState,
             sleepTimerWasActiveState = sleepTimerWasActiveState,

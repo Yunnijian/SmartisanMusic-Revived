@@ -15,6 +15,8 @@ internal fun PlaybackMoreActionOverlays(
     sleepTimerActive: Boolean,
     addToPlaylistEnabled: Boolean,
     shareEnabled: Boolean,
+    showShareOptionsPanel: Boolean,
+    listenTogetherEnabled: Boolean,
     showSleepTimerDialog: Boolean,
     sleepTimerState: PlaybackSleepTimerState,
     bottomInsetPx: Int,
@@ -22,11 +24,14 @@ internal fun PlaybackMoreActionOverlays(
     onAddToQueueClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onShareClick: () -> Unit,
+    onShareSongClick: () -> Unit,
+    onListenTogetherClick: () -> Unit,
     onSleepTimerClick: () -> Unit,
     onLyricsToggle: () -> Unit,
     onScratchToggle: () -> Unit,
     onDeleteClick: () -> Unit,
     onDismissMorePanel: () -> Unit,
+    onDismissShareOptions: () -> Unit,
     onSleepTimerDismiss: () -> Unit,
     onSleepTimerDurationSelected: (Long) -> Unit,
 ) {
@@ -50,6 +55,15 @@ internal fun PlaybackMoreActionOverlays(
                 onDeleteClick = onDeleteClick,
                 onDismissRequest = onDismissMorePanel,
             ),
+        modifier = Modifier.fillMaxSize().zIndex(8f),
+    )
+
+    PlaybackShareOptionsOverlay(
+        visible = showShareOptionsPanel,
+        listenTogetherEnabled = listenTogetherEnabled,
+        onShareSongClick = onShareSongClick,
+        onListenTogetherClick = onListenTogetherClick,
+        onDismissRequest = onDismissShareOptions,
         modifier = Modifier.fillMaxSize().zIndex(8f),
     )
 

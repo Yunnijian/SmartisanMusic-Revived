@@ -28,6 +28,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.smartisan.music.data.settings.ThemeSettingsStore
+import com.smartisan.music.listentogether.ListenTogetherInviteHost
+import com.smartisan.music.listentogether.ListenTogetherInvitePath
+import com.smartisan.music.listentogether.ListenTogetherShortHost
 import com.smartisan.music.ui.artwork.AlbumArtworkBrowserHost
 import com.smartisan.music.ui.components.audioPermission
 import com.smartisan.music.ui.components.hasAudioPermission
@@ -104,6 +107,14 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val listenTogetherUrl = launchIntent.listenTogetherInviteUrlOrNull()
+        if (listenTogetherUrl != null && !isConsumedListenTogetherInvite(launchIntent)) {
+            (application as SmartisanMusicApplication).musicAppContainer
+                .listenTogetherStore.joinRoomFromUrl(listenTogetherUrl)
+            launchIntent.putExtra(ExtraListenTogetherConsumed, true)
+            return
+        }
+
         val externalAudioMimeType = launchIntent.resolveType(contentResolver)
         if (
             isExternalAudioLaunchIntent(launchIntent, externalAudioMimeType) &&
@@ -119,6 +130,26 @@ class MainActivity : AppCompatActivity() {
                 )
             launchIntent.putExtra(ExtraExternalAudioConsumed, true)
         }
+    }
+
+    private fun Intent?.listenTogetherInviteUrlOrNull(): String? {
+        if (this?.action != Intent.ACTION_VIEW) {
+            return null
+        }
+        val uri = data ?: return null
+        if (uri.scheme != "https") {
+            return null
+        }
+        val host = uri.host ?: return null
+        val isLongInvite =
+            host.equals(ListenTogetherInviteHost, ignoreCase = true) &&
+                uri.path?.startsWith(ListenTogetherInvitePath) == true
+        val isShortInvite = host.equals(ListenTogetherShortHost, ignoreCase = true)
+        return if (isLongInvite || isShortInvite) uri.toString() else null
+    }
+
+    private fun isConsumedListenTogetherInvite(intent: Intent?): Boolean {
+        return intent?.getBooleanExtra(ExtraListenTogetherConsumed, false) == true
     }
 
     private fun clearExternalAudioLaunchRequest(requestId: Int) {
@@ -159,6 +190,8 @@ class MainActivity : AppCompatActivity() {
             "com.smartisan.music.extra.OPEN_PLAYBACK_CONSUMED"
         private const val ExtraExternalAudioConsumed =
             "com.smartisan.music.extra.EXTERNAL_AUDIO_CONSUMED"
+        private const val ExtraListenTogetherConsumed =
+            "com.smartisan.music.extra.LISTEN_TOGETHER_CONSUMED"
         private const val ContentScheme = "content"
         private const val FileScheme = "file"
         private const val StartupSplashTimeoutMillis = 2_500L

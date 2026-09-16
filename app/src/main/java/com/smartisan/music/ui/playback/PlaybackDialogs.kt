@@ -83,6 +83,62 @@ internal fun PlaybackMoreActionsOverlay(
 }
 
 @Composable
+internal fun PlaybackShareOptionsOverlay(
+    visible: Boolean,
+    listenTogetherEnabled: Boolean,
+    onShareSongClick: () -> Unit,
+    onListenTogetherClick: () -> Unit,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    PlaybackBottomPanel(visible, onDismissRequest, modifier) {
+        SmartisanMenuTitleBar(stringResource(R.string.share), onDismissRequest)
+        Column(Modifier.fillMaxWidth()) {
+            ShareOptionRow(R.string.share_song, onShareSongClick)
+            if (listenTogetherEnabled) {
+                ShareOptionRow(R.string.listen_together_title, onListenTogetherClick)
+            }
+        }
+        Spacer(
+            Modifier.fillMaxWidth()
+                .height(with(LocalDensity.current) { 1.toDp() })
+                .background(colorResource(R.color.bottom_line))
+        )
+    }
+}
+
+@Composable
+private fun ShareOptionRow(labelRes: Int, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectSmartisanPressedAsState()
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .smartisanPainterBackground(
+                rememberSmartisanDrawablePainter(
+                    R.drawable.menu_item_selector,
+                    enabled = true,
+                    pressed = pressed,
+                )
+            )
+            .clickable(interaction, null, onClick = smartisanClick(onClick)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicText(
+            stringResource(labelRes),
+            Modifier.padding(horizontal = 20.dp),
+            style =
+                TextStyle(
+                    fontSize = 15.sp,
+                    color = colorResource(R.color.title_color),
+                    platformStyle = PlatformTextStyle(includeFontPadding = true),
+                ),
+        )
+    }
+}
+
+@Composable
 internal fun PlaybackSleepTimerDialog(
     visible: Boolean,
     state: PlaybackSleepTimerState,

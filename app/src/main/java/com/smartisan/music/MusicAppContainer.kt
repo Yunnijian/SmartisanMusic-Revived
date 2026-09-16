@@ -12,6 +12,7 @@ import com.smartisan.music.data.settings.NavigationSettingsStore
 import com.smartisan.music.data.settings.OnlineMusicSettingsStore
 import com.smartisan.music.data.settings.PlaybackSettingsStore
 import com.smartisan.music.data.settings.ThemeSettingsStore
+import com.smartisan.music.listentogether.ListenTogetherStore
 
 /**
  * 应用级依赖容器：懒加载单例持有跨页面共享的数据层对象。
@@ -25,6 +26,9 @@ internal class MusicAppContainer private constructor(context: Context) {
 
     val onlineRepositoryRouter: OnlineMusicRepositoryRouter by lazy {
         OnlineMusicRepositoryRouter.getInstance(appContext)
+    }
+    val listenTogetherStore: ListenTogetherStore by lazy {
+        ListenTogetherStore(onlineRepositoryRouter)
     }
     val neteaseAuthStore: NeteaseAuthStore by lazy { NeteaseAuthStore(appContext) }
     val onlineMusicSettingsStore: OnlineMusicSettingsStore by lazy {

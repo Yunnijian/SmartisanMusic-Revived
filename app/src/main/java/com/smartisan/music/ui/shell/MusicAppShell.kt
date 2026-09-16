@@ -55,6 +55,7 @@ import com.smartisan.music.ui.album.AlbumViewMode
 import com.smartisan.music.ui.artist.parentTarget
 import com.smartisan.music.ui.components.rememberMediaStoreDeleteCoordinator
 import com.smartisan.music.ui.library.rememberLibraryMediaState
+import com.smartisan.music.ui.listentogether.ListenTogetherSessionWiring
 import com.smartisan.music.ui.navigation.MusicDestination
 import com.smartisan.music.ui.shell.playback.PlaybackBarHost
 import com.smartisan.music.ui.shell.playback.loadArtworkBitmap
@@ -183,6 +184,8 @@ private fun MusicAppShellContent(
     )
 
     ShellBackHandler(uiState)
+
+    ListenTogetherSessionWiring()
 
     val bottomNavigationHeight =
         dimensionResource(R.dimen.realtabcontent_margin_bottom) +

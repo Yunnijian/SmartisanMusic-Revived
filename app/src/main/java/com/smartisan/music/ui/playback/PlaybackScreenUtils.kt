@@ -12,6 +12,7 @@ import androidx.annotation.DrawableRes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisan.music.R
+import com.smartisan.music.data.online.onlineIdentityOrNull
 import com.smartisan.music.platform.media.audioMediaItemUri
 import com.smartisan.music.playback.LocalAudioLibrary
 import java.util.Locale
@@ -58,6 +59,27 @@ internal fun MediaItem.resolveDeleteTarget(): PlaybackDeleteTargetResult {
 
 internal fun MediaItem.canShareAudio(): Boolean {
     return localConfiguration?.uri?.scheme == ContentResolver.SCHEME_CONTENT
+}
+
+/** 分享纯文本（邀请链接、歌曲链接等），失败返回 false。 */
+internal fun Context.tryShareText(text: String): Boolean {
+    val sendIntent =
+        Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+    return runCatching {
+        startActivity(Intent.createChooser(sendIntent, getString(R.string.share)))
+    }
+        .isSuccess
+}
+
+/** 分享在线歌曲链接（https://music.163.com/song?id=…）；非在线条目返回 false。 */
+internal fun Context.tryShareOnlineSong(mediaItem: MediaItem): Boolean {
+    val identity = mediaItem.onlineIdentityOrNull() ?: return false
+    val link = "https://music.163.com/song?id=${identity.trackId}"
+    val title = mediaItem.mediaMetadata.title?.toString()?.takeIf(String::isNotBlank)
+    return tryShareText(if (title != null) "$title\n$link" else link)
 }
 
 internal fun Context.tryShareAudio(mediaItem: MediaItem): Boolean {
