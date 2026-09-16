@@ -9,6 +9,50 @@ private suspend fun <T> accountRequiresLoginOrNull(block: suspend () -> T): T? =
     if (e.reason == NeteaseApiFailureReason.RequiresLogin) null else throw e
 }
 
+internal suspend fun NeteaseOnlineMusicRepository.dailyStyleCategoriesPage(): List<NeteaseDailyStyleCategory>? {
+    val state = authStore?.load() ?: return null
+    if (!state.isLoggedIn) {
+        return null
+    }
+    return accountRequiresLoginOrNull {
+        cachedPage(
+            key = cacheKey("daily:styles"),
+            ttlMs = NeteaseFeaturedCacheTtlMs,
+            codec = OnlinePageCacheCodecs.DailyStyles,
+        ) {
+            client.getDailyStyles().categories
+        }
+    }?.takeIf(List<NeteaseDailyStyleCategory>::isNotEmpty)
+}
+
+internal suspend fun NeteaseOnlineMusicRepository.saveDailyStylePage(
+    categoryId: Int,
+    tagId: Int,
+): NeteaseAccountActionResult = runSuspendCatching {
+    client.saveDailyStyle(categoryId = categoryId, tagId = tagId)
+}.getOrDefault(NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed))
+
+/**
+ * 风格日推曲目 + 当前风格。
+ *
+ * 刻意不进缓存：风格存在服务端，切换后列表必须立刻变，而当前风格是靠响应的 tags 回显的，
+ * 缓存命中就拿不到回显。单次响应约 60KB，可接受。
+ */
+internal suspend fun NeteaseOnlineMusicRepository.dailyStyleHomePage(
+    limit: Int,
+): NeteaseDailyStyleHome? {
+    val state = authStore?.load() ?: return null
+    if (!state.isLoggedIn) {
+        return null
+    }
+    return accountRequiresLoginOrNull {
+        val result = runSuspendCatching {
+            client.getDailyStyleSongs(limit = limit)
+        }.getOrDefault(NeteaseDailyStyleHomeResult(NeteaseAccountActionStatus.Failed))
+        result.home.takeIf { result.status == NeteaseAccountActionStatus.Success }
+    }
+}
+
 internal suspend fun NeteaseOnlineMusicRepository.currentUserProfile(): NeteaseAccountProfile? {
     val state = authStore?.load() ?: return null
     if (!state.isLoggedIn) {

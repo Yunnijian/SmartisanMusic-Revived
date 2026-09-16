@@ -255,6 +255,16 @@ internal interface OnlineMusicProviderRepository {
     /** 账号「每日推荐」歌曲；未登录或失败返回 null（调用方降级为通用推荐）。 */
     suspend fun currentUserDailyRecommendedTracks(limit: Int = 30): List<OnlineTrack>? = null
 
+    /** 风格日推可选的分类与标签；未登录或失败返回 null。 */
+    suspend fun dailyStyleCategories(): List<NeteaseDailyStyleCategory>? = null
+
+    /** 保存所选风格到服务端（账号级持久化，会影响官方 App 的每日推荐）。 */
+    suspend fun saveDailyStyle(categoryId: Int, tagId: Int): NeteaseAccountActionResult =
+        NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
+
+    /** 按服务端已保存的风格拉取日推歌曲，并带回当前风格；未登录或失败返回 null。 */
+    suspend fun dailyStyleHome(limit: Int = 30): NeteaseDailyStyleHome? = null
+
     suspend fun accountPlaylists(): List<OnlineAccountPlaylist>? = null
 
     suspend fun accountAlbums(): List<OnlineAlbum>? = null

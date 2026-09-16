@@ -166,3 +166,48 @@ internal suspend fun NeteaseCloudMusicClient.deletePlaylist(playlistId: String):
         )
     }
 }
+
+/**
+ * 风格日推：拉取可选的风格分类与标签（曲风/语种/情绪/场景/主题）。
+ *
+ * 官方 App 走 eapi；风格本身不在请求里传，而是先 [saveDailyStyle] 存到服务端，
+ * [getDailyStyleSongs] 再按已保存的风格返回。
+ */
+internal suspend fun NeteaseCloudMusicClient.getDailyStyles(): NeteaseDailyStylesResult = withContext(AppDispatchers.IO) {
+    val response = runSuspendCatching {
+        requestWithLoginRetry {
+            callEApi(path = "/homepage/daily/song/config/get", params = emptyMap())
+        }
+    }.getOrElse { return@withContext NeteaseDailyStylesResult(NeteaseAccountActionStatus.Failed) }
+    parseNeteaseDailyStylesResponse(response)
+}
+
+/** 保存所选风格到服务端（账号级，会同时影响官方 App 的每日推荐）。 */
+internal suspend fun NeteaseCloudMusicClient.saveDailyStyle(
+    categoryId: Int,
+    tagId: Int,
+): NeteaseAccountActionResult = withContext(AppDispatchers.IO) {
+    requestAccountActionWithSessionRetry {
+        callEApi(
+            path = "/homepage/daily/song/tag/save",
+            params = mapOf(
+                "tags" to """{"categoryId":$categoryId,"tagIds":[$tagId]}""",
+            ),
+        )
+    }
+}
+
+/** 按服务端已保存的风格拉取日推歌曲，同时带回当前风格（tags 回显）。 */
+internal suspend fun NeteaseCloudMusicClient.getDailyStyleSongs(limit: Int): NeteaseDailyStyleHomeResult = withContext(AppDispatchers.IO) {
+    val safeLimit = limit.coerceAtLeast(1)
+    requestDailyStyleSongsWithSessionRetry {
+        callEApi(path = "/homepage/category/daily/song/list", params = emptyMap())
+    }.let { result ->
+        val home = result.home
+        if (result.status == NeteaseAccountActionStatus.Success && home != null) {
+            result.copy(home = home.copy(tracks = home.tracks.take(safeLimit)))
+        } else {
+            result
+        }
+    }
+}

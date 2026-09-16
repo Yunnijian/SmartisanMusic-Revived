@@ -260,6 +260,17 @@ internal class NeteaseOnlineMusicRepository(
     override suspend fun currentUserDailyRecommendedTracks(limit: Int): List<OnlineTrack>? =
         currentUserDailyRecommendedTracksPage(limit)
 
+    override suspend fun dailyStyleCategories(): List<NeteaseDailyStyleCategory>? =
+        dailyStyleCategoriesPage()
+
+    override suspend fun saveDailyStyle(
+        categoryId: Int,
+        tagId: Int,
+    ): NeteaseAccountActionResult = saveDailyStylePage(categoryId, tagId)
+
+    override suspend fun dailyStyleHome(limit: Int): NeteaseDailyStyleHome? =
+        dailyStyleHomePage(limit)
+
     override suspend fun accountPlaylists(): List<OnlineAccountPlaylist>? = accountPlaylistsPage()
 
     override suspend fun accountAlbums(): List<OnlineAlbum>? = accountAlbumsPage()

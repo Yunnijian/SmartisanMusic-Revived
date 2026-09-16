@@ -8,6 +8,10 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.smartisan.music.data.online.NeteaseAccountActionStatus
+import com.smartisan.music.data.online.NeteaseDailyStyleCategory
+import com.smartisan.music.data.online.NeteaseDailyStyleHome
+import com.smartisan.music.data.online.NeteaseDailyStyleSelection
 import com.smartisan.music.data.online.OnlineAccountPlaylist
 import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
@@ -186,6 +190,16 @@ internal class CloudMusicDataStore(
         }
     }
 
+    /** 风格日推曲目 + 当前风格：进「每日推荐」整页的风格 tab 时才加载（不进缓存，切换后必须立刻变）。 */
+    val dailyStyleHome = CloudDataSlot<Unit, NeteaseDailyStyleHome?>(scope) {
+        cloudRunSuspendCatching { repository.dailyStyleHome() }.getOrNull()
+    }
+
+    /** 风格日推可选分类；只在用户首次打开风格选择层时加载一次。 */
+    val dailyStyles = CloudDataSlot<Unit, List<NeteaseDailyStyleCategory>>(scope) {
+        repository.dailyStyleCategories().orEmpty()
+    }
+
     /** 电台模块：首页预览与两个子页列表共用同一份数据，切子页只换渲染切片。 */
     val radio = CloudDataSlot<Unit, OnlineRadioHome>(scope) { repository.featuredRadioHome() }
 
@@ -326,6 +340,22 @@ internal class CloudMusicDataStore(
             artistAlbums.reload(artist)
         }
     }
+
+    /**
+     * 切换风格日推：先存到服务端，成功后重拉风格曲目。
+     *
+     * 风格是服务端账号级状态，曲目列表要按新风格重算，所以不能只换本地切片；
+     * 失败时不重拉，界面保持原风格（服务端也仍是原风格）。
+     */
+    suspend fun switchDailyStyle(categoryId: Int, tagId: Int): NeteaseAccountActionStatus {
+        val status = cloudRunSuspendCatching {
+            repository.saveDailyStyle(categoryId = categoryId, tagId = tagId)
+        }.getOrNull()?.status ?: NeteaseAccountActionStatus.Failed
+        if (status == NeteaseAccountActionStatus.Success) {
+            dailyStyleHome.reload(Unit)
+        }
+        return status
+    }
 }
 
 /**
@@ -345,7 +375,8 @@ internal class CloudMusicScrollStates {
     val radioList = LazyListState()
     val radioTracks = LazyListState()
 
-    val featuredTracks = LazyListState()
+    val dailyDefault = LazyListState()
+    val dailyStyle = LazyListState()
     val featuredPlaylists = LazyListState()
     val featuredCharts = LazyListState()
     val featuredAlbums = LazyListState()
@@ -358,7 +389,6 @@ internal class CloudMusicScrollStates {
     val searchPlaylists = LazyListState()
 
     fun featured(page: CloudFeaturedPage): LazyListState = when (page) {
-        CloudFeaturedPage.Tracks -> featuredTracks
         CloudFeaturedPage.Playlists -> featuredPlaylists
         CloudFeaturedPage.Charts -> featuredCharts
         CloudFeaturedPage.Albums -> featuredAlbums

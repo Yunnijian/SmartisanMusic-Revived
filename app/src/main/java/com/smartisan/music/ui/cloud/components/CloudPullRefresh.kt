@@ -146,7 +146,12 @@ internal fun CloudPullRefresh(
         }
     }
 
-    val connection = remember {
+    // 刻意不 remember：本对象不持有状态（phase/pull/reveal 都是外层 remember 的 State 委托，
+    // 读写落到同一份 MutableState），每次组合重建无副作用，却能保证捕获到最新的
+    // onRefresh / canChildScrollUp。调用方常按当前子页/分区换 listState（电台子页、
+    // Featured 整页、日推双 tab），用 remember 或 rememberUpdatedState 都会锁死首个回调，
+    // 导致在旧列表上判「已到顶」，列表明明滚到半途也误触发刷新、且刷新的是旧那一栏。
+    val connection =
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.Drag) return Offset.Zero
@@ -202,7 +207,6 @@ internal fun CloudPullRefresh(
                 return available
             }
         }
-    }
 
     // 数据重载结束 → 补转半圈再收起。
     LaunchedEffect(refreshing) {

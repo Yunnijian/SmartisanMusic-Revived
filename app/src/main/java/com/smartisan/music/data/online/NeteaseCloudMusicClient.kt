@@ -298,6 +298,21 @@ internal class NeteaseCloudMusicClient(
         return result
     }
 
+    internal fun requestDailyStyleSongsWithSessionRetry(
+        request: () -> String,
+    ): NeteaseDailyStyleHomeResult {
+        var result = runSuspendCatching {
+            parseNeteaseDailyStyleHomeResponse(request())
+        }.getOrDefault(NeteaseDailyStyleHomeResult(NeteaseAccountActionStatus.Failed))
+        if (hasLogin() && result.status == NeteaseAccountActionStatus.RequiresLogin) {
+            ensureWeapiSession()
+            result = runSuspendCatching {
+                parseNeteaseDailyStyleHomeResponse(request())
+            }.getOrDefault(NeteaseDailyStyleHomeResult(NeteaseAccountActionStatus.Failed))
+        }
+        return result
+    }
+
     private fun tryParseDailyRecommendedTracksResponse(
         request: () -> String,
     ): NeteaseDailyRecommendedTracksResult {

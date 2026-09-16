@@ -133,18 +133,20 @@ internal fun CloudMusicHost(
     BackHandler(
         enabled = active && !viewModel.searchVisible && viewModel.selectedDetail == null &&
             viewModel.artistAlbumsTarget == null && viewModel.radioSubPage == CloudRadioSubPage.Home &&
-            (viewModel.radioVisible || viewModel.artistsVisible || viewModel.featuredPage != null),
+            (viewModel.radioVisible || viewModel.artistsVisible ||
+                viewModel.featuredPage != null || viewModel.dailyVisible),
     ) {
         when {
             viewModel.radioVisible -> viewModel.radioVisible = false
             viewModel.artistsVisible -> viewModel.artistsVisible = false
+            viewModel.dailyVisible -> viewModel.dailyVisible = false
             else -> viewModel.featuredPage = null
         }
     }
     BackHandler(
         enabled = active && !viewModel.searchVisible && viewModel.selectedDetail == null &&
             viewModel.featuredPage == null && viewModel.artistAlbumsTarget == null &&
-            !viewModel.radioVisible && !viewModel.artistsVisible &&
+            !viewModel.radioVisible && !viewModel.artistsVisible && !viewModel.dailyVisible &&
             viewModel.subPage == CloudSubPage.Mine,
     ) {
         viewModel.subPage = CloudSubPage.Home
@@ -176,7 +178,8 @@ internal fun CloudMusicHost(
                     viewModel.featuredPage == CloudFeaturedPage.Playlists ||
                         viewModel.featuredPage == CloudFeaturedPage.Charts -> CloudHomeEntry.Collection
                     viewModel.featuredPage == CloudFeaturedPage.Artists -> CloudHomeEntry.Artist
-                    viewModel.subPage == CloudSubPage.Mine -> CloudHomeEntry.Mine
+                    viewModel.subPage == CloudSubPage.Mine && !viewModel.dailyVisible ->
+                        CloudHomeEntry.Mine
                     else -> CloudHomeEntry.Recommend
                 },
                 onEntryClick = viewModel::switchEntry,
@@ -258,6 +261,15 @@ private fun CloudMusicHostPrimaryContent(
     viewModel: CloudMusicHostViewModel,
 ) {
     when (page) {
+        CloudPrimaryPage.Daily -> CloudMusicDailyPage(
+            data = data,
+            scrollStates = scrollStates,
+            active = active,
+            playbackBarOverlayHeight = playbackBarOverlayHeight,
+            tab = viewModel.dailyTab,
+            onTabChange = { viewModel.dailyTab = it },
+            modifier = Modifier.fillMaxSize(),
+        )
         is CloudPrimaryPage.ArtistAlbums -> CloudMusicArtistAlbumsPage(
             data = data,
             scrollStates = scrollStates,
@@ -307,6 +319,7 @@ private fun CloudMusicHostPrimaryContent(
                 onOpenArtist = viewModel::openArtistDetail,
                 onOpenFeatured = { viewModel.featuredPage = it },
                 onOpenBannerTrack = viewModel::openBannerTrack,
+                onOpenDaily = viewModel::openDaily,
                 modifier = Modifier.fillMaxSize(),
             )
             CloudSubPage.Mine -> CloudMusicMinePage(

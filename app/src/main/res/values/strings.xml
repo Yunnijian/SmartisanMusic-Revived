@@ -267,6 +267,10 @@
     <string name="cloud_music_home_loading">正在加载</string>
     <string name="cloud_music_home_error">加载失败</string>
     <string name="cloud_music_section_daily_tracks">每日推荐</string>
+    <string name="cloud_daily_style_action">风格</string>
+    <string name="cloud_daily_style_title">选择风格</string>
+    <string name="cloud_music_section_daily_default">默认推荐</string>
+    <string name="cloud_music_section_daily_style">风格推荐</string>
     <string name="cloud_music_section_playlists">推荐歌单</string>
     <string name="cloud_music_section_charts">排行榜</string>
     <string name="cloud_music_section_albums">新碟上架</string>

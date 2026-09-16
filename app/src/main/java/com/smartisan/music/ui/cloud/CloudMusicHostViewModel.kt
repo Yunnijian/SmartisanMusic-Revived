@@ -35,6 +35,11 @@ internal sealed interface CloudPrimaryPage {
         override val order: Int get() = 2
     }
 
+    /** 「每日推荐」整页：默认推荐 / 风格推荐两个并列 tab，从首页日推区块的「全部」进入。 */
+    data object Daily : CloudPrimaryPage {
+        override val order: Int get() = 3
+    }
+
     data class Featured(val page: CloudFeaturedPage) : CloudPrimaryPage {
         override val order: Int get() = 3
     }
@@ -72,6 +77,9 @@ internal class CloudMusicHostViewModel(
     var selectedDetail: CloudDetailTarget? by mutableStateOf(null)
     // 「查看全部」整页：与详情页同属列表之上的推进层，返回时先退整页再退详情。
     var featuredPage: CloudFeaturedPage? by mutableStateOf(null)
+    // 「每日推荐」整页（默认推荐 / 风格推荐双 tab）。
+    var dailyVisible: Boolean by mutableStateOf(false)
+    var dailyTab: CloudDailyTab by mutableStateOf(CloudDailyTab.Default)
     // 电台模块（首页/热门播客/推荐节目三个子页）与歌手页/歌手专辑页，均由顶部入口行进入。
     var radioVisible: Boolean by mutableStateOf(false)
     var radioSubPage: CloudRadioSubPage by mutableStateOf(CloudRadioSubPage.Home)
@@ -93,10 +101,17 @@ internal class CloudMusicHostViewModel(
                 albums != null -> CloudPrimaryPage.ArtistAlbums(albums)
                 artistsVisible -> CloudPrimaryPage.Artists
                 radioVisible -> CloudPrimaryPage.Radio
+                dailyVisible -> CloudPrimaryPage.Daily
                 featured != null -> CloudPrimaryPage.Featured(featured)
                 else -> CloudPrimaryPage.Entry(subPage)
             }
         }
+
+    /** 从首页日推区块的「全部」进入每日推荐整页，总是落在默认推荐 tab。 */
+    fun openDaily() {
+        dailyTab = CloudDailyTab.Default
+        dailyVisible = true
+    }
 
     fun saveLoginCookie(cookieJson: String): Boolean = authStore.saveCookieJson(cookieJson)
 
@@ -159,6 +174,7 @@ internal class CloudMusicHostViewModel(
     /** 入口行切换：进入任一入口时清掉其他推进层，避免层叠残留。 */
     fun switchEntry(entry: CloudHomeEntry) {
         featuredPage = null
+        dailyVisible = false
         radioVisible = false
         radioSubPage = CloudRadioSubPage.Home
         artistsVisible = false

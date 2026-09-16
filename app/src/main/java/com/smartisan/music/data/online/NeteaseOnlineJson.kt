@@ -615,6 +615,83 @@ internal fun parseNeteaseDailyRecommendedTracksResponse(response: String): Netea
     )
 }
 
+internal fun parseNeteaseDailyStyleHomeResponse(response: String): NeteaseDailyStyleHomeResult {
+    val root = JSONObject(response)
+    val code = root.optInt("code", -1)
+    val status = when (code) {
+        200 -> NeteaseAccountActionStatus.Success
+        301 -> NeteaseAccountActionStatus.RequiresLogin
+        else -> NeteaseAccountActionStatus.Failed
+    }
+    if (status != NeteaseAccountActionStatus.Success) {
+        return NeteaseDailyStyleHomeResult(status = status, code = code.takeIf { it >= 0 })
+    }
+    val data = root.optJSONObject("data")
+    val songs = data?.optJSONArray("dailySongs")
+        ?: data?.optJSONArray("recommend")
+        ?: root.optJSONArray("recommend")
+        ?: root.optJSONArray("dailySongs")
+    val tracks = songs
+        ?.toJsonObjects()
+        ?.mapNotNull(::parseNeteaseSong)
+        .orEmpty()
+    // 当前风格由 tags 回显：{"categoryId":1000,"categoryName":"曲风","tagVOList":[{...,"tagId":10005,"tagName":"嘻哈/说唱"}]}
+    val tagsObject = data?.optJSONObject("tags") ?: root.optJSONObject("tags")
+    val selection = tagsObject
+        ?.optJSONArray("tagVOList")
+        ?.toJsonObjects()
+        ?.firstOrNull()
+        ?.let { tag ->
+            val tagName = tag.optNonBlankString("tagName") ?: return@let null
+            NeteaseDailyStyleSelection(
+                categoryId = tag.optInt("categoryId", 0),
+                categoryName = tagsObject.optNonBlankString("categoryName"),
+                tagId = tag.optInt("tagId", 0),
+                tagName = tagName,
+            )
+        }
+    return NeteaseDailyStyleHomeResult(
+        status = NeteaseAccountActionStatus.Success,
+        home = NeteaseDailyStyleHome(tracks = tracks, selection = selection),
+        code = code,
+    )
+}
+
+internal fun parseNeteaseDailyStylesResponse(response: String): NeteaseDailyStylesResult {
+    val root = JSONObject(response)
+    val code = root.optInt("code", -1)
+    val status = when (code) {
+        200 -> NeteaseAccountActionStatus.Success
+        301 -> NeteaseAccountActionStatus.RequiresLogin
+        else -> NeteaseAccountActionStatus.Failed
+    }
+    if (status != NeteaseAccountActionStatus.Success) {
+        return NeteaseDailyStylesResult(status = status, code = code.takeIf { it >= 0 })
+    }
+    val categories = root.optJSONObject("data")
+        ?.optJSONArray("categorys")
+        ?.toJsonObjects()
+        ?.mapNotNull { category ->
+            val categoryId = category.optInt("categoryId", 0)
+            val name = category.optNonBlankString("categoryName") ?: return@mapNotNull null
+            val tags = category.optJSONArray("tagVOList")
+                ?.toJsonObjects()
+                ?.mapNotNull { tag ->
+                    val tagId = tag.optInt("tagId", 0)
+                    val tagName = tag.optNonBlankString("tagName") ?: return@mapNotNull null
+                    if (tagId <= 0) null else NeteaseDailyStyleTag(categoryId, tagId, tagName)
+                }
+                .orEmpty()
+            if (tags.isEmpty()) null else NeteaseDailyStyleCategory(categoryId, name, tags)
+        }
+        .orEmpty()
+    return NeteaseDailyStylesResult(
+        status = NeteaseAccountActionStatus.Success,
+        categories = categories,
+        code = code,
+    )
+}
+
 internal fun parseNeteasePlaylistCreateResponse(response: String): OnlineAccountPlaylistCreateResult {
     val root = JSONObject(response)
     val code = root.optInt("code", -1)

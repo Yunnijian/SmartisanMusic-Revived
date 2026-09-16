@@ -49,6 +49,11 @@ internal object OnlinePageCacheCodecs {
         decodeItem = ::onlineSearchHotKeywordFromJson,
     )
 
+    val DailyStyles: OnlinePageCacheCodec<List<NeteaseDailyStyleCategory>> = listCodec(
+        encodeItem = NeteaseDailyStyleCategory::toJsonObject,
+        decodeItem = ::neteaseDailyStyleCategoryFromJson,
+    )
+
     val TrackIds: OnlinePageCacheCodec<Set<String>> = OnlinePageCacheCodec(
         encode = { ids ->
             JSONObject().put(
@@ -327,6 +332,46 @@ private fun onlineSearchHotKeywordFromJson(root: JSONObject): OnlineSearchHotKey
         keyword = keyword,
         subtitle = root.optCacheString("subtitle"),
         score = root.optLong("score", 0L).coerceAtLeast(0L),
+    )
+}
+
+private fun NeteaseDailyStyleCategory.toJsonObject(): JSONObject {
+    return JSONObject()
+        .put("categoryId", categoryId)
+        .put("name", name)
+        .put(
+            "tags",
+            JSONArray().also { array ->
+                tags.forEach { tag ->
+                    array.put(
+                        JSONObject()
+                            .put("categoryId", tag.categoryId)
+                            .put("tagId", tag.tagId)
+                            .put("name", tag.name),
+                    )
+                }
+            },
+        )
+}
+
+private fun neteaseDailyStyleCategoryFromJson(root: JSONObject): NeteaseDailyStyleCategory? {
+    val name = root.optCacheString("name") ?: return null
+    val tags = root.optJSONArray("tags")
+        ?.let { array ->
+            (0 until array.length()).mapNotNull { index -> array.optJSONObject(index) }
+        }
+        ?.mapNotNull { tag ->
+            val tagName = tag.optCacheString("name") ?: return@mapNotNull null
+            val tagId = tag.optInt("tagId", 0)
+            if (tagId <= 0) null
+            else NeteaseDailyStyleTag(tag.optInt("categoryId", 0), tagId, tagName)
+        }
+        .orEmpty()
+    if (tags.isEmpty()) return null
+    return NeteaseDailyStyleCategory(
+        categoryId = root.optInt("categoryId", 0),
+        name = name,
+        tags = tags,
     )
 }
 

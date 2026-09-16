@@ -80,6 +80,46 @@ internal data class NeteaseDailyRecommendedTracksResult(
     val code: Int? = null,
 )
 
+/** 风格日推的单个标签（如「摇滚」「华语」）。 */
+internal data class NeteaseDailyStyleTag(
+    val categoryId: Int,
+    val tagId: Int,
+    val name: String,
+)
+
+/** 风格日推的分类（曲风 / 语种 / 情绪 / 场景 / 主题），含该分类下的全部标签。 */
+internal data class NeteaseDailyStyleCategory(
+    val categoryId: Int,
+    val name: String,
+    val tags: List<NeteaseDailyStyleTag>,
+)
+
+internal data class NeteaseDailyStylesResult(
+    val status: NeteaseAccountActionStatus,
+    val categories: List<NeteaseDailyStyleCategory> = emptyList(),
+    val code: Int? = null,
+)
+
+/** 服务端当前已保存的风格选择；由风格曲目接口的 tags 回显给出。 */
+internal data class NeteaseDailyStyleSelection(
+    val categoryId: Int,
+    val categoryName: String?,
+    val tagId: Int,
+    val tagName: String,
+)
+
+/** 风格日推首页数据：曲目 + 当前风格（切风格后列表与风格名一起变）。 */
+internal data class NeteaseDailyStyleHome(
+    val tracks: List<OnlineTrack>,
+    val selection: NeteaseDailyStyleSelection?,
+)
+
+internal data class NeteaseDailyStyleHomeResult(
+    val status: NeteaseAccountActionStatus,
+    val home: NeteaseDailyStyleHome? = null,
+    val code: Int? = null,
+)
+
 internal enum class NeteasePlaylistTrackOperation(val apiValue: String) {
     Add("add"),
     Remove("del"),

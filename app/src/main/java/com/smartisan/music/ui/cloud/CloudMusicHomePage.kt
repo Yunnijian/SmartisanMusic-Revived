@@ -1,5 +1,6 @@
 package com.smartisan.music.ui.cloud
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -40,7 +40,6 @@ import com.smartisan.music.ui.cloud.components.CloudMusicCoverCardSection
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
 import com.smartisan.music.ui.cloud.components.CloudPullRefresh
-import kotlinx.coroutines.launch
 
 /**
  * 云音乐首页推荐页。
@@ -63,10 +62,10 @@ internal fun CloudMusicHomePage(
     onOpenArtist: (OnlineArtist) -> Unit,
     onOpenFeatured: (CloudFeaturedPage) -> Unit,
     onOpenBannerTrack: (OnlineBanner) -> Unit,
+    onOpenDaily: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
-    val scope = rememberCoroutineScope()
     val homeSlot = data.home
     val sectionAnimation = data.homeSectionAnimation
     val homeLoaded = homeSlot.state(Unit) is CloudSlotState.Success
@@ -139,6 +138,7 @@ internal fun CloudMusicHomePage(
                     onOpenArtist = onOpenArtist,
                     onOpenFeatured = onOpenFeatured,
                     onOpenBannerTrack = onOpenBannerTrack,
+                    onOpenDaily = onOpenDaily,
                     onPlayDailyTracks = { tracks, index ->
                         val items = tracks.map {
                             it.toMediaItem().withOnlinePlaybackPlaceholderUri()
@@ -168,6 +168,7 @@ private fun CloudMusicHomeContent(
     onOpenArtist: (OnlineArtist) -> Unit,
     onOpenFeatured: (CloudFeaturedPage) -> Unit,
     onOpenBannerTrack: (OnlineBanner) -> Unit,
+    onOpenDaily: () -> Unit,
     onPlayDailyTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
 ) {
     val home = bundle.home
@@ -220,7 +221,11 @@ private fun CloudMusicHomeContent(
             item(key = "cloud-home-section-daily") {
                 val tracks = dailyTracks
                 CloudHomeAnimatedSection(visibleState = sectionAnimation.stateAt(animationIndex)) {
-                    CloudMusicCoverCardSection(title = dailyTracksTitle) {
+                    CloudMusicCoverCardSection(
+                        title = dailyTracksTitle,
+                        actionText = viewAllText,
+                        onActionClick = onOpenDaily,
+                    ) {
                         itemsIndexed(
                             items = tracks,
                             key = { index, track -> "${track.mediaId}:$index" },
