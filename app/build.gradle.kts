@@ -124,6 +124,7 @@ dependencies {
         }
     }
     implementation(libs.superlyric.api)
+    implementation(libs.qr.code.kotlin)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)

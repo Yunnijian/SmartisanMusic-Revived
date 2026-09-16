@@ -40,7 +40,7 @@ import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.ui.cloud.components.CloudHomeEntry
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicHomeEntryRow
-import com.smartisan.music.ui.online.NeteaseWebLoginActivity
+import com.smartisan.music.ui.online.NeteaseLoginActivity
 import com.smartisan.music.ui.shell.PageStackTransition
 import com.smartisan.music.ui.navigation.SmartisanNavigationDuration
 import kotlin.math.cos
@@ -82,7 +82,7 @@ internal fun CloudMusicHost(
             return@rememberLauncherForActivityResult
         }
         val cookieJson = result.data
-            ?.getStringExtra(NeteaseWebLoginActivity.ExtraCookieJson)
+            ?.getStringExtra(NeteaseLoginActivity.ExtraCookieJson)
             .orEmpty()
         if (cookieJson.isNotBlank() && viewModel.saveLoginCookie(cookieJson)) {
             viewModel.reloadAuthState()
@@ -160,7 +160,7 @@ internal fun CloudMusicHost(
                 subtitle = stringResource(R.string.cloud_music_login_prompt),
                 actionText = stringResource(R.string.cloud_music_login_action),
                 onActionClick = {
-                    loginLauncher.launch(NeteaseWebLoginActivity.createIntent(context))
+                    loginLauncher.launch(NeteaseLoginActivity.createIntent(context))
                 },
                 modifier = Modifier
                     .fillMaxWidth()

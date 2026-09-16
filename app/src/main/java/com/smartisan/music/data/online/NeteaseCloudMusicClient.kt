@@ -133,6 +133,7 @@ internal class NeteaseCloudMusicClient(
         path: String,
         params: Map<String, String>,
         host: String = "interface.music.163.com",
+        anonymous: Boolean = false,
     ): String {
         val normalizedPath = if (path.startsWith("/")) path else "/$path"
         val eapiPath = "/eapi$normalizedPath"
@@ -140,7 +141,7 @@ internal class NeteaseCloudMusicClient(
         val url = "https://$host$eapiPath"
         val encryptedParams = NeteaseCrypto.encryptEApiParams(apiPath, params.toJsonObjectString())
         val body = "params=${encryptedParams.urlEncoded()}"
-        val connection = openConnection(url, followRedirects = true).apply {
+        val connection = openConnection(url, followRedirects = true, anonymous = anonymous).apply {
             requestMethod = "POST"
             doOutput = true
             setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
@@ -201,9 +202,18 @@ internal class NeteaseCloudMusicClient(
         )
     }
 
+    /**
+     * [anonymous] 为真时**不发已持久化的账号 Cookie**（MUSIC_U 等），但仍带上本次会话新产生的
+     * Cookie（如取 unikey 时服务端下发的 NMTID）。
+     *
+     * 登录类接口必须这样：带上已登录的 MUSIC_U 会被服务端按「已登录」拒绝
+     * （扫码轮询返回 `code=400 "device has login success"`）；而完全不发 Cookie 又会让
+     * 取 key 与轮询分属两个会话，服务端无法关联同一扫码流程，容易被判环境异常。
+     */
     private fun openConnection(
         url: String,
         followRedirects: Boolean,
+        anonymous: Boolean = false,
     ): HttpURLConnection {
         return (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = HttpTimeoutMs
@@ -213,10 +223,22 @@ internal class NeteaseCloudMusicClient(
             setRequestProperty("Accept-Language", Locale.getDefault().toLanguageTag())
             setRequestProperty("Referer", "https://music.163.com/")
             setRequestProperty("User-Agent", UserAgent)
-            buildCookieHeader().takeIf(String::isNotBlank)?.let { cookieHeader ->
-                setRequestProperty("Cookie", cookieHeader)
+            val cookieHeader = if (anonymous) buildSessionOnlyCookieHeader() else buildCookieHeader()
+            cookieHeader.takeIf(String::isNotBlank)?.let { header ->
+                setRequestProperty("Cookie", header)
             }
         }
+    }
+
+    /** 只含本次会话 Cookie 的请求头：登录流程用，避开已持久化账号态。 */
+    private fun buildSessionOnlyCookieHeader(): String {
+        val cookies = linkedMapOf<String, String>()
+        synchronized(sessionCookieLock) {
+            sessionCookies.forEach { (key, value) -> cookies[key] = value }
+        }
+        cookies.putIfAbsent("os", "pc")
+        cookies.putIfAbsent("appver", "8.10.35")
+        return cookies.entries.joinToString("; ") { (key, value) -> "$key=$value" }
     }
 
     internal fun requestPlaybackUrlWithSessionRetry(
@@ -364,6 +386,26 @@ internal class NeteaseCloudMusicClient(
 
     internal fun hasLogin(): Boolean {
         return !effectiveCookies()[NeteaseLoginCookieName].isNullOrBlank()
+    }
+
+    /**
+     * 本次会话收到的响应 Cookie 快照。
+     *
+     * 登录类端点（手机号 / 扫码）成功后由 Set-Cookie 下发 MUSIC_U，
+     * 调用方取这份快照写进 [NeteaseAuthStore] 才完成登录持久化。
+     * 不走 [effectiveCookies]：那里对 session 的 MUSIC_U 有「已持久化才生效」的过滤，
+     * 首次登录时会把刚拿到的凭据挡掉。
+     */
+    internal fun sessionCookieSnapshot(): Map<String, String> {
+        return synchronized(sessionCookieLock) { sessionCookies.toMap() }
+    }
+
+    /**
+     * 清空本次会话累积的响应 Cookie。登录流程开始时调用：
+     * 否则换号登录时旧账号的会话 Cookie 会混进新手快照被一起落盘。
+     */
+    internal fun clearSessionCookies() {
+        synchronized(sessionCookieLock) { sessionCookies.clear() }
     }
 
     private fun effectiveCookies(): Map<String, String> {

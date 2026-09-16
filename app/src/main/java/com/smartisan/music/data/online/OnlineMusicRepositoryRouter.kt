@@ -119,6 +119,31 @@ internal class OnlineMusicRepositoryRouter(
         }
     }
 
+    /** 登录页打开时调一次：清掉上一轮登录残留的会话 Cookie。 */
+    fun beginLoginSession() {
+        neteaseRepository.beginLoginSession()
+    }
+
+    suspend fun sendLoginSmsCode(phone: String): NeteaseLoginOutcome {
+        return neteaseRepository.sendLoginSmsCode(phone)
+    }
+
+    suspend fun loginWithPhone(phone: String, smsCode: String): NeteaseLoginOutcome {
+        return neteaseRepository.loginWithPhone(phone = phone, smsCode = smsCode)
+    }
+
+    suspend fun getLoginQrKey(): NeteaseQrKeyResult {
+        return neteaseRepository.getLoginQrKey()
+    }
+
+    suspend fun pollLoginQrStatus(unikey: String): NeteaseQrPollResult {
+        return neteaseRepository.pollLoginQrStatus(unikey)
+    }
+
+    suspend fun completeQrLogin(): NeteaseLoginOutcome {
+        return neteaseRepository.completeQrLogin()
+    }
+
     suspend fun setTrackLiked(
         identity: OnlineTrackIdentity,
         liked: Boolean,

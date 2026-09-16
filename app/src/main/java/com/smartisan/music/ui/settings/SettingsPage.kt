@@ -19,7 +19,7 @@ import com.smartisan.music.R
 import com.smartisan.music.data.online.NeteaseAuthStore
 import com.smartisan.music.data.settings.*
 import com.smartisan.music.launcher.AppIconManager
-import com.smartisan.music.ui.online.NeteaseWebLoginActivity
+import com.smartisan.music.ui.online.NeteaseLoginActivity
 import com.smartisan.music.ui.shell.PageStackTransition
 import kotlinx.coroutines.launch
 
@@ -74,7 +74,7 @@ internal fun SettingsPage(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val cookieJson = result.data
-                ?.getStringExtra(NeteaseWebLoginActivity.ExtraCookieJson)
+                ?.getStringExtra(NeteaseLoginActivity.ExtraCookieJson)
                 .orEmpty()
             if (cookieJson.isNotBlank() && authStore.saveCookieJson(cookieJson)) {
                 Toast.makeText(context, R.string.netease_login_success, Toast.LENGTH_SHORT).show()
@@ -115,7 +115,7 @@ internal fun SettingsPage(
                     if (neteaseSignedIn) {
                         logoutConfirmationVisible = true
                     } else {
-                        neteaseLoginLauncher.launch(NeteaseWebLoginActivity.createIntent(context))
+                        neteaseLoginLauncher.launch(NeteaseLoginActivity.createIntent(context))
                     }
                 },
                 onPlaybackQualityClick = {
