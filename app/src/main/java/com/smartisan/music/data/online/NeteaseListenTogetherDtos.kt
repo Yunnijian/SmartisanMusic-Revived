@@ -86,3 +86,14 @@ internal data class ListenTogetherSyncResult(
     val snapshot: ListenTogetherSyncSnapshot? = null,
     val code: Int? = null,
 )
+
+internal data class ListenTogetherStatistics(
+    val totalConnectionTimeSeconds: Long,
+    val listenCount: Int,
+)
+
+internal data class ListenTogetherStatisticsResult(
+    val status: NeteaseAccountActionStatus,
+    val statistics: ListenTogetherStatistics? = null,
+    val code: Int? = null,
+)

@@ -359,6 +359,11 @@ internal interface OnlineMusicProviderRepository {
         playlistParam: String,
     ): NeteaseAccountActionResult = NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
 
+    suspend fun getListenTogetherStatistics(
+        roomId: String,
+        roomUserIds: List<Long>,
+    ): ListenTogetherStatisticsResult = ListenTogetherStatisticsResult(NeteaseAccountActionStatus.Failed)
+
     suspend fun endListenTogetherRoom(roomId: String): NeteaseAccountActionResult =
         NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
 }

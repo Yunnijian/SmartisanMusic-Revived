@@ -2,6 +2,7 @@ package com.smartisan.music.listentogether
 
 import androidx.media3.common.Player
 import com.smartisan.music.data.online.ListenTogetherPlayCommand
+import com.smartisan.music.data.online.ListenTogetherPlaylistSnapshot
 import com.smartisan.music.data.online.ListenTogetherRoom
 import com.smartisan.music.data.online.ListenTogetherUser
 import com.smartisan.music.data.online.NeteaseAccountActionStatus
@@ -10,6 +11,7 @@ import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
 import com.smartisan.music.data.online.OnlineTrackIdentity
 import com.smartisan.music.data.online.onlineIdentityOrNull
 import com.smartisan.music.data.online.runSuspendCatching
+import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,6 +42,9 @@ internal data class ListenTogetherSessionState(
     val selfUserId: Long? = null,
     val isHost: Boolean = false,
     val users: List<ListenTogetherUser> = emptyList(),
+    val otherMember: ListenTogetherUser? = null,
+    val accumulatedSeconds: Long = 0L,
+    val thisRoomSeconds: Long = 0L,
     val message: String? = null,
 )
 
@@ -65,10 +70,12 @@ internal class ListenTogetherStore(
     private var lastAppliedServerSeq: Long = 0L
     private var clientSeq: Long = 0L
     private var playlistVersion: Long = 0L
+    private var appliedPlaylistVersion: Int = 0
     private var suppressReportsUntilMs: Long = 0L
 
     private var pollJob: Job? = null
     private var playlistReportJob: Job? = null
+    private var durationJob: Job? = null
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -150,6 +157,7 @@ internal class ListenTogetherStore(
                 selfUserId = myUserId,
                 isHost = true,
                 users = room.users,
+                otherMember = otherMemberOf(room.users),
                 message = null,
             )
         }
@@ -157,6 +165,8 @@ internal class ListenTogetherStore(
         runSuspendCatching { seedPlaylistSnapshot(room.roomId) }
         runSuspendCatching { reportPlaybackCommand("GOTO", force = true) }
         startPolling()
+        startLocalDurationTimer()
+        scope.launch { refreshStatistics(room.roomId) }
         return room
     }
 
@@ -182,10 +192,26 @@ internal class ListenTogetherStore(
                 selfUserId = myUserId,
                 isHost = room.creatorId == myUserId,
                 users = room.users,
+                otherMember = otherMemberOf(room.users),
                 message = null,
             )
         }
         startPolling()
+        startLocalDurationTimer()
+        scope.launch { refreshStatistics(room.roomId) }
+    }
+
+    private fun startLocalDurationTimer() {
+        durationJob?.cancel()
+        durationJob = scope.launch {
+            while (isActive) {
+                delay(LocalDurationTickMs)
+                if (roomId == null) {
+                    return@launch
+                }
+                _state.update { it.copy(thisRoomSeconds = it.thisRoomSeconds + LocalDurationStepSeconds) }
+            }
+        }
     }
 
     private fun startPolling() {
@@ -212,7 +238,57 @@ internal class ListenTogetherStore(
         if (result?.status != NeteaseAccountActionStatus.Success) {
             return
         }
+        result.snapshot?.playlist?.let { applyRemotePlaylist(it) }
         result.snapshot?.command?.let { applyRemoteCommand(it) }
+    }
+
+    /**
+     * 把房间队列拉到本地播放器。
+     *
+     * 房主把队列 REPLACE 进房间后，加入方只能从这里拿到歌单——只消费 playCommand 的话，
+     * 房主没切过歌（无命令）时本地队列就一直是空的。以 version 判新旧避免每轮重复重建，
+     * 且只在确实变新时才动播放器，保住当前播放进度。
+     *
+     * 只给加入方用：房主自己的队列就是房间队列（建房时已 seed），再采纳一次只会白重建；
+     * 更要紧的是别让对端上报的版本反过来顶掉房主已经在用的队列。
+     */
+    private suspend fun applyRemotePlaylist(playlist: ListenTogetherPlaylistSnapshot) {
+        val player = player ?: return
+        if (_state.value.isHost) {
+            return
+        }
+        // versions 是各端各自的版本号，只认对方的；自己那份是自己 seed 的，回读会白重建一次。
+        val remoteVersion =
+            playlist.versions.filterNot { it.userId == myUserId }.maxOfOrNull { it.version } ?: return
+        if (!shouldApplyRemotePlaylist(remoteVersion, appliedPlaylistVersion)) {
+            return
+        }
+        val songIds = playlist.displaySongIds.map(String::trim).filter(String::isNotEmpty)
+        if (songIds.isEmpty()) {
+            return
+        }
+        appliedPlaylistVersion = remoteVersion
+
+        val currentTrackId = player.currentMediaItem
+            ?.onlineIdentityOrNull()
+            ?.takeIf { it.source == NeteaseSourceId }
+            ?.trackId
+        val items = router.getMediaItems(
+            songIds.map { OnlineTrackIdentity(source = NeteaseSourceId, trackId = it) },
+        ).map { it.withOnlinePlaybackPlaceholderUri() }
+        if (items.isEmpty()) {
+            return
+        }
+        // 队列重建会让播放器回到第一首，按当前歌在新队列里的位置复位，听感上不跳。
+        val resumeIndex = items.indexOfFirst { item ->
+            item.onlineIdentityOrNull()?.takeIf { it.source == NeteaseSourceId }?.trackId == currentTrackId
+        }
+        val startIndex = resumeIndex.coerceAtLeast(0)
+        val startPositionMs =
+            if (resumeIndex >= 0) player.currentPosition.coerceAtLeast(0L) else 0L
+        suppressReportsUntilMs = System.currentTimeMillis() + EchoSuppressMs
+        player.setMediaItems(items, startIndex, startPositionMs)
+        player.prepare()
     }
 
     private suspend fun refreshRoomStatus(id: String) {
@@ -227,12 +303,18 @@ internal class ListenTogetherStore(
             return
         }
         roomStatus.room?.let { room ->
+            val newOtherMember = otherMemberOf(room.users)
+            val previousOtherUserId = _state.value.otherMember?.userId
             _state.update {
                 it.copy(
                     connectionState = ListenTogetherConnectionState.Connected,
                     isHost = room.creatorId == myUserId,
                     users = room.users,
+                    otherMember = newOtherMember,
                 )
+            }
+            if (newOtherMember?.userId != null && newOtherMember.userId != previousOtherUserId) {
+                scope.launch { refreshStatistics(id) }
             }
         }
     }
@@ -294,15 +376,44 @@ internal class ListenTogetherStore(
         }
     }
 
+    /** 房间里除自己以外的那个成员；自己是唯一成员或未确认 selfId 时为空。 */
+    private fun otherMemberOf(users: List<ListenTogetherUser>): ListenTogetherUser? {
+        val selfId = myUserId ?: return null
+        return users.firstOrNull { it.userId != selfId }
+    }
+
+    /**
+     * 拉取双方历史累计时长。失败时静默降级：保持现状（只显示本地计时），
+     * 不弹 Toast、不打断同步——统计属于展示辅助，不是会话主线。
+     */
+    private suspend fun refreshStatistics(roomId: String) {
+        val state = _state.value
+        val selfId = state.selfUserId ?: return
+        val otherId = state.otherMember?.userId ?: return
+        val roomUserIds = if (state.isHost) listOf(selfId, otherId) else listOf(otherId, selfId)
+        val result = runSuspendCatching {
+            router.getListenTogetherStatistics(roomId, roomUserIds)
+        }.getOrNull()
+        if (result?.status != NeteaseAccountActionStatus.Success) {
+            return
+        }
+        result.statistics?.let { statistics ->
+            _state.update { it.copy(accumulatedSeconds = statistics.totalConnectionTimeSeconds) }
+        }
+    }
+
     private fun endSession(message: String) {
         pollJob?.cancel()
         pollJob = null
         playlistReportJob?.cancel()
         playlistReportJob = null
+        durationJob?.cancel()
+        durationJob = null
         roomId = null
         lastAppliedServerSeq = 0L
         clientSeq = 0L
         playlistVersion = 0L
+        appliedPlaylistVersion = 0
         suppressReportsUntilMs = 0L
         _state.update { state ->
             state.copy(
@@ -311,6 +422,9 @@ internal class ListenTogetherStore(
                 selfUserId = null,
                 isHost = false,
                 users = emptyList(),
+                otherMember = null,
+                accumulatedSeconds = 0L,
+                thisRoomSeconds = 0L,
                 message = message,
             )
         }
@@ -326,23 +440,40 @@ internal class ListenTogetherStore(
         suppressReportsUntilMs = System.currentTimeMillis() + EchoSuppressMs
         val current = player.currentMediaItem?.onlineIdentityOrNull()
         if (current?.trackId != targetId) {
-            val items = router.resolvePlayableItems(
-                listOf(OnlineTrackIdentity(source = NeteaseSourceId, trackId = targetId)),
-                includeLyrics = false,
-            )
-            val item = items.firstOrNull()
-            if (item == null) {
-                _state.update { it.copy(message = "无法播放对方点播的歌曲") }
-                return
+            val queueIndex = player.onlineTrackIndex(targetId)
+            if (queueIndex >= 0) {
+                // 目标歌已在房间队列里：只切索引，别把整队换成单曲。
+                player.seekTo(queueIndex, 0L)
+            } else {
+                val items = router.resolvePlayableItems(
+                    listOf(OnlineTrackIdentity(source = NeteaseSourceId, trackId = targetId)),
+                    includeLyrics = false,
+                )
+                val item = items.firstOrNull()
+                if (item == null) {
+                    _state.update { it.copy(message = "无法播放对方点播的歌曲") }
+                    return
+                }
+                player.setMediaItem(item)
+                player.prepare()
             }
-            player.setMediaItem(item)
-            player.prepare()
         }
         player.seekTo(command.progressMs.coerceAtLeast(0L))
         when (command.playStatus) {
             "PLAY" -> player.play()
             "PAUSE" -> player.pause()
         }
+    }
+
+    /** 目标曲目在当前播放队列里的下标；不在队列中返回 -1。 */
+    private fun Player.onlineTrackIndex(trackId: String): Int {
+        for (index in 0 until mediaItemCount) {
+            val identity = getMediaItemAt(index).onlineIdentityOrNull() ?: continue
+            if (identity.source == NeteaseSourceId && identity.trackId == trackId) {
+                return index
+            }
+        }
+        return -1
     }
 
     private fun reportPlaybackCommand(type: String, force: Boolean = false) {
@@ -405,6 +536,18 @@ internal fun shouldApplyRemoteCommand(
     return command.serverSeq > lastAppliedServerSeq
 }
 
+/**
+ * 房间队列是否比本地已应用的更新。版本号由各端自己上报、服务端只回显，
+ * 因此「同版本」是常态（每轮轮询都会读回上次的快照），必须判等跳过，
+ * 否则每秒都会重建一次播放队列。
+ */
+internal fun shouldApplyRemotePlaylist(
+    remoteVersion: Int,
+    appliedVersion: Int,
+): Boolean {
+    return remoteVersion > appliedVersion
+}
+
 internal fun buildListenTogetherCommandInfo(
     commandType: String,
     progressMs: Long,
@@ -427,3 +570,5 @@ private const val StatusEveryTicks = 5L
 private const val HeartbeatEveryTicks = 30L
 private const val EchoSuppressMs = 1_000L
 private const val PlaylistReportDebounceMs = 350L
+private const val LocalDurationTickMs = 60_000L
+private const val LocalDurationStepSeconds = 60L

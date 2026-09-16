@@ -345,6 +345,9 @@
 
     <!-- 一起听 -->
     <string name="listen_together_title">一起听</string>
+    <string name="listen_together_listened_one_minute">一起听了1分钟</string>
+    <string name="listen_together_listened_minutes">一起听了%1$d分钟</string>
+    <string name="listen_together_listened_hours_minutes">一起听了%1$d小时%2$d分钟</string>
     <string name="cloud_music_album_total_tracks">共 %1$d 首</string>
     <plurals name="cloud_music_album_count">
         <item quantity="other">%1$d 张专辑</item>

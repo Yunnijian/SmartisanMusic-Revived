@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.smartisan.music.R
 import com.smartisan.music.playback.EmbeddedLyrics
+import com.smartisan.music.ui.listentogether.ListenTogetherStatusOverlay
 
 @Composable
 internal fun PlaybackVisualStage(
@@ -84,6 +85,18 @@ internal fun PlaybackVisualStage(
         val moreButtonTopMargin = 38.dp * scale
         val actionButtonSize = PlaybackActionButtonSize * scale
         val isLyricsPage = currentVisualPage == PlaybackVisualPage.Lyrics
+        // 封面页切走/切回时的进场与出场；与封面同一转场参数，徽标才能跟碟片同步。
+        val coverEnterSpec =
+            tween<Float>(
+                durationMillis = PlaybackVisualPageEnterDurationMillis,
+                delayMillis = PlaybackVisualPageEnterDelayMillis,
+                easing = PlaybackControlEasing,
+            )
+        val coverExitSpec =
+            tween<Float>(
+                durationMillis = PlaybackVisualPageExitDurationMillis,
+                easing = PlaybackControlEasing,
+            )
 
         Box(
             modifier =
@@ -99,6 +112,16 @@ internal fun PlaybackVisualStage(
                 onMoreClick = onMoreClick,
                 onKeepLyricsScreenAwakeToggle = onKeepLyricsScreenAwakeToggle,
             )
+            // 徽标属于封面页：切到歌词页要随碟片一起淡出并略微放大，切回来再复原。
+            // 抬 zIndex：耳机弧线上端会压在碟片下缘，必须画在转盘之后。
+            AnimatedVisibility(
+                visible = !isLyricsPage,
+                enter = fadeIn(coverEnterSpec) + scaleIn(initialScale = 1.015f, animationSpec = coverEnterSpec),
+                exit = fadeOut(coverExitSpec) + scaleOut(targetScale = 1.015f, animationSpec = coverExitSpec),
+                modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f),
+            ) {
+                ListenTogetherStatusOverlay()
+            }
             Box(
                 modifier =
                     Modifier.align(Alignment.TopCenter)

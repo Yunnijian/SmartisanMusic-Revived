@@ -2,6 +2,7 @@ package com.smartisan.music.data.online
 
 import com.smartisan.music.AppDispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** 「一起听」客户端协议端点：建房/入房/状态/心跳/同步/命令上报/结束，全走 eapi。 */
@@ -142,6 +143,28 @@ internal suspend fun NeteaseCloudMusicClient.endListenTogetherRoom(roomId: Strin
     parseNeteaseAccountActionResponse(response)
 }
 
+/**
+ * 拉取房间双方的历史累计时长。`roomUserIds` 必须显式传入两个 uid，缺省会被服务端 400。
+ */
+internal suspend fun NeteaseCloudMusicClient.getListenTogetherStatistics(
+    roomId: String,
+    roomUserIds: List<Long>,
+): ListenTogetherStatisticsResult = withContext(AppDispatchers.IO) {
+    val id = roomId.trim().takeIf(String::isNotEmpty)
+        ?: return@withContext ListenTogetherStatisticsResult(NeteaseAccountActionStatus.Failed)
+    val idsJson = JSONArray(roomUserIds).toString()
+    val response = requestWithLoginRetry {
+        callEApi(
+            path = "/listen/together/relation/statistics/get/v2",
+            params = mapOf(
+                "roomId" to id,
+                "roomUserIds" to idsJson,
+            ),
+        )
+    }
+    parseListenTogetherStatisticsResponse(response)
+}
+
 internal fun parseListenTogetherCreateResponse(response: String): ListenTogetherCreateResult {
     val root = runCatching { JSONObject(response) }.getOrNull()
         ?: return ListenTogetherCreateResult(NeteaseAccountActionStatus.Failed)
@@ -196,6 +219,21 @@ internal fun parseListenTogetherSyncResponse(response: String): ListenTogetherSy
         playlist = data.optJSONObject("playlist")?.let(::parseListenTogetherPlaylist),
     )
     return ListenTogetherSyncResult(status, snapshot, code.takeIf { it >= 0 })
+}
+
+internal fun parseListenTogetherStatisticsResponse(response: String): ListenTogetherStatisticsResult {
+    val root = runCatching { JSONObject(response) }.getOrNull()
+        ?: return ListenTogetherStatisticsResult(NeteaseAccountActionStatus.Failed)
+    val code = root.optInt("code", -1)
+    val status = listenTogetherStatusOf(code)
+    val data = root.optJSONObject("data")
+    val statistics = data?.let {
+        ListenTogetherStatistics(
+            totalConnectionTimeSeconds = it.optLong("totalConnectionTime", 0L),
+            listenCount = it.optInt("listenCount", 0),
+        )
+    }
+    return ListenTogetherStatisticsResult(status, statistics, code.takeIf { it >= 0 })
 }
 
 private fun parseListenTogetherRoom(room: JSONObject): ListenTogetherRoom? {

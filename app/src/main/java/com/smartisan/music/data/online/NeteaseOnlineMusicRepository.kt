@@ -364,6 +364,11 @@ internal class NeteaseOnlineMusicRepository(
         playlistParam: String,
     ): NeteaseAccountActionResult = client.reportListenTogetherPlaylist(roomId, playlistParam)
 
+    override suspend fun getListenTogetherStatistics(
+        roomId: String,
+        roomUserIds: List<Long>,
+    ): ListenTogetherStatisticsResult = client.getListenTogetherStatistics(roomId, roomUserIds)
+
     override suspend fun endListenTogetherRoom(roomId: String): NeteaseAccountActionResult =
         client.endListenTogetherRoom(roomId)
 }

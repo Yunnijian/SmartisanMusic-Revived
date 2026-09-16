@@ -277,6 +277,13 @@ internal class OnlineMusicRepositoryRouter(
         return neteaseRepository.reportListenTogetherPlaylist(roomId, playlistParam)
     }
 
+    suspend fun getListenTogetherStatistics(
+        roomId: String,
+        roomUserIds: List<Long>,
+    ): ListenTogetherStatisticsResult {
+        return neteaseRepository.getListenTogetherStatistics(roomId, roomUserIds)
+    }
+
     suspend fun endListenTogetherRoom(roomId: String): NeteaseAccountActionResult {
         return neteaseRepository.endListenTogetherRoom(roomId)
     }

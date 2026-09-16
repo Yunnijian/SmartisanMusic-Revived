@@ -69,6 +69,19 @@ class ListenTogetherStoreTest {
     }
 
     @Test
+    fun appliesPlaylistWhenRemoteVersionIsNewer() {
+        assertTrue(shouldApplyRemotePlaylist(remoteVersion = 1, appliedVersion = 0))
+        assertTrue(shouldApplyRemotePlaylist(remoteVersion = 3, appliedVersion = 2))
+    }
+
+    @Test
+    fun skipsPlaylistWhenVersionUnchangedOrOlder() {
+        // 每轮轮询都会回读同一份快照，判等必须跳过，否则每秒重建一次队列。
+        assertFalse(shouldApplyRemotePlaylist(remoteVersion = 2, appliedVersion = 2))
+        assertFalse(shouldApplyRemotePlaylist(remoteVersion = 1, appliedVersion = 4))
+    }
+
+    @Test
     fun commandInfoCarriesProtocolFields() {
         val info = buildListenTogetherCommandInfo(
             commandType = "GOTO",
