@@ -22,6 +22,10 @@ internal const val OnlineTranslatedLyricsExtraKey = "com.smartisan.music.extra.O
 internal const val OnlineWordLyricsExtraKey = "com.smartisan.music.extra.ONLINE_WORD_LYRICS"
 internal const val OnlineTranslatedWordLyricsExtraKey = "com.smartisan.music.extra.ONLINE_TRANSLATED_WORD_LYRICS"
 internal const val OnlinePlaybackResolvedAtExtraKey = "com.smartisan.music.extra.ONLINE_PLAYBACK_RESOLVED_AT"
+
+/** 服务端回显的实际音质档位（如 jymaster）与码率 bps；请求被静默降级时以这两个值为准。 */
+internal const val OnlinePlaybackLevelExtraKey = "com.smartisan.music.extra.ONLINE_PLAYBACK_LEVEL"
+internal const val OnlinePlaybackBitrateExtraKey = "com.smartisan.music.extra.ONLINE_PLAYBACK_BITRATE"
 internal const val OnlinePlaybackUriScheme = "smartisan-online"
 
 internal data class OnlineLyrics(

@@ -72,6 +72,24 @@ internal suspend fun NeteaseOnlineMusicRepository.currentUserProfile(): NeteaseA
     }
 }
 
+/**
+ * 账号的音质权益档次，供设置页灰置不可用档位；未登录或拉取失败返回 null（调用方按未知处理）。
+ *
+ * 与账号其他信息同用账号域缓存，登录/换号时会随 [NeteaseOnlineMemoryCache] 的账号域失效一起作废。
+ */
+internal suspend fun NeteaseOnlineMusicRepository.vipLevel(): com.smartisan.music.data.settings.NeteaseVipLevel? {
+    val state = authStore?.load() ?: return null
+    if (!state.isLoggedIn) {
+        return null
+    }
+    return NeteaseOnlineMemoryCache.getOrLoadNonNull(
+        key = cacheKey("account:vip-level"),
+        ttlMs = NeteaseAccountCacheTtlMs,
+    ) {
+        runSuspendCatching { client.getVipLevel() }.getOrNull()
+    }
+}
+
 internal suspend fun NeteaseOnlineMusicRepository.currentUserPlaylists(
     limit: Int = AccountPlaylistLimit,
 ): List<NeteasePlaylistSummary>? {

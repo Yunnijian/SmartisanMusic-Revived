@@ -12,9 +12,17 @@ internal data class OnlineTrack(
     val mediaId: String = buildOnlineMediaId(source, trackId)
 }
 
+/**
+ * 播放地址解析结果。
+ *
+ * [level] / [br] 是服务端回显的**实际**档位与码率：请求高档位而账号权益或曲目资源不足时，
+ * 服务端会静默下发较低档位，只有回显值能反映真实结果（未登录的外链兜底路径没有这两个字段）。
+ */
 internal data class OnlinePlaybackUrl(
     val url: String,
     val mimeType: String?,
+    val level: String? = null,
+    val br: Long? = null,
 )
 
 internal data class NeteaseAccountProfile(

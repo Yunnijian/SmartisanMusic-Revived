@@ -3,6 +3,7 @@ package com.smartisan.music.data.online
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
+import com.smartisan.music.data.settings.NeteaseVipLevel
 import kotlinx.coroutines.CancellationException
 
 internal class OnlineMusicRepositoryRouter(
@@ -162,6 +163,11 @@ internal class OnlineMusicRepositoryRouter(
      */
     suspend fun accountLikedTrackIds(): Set<String>? {
         return runOnlineFetch(null) { neteaseRepository.accountLikedTrackIds() }
+    }
+
+    /** 当前登录账号的音质权益档次；未登录或失败返回 null（调用方按未知处理）。 */
+    suspend fun vipLevel(): NeteaseVipLevel? {
+        return runOnlineFetch(null) { neteaseRepository.vipLevel() }
     }
 
     /** 当前登录账号资料；未登录或失败返回 null。 */

@@ -1,6 +1,7 @@
 package com.smartisan.music.data.online
 
 import com.smartisan.music.AppDispatchers
+import com.smartisan.music.data.settings.NeteaseVipLevel
 import kotlinx.coroutines.withContext
 
 /** 账号域端点：用户资料、云盘歌单/专辑/电台、红心、每日推荐、歌单增删与曲目操作。 */
@@ -70,6 +71,22 @@ internal suspend fun NeteaseCloudMusicClient.getCurrentUserProfile(): NeteaseAcc
         callWeApi("/w/nuser/account/get", emptyMap())
     }
     parseNeteaseAccountProfileResponse(response)
+}
+
+/**
+ * 账号的音质权益档次，用于设置页判断哪些音质档位可选；未登录或异常返回 null。
+ *
+ * 端点与官方客户端一致（/music-vip-membership/client/vip/info）：官方用它判定 isPlusVip
+ * （即黑胶 SVIP，取 redplus 有效期）与 isVinylVip（黑胶 VIP，取 musicPackage/associator 有效期）。
+ */
+internal suspend fun NeteaseCloudMusicClient.getVipLevel(): NeteaseVipLevel? = withContext(AppDispatchers.IO) {
+    if (!hasLogin()) {
+        return@withContext null
+    }
+    val response = runSuspendCatching {
+        callEApi("/music-vip-membership/client/vip/info", emptyMap())
+    }.getOrNull() ?: return@withContext null
+    parseNeteaseVipLevelResponse(response)
 }
 
 internal suspend fun NeteaseCloudMusicClient.setSongLiked(trackId: String, liked: Boolean): NeteaseAccountActionResult = withContext(AppDispatchers.IO) {

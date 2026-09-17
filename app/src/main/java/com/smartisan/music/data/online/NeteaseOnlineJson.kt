@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import com.smartisan.music.data.settings.NeteaseVipLevel
 import com.smartisan.music.playback.LocalAudioLibrary
 import org.json.JSONArray
 import org.json.JSONObject
@@ -118,6 +119,8 @@ internal fun OnlineTrack.toMediaItem(
     playbackUrl: String? = null,
     mimeType: String? = null,
     lyrics: OnlineLyrics? = null,
+    playbackLevel: String? = null,
+    playbackBr: Long? = null,
 ): MediaItem {
     val extras = Bundle().apply {
         putBoolean(OnlineTrackExtraKey, true)
@@ -140,6 +143,12 @@ internal fun OnlineTrack.toMediaItem(
         }
         if (!playbackUrl.isNullOrBlank()) {
             putLong(OnlinePlaybackResolvedAtExtraKey, System.currentTimeMillis())
+        }
+        playbackLevel?.takeIf(String::isNotBlank)?.let { level ->
+            putString(OnlinePlaybackLevelExtraKey, level)
+        }
+        playbackBr?.takeIf { bitrate -> bitrate > 0L }?.let { bitrate ->
+            putLong(OnlinePlaybackBitrateExtraKey, bitrate)
         }
     }
     val metadata = MediaMetadata.Builder()
@@ -299,6 +308,38 @@ internal fun parseNeteaseSong(song: JSONObject): OnlineTrack? {
         durationMs = duration.coerceAtLeast(0L),
         artworkUrl = album?.optArtworkUrl(),
     )
+}
+
+/** 会员权益包的有效期字段；无该包或已过期返回 null。 */
+private fun JSONObject.vipPackageExpireTime(name: String): Long? {
+    return optJSONObject(name)?.optLongOrNull("expireTime")?.takeIf { it > 0L }
+}
+
+/**
+ * 解析 vip/info 响应，得出账号音质权益档次。
+ *
+ * 判定顺序与官方一致：`redplus` 有效即黑胶 SVIP（官方 isPlusVip），
+ * 否则 `musicPackage` / `associator` 有效为黑胶 VIP；都没有则免费。
+ * 用本地时间与 expireTime 比较，不依赖响应的 now 字段。
+ */
+internal fun parseNeteaseVipLevelResponse(
+    response: String,
+    nowMs: Long = System.currentTimeMillis(),
+): NeteaseVipLevel? {
+    val root = runCatching { JSONObject(response) }.getOrNull() ?: return null
+    if (root.optInt("code", -1) != 200) {
+        return null
+    }
+    val data = root.optJSONObject("data") ?: return null
+    fun isActive(name: String): Boolean {
+        val expireTime = data.vipPackageExpireTime(name) ?: return false
+        return expireTime > nowMs
+    }
+    return when {
+        isActive("redplus") -> NeteaseVipLevel.Svip
+        isActive("musicPackage") || isActive("associator") -> NeteaseVipLevel.Vip
+        else -> NeteaseVipLevel.Free
+    }
 }
 
 internal fun parseNeteaseAccountProfileJson(profileJson: String): NeteaseAccountProfile? {
@@ -505,6 +546,9 @@ internal fun parseNeteasePlaybackUrlResponse(
             OnlinePlaybackUrl(
                 url = playableUrl,
                 mimeType = item.optNonBlankString("type")?.toAudioMimeType(),
+                // 服务端回显的实际档位/码率：请求与权益不匹配时会静默降级，只有这里能反映真实结果。
+                level = item.optNonBlankString("level"),
+                br = item.optLongOrNull("br")?.takeIf { bitrate -> bitrate > 0L },
             ),
     )
 }

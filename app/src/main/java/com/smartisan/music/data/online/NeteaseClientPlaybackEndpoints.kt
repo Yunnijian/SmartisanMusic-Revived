@@ -34,11 +34,12 @@ internal suspend fun NeteaseCloudMusicClient.getPlaybackUrlResult(
         val eapiResult = requestPlaybackUrlWithSessionRetry(originalDurationMs) {
             callEApi(
                 path = "/song/enhance/player/url/v1",
-                params = mapOf(
-                    "ids" to idsJson,
-                    "level" to quality.level,
-                    "encodeType" to quality.encodeType,
-                ),
+                params = buildMap {
+                    put("ids", idsJson)
+                    put("level", quality.level)
+                    put("encodeType", quality.encodeType)
+                    quality.immerseType?.let { immerseType -> put("immerseType", immerseType) }
+                },
             )
         }
         when (eapiResult.status) {

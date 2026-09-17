@@ -53,6 +53,8 @@ internal suspend fun NeteaseOnlineMusicRepository.resolvePlayableTrack(
         playbackUrl = playbackUrl.url,
         mimeType = playbackUrl.mimeType,
         lyrics = lyrics,
+        playbackLevel = playbackUrl.level,
+        playbackBr = playbackUrl.br,
     )
 }
 
