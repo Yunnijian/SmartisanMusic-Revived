@@ -42,11 +42,14 @@ import androidx.media3.common.Player
 import com.smartisan.music.R
 import com.smartisan.music.data.playlist.UserPlaylistDetail
 import com.smartisan.music.playback.LocalAudioLibrary
+import com.smartisan.music.ui.artwork.AlbumArtworkLoader
 import com.smartisan.music.ui.components.*
 import com.smartisan.music.ui.library.LibraryBlank
 import com.smartisan.music.ui.library.LibraryDivider
 import com.smartisan.music.ui.library.LibraryFooter
+import com.smartisan.music.ui.library.SmartisanMediaArtwork
 import com.smartisan.music.ui.library.libraryListEntrance
+import com.smartisan.music.ui.library.rememberAlbumArtworkLoader
 import com.smartisan.music.ui.library.rememberLibraryListEntrance
 import com.smartisan.music.ui.songs.SmartisanPlayingTitle
 import com.smartisan.music.ui.songs.SongPlaybackState
@@ -77,6 +80,7 @@ internal fun PlaylistDetailPage(
 ) {
     val listState = rememberLazyListState()
     val playback = rememberSongPlaybackState(browser)
+    val artwork = rememberAlbumArtworkLoader()
     var preview by remember(tracks) { mutableStateOf(tracks) }
     val dragState = rememberSmartisanListDragState(tracks)
     val latestTracks by rememberUpdatedState(tracks)
@@ -277,6 +281,7 @@ internal fun PlaylistDetailPage(
                                         editMode,
                                         item.mediaId in selectedTrackIds,
                                         playback,
+                                        artwork,
                                         { onTrackClick(item, index) },
                                         { onTrackMoreClick(item) },
                                         Modifier.smartisanDragRecording(layer),
@@ -307,6 +312,7 @@ private fun PlaylistTrackRow(
     editMode: Boolean,
     checked: Boolean,
     playback: SongPlaybackState,
+    artwork: AlbumArtworkLoader,
     onClick: () -> Unit,
     onMore: () -> Unit,
     modifier: Modifier,
@@ -359,7 +365,25 @@ private fun PlaylistTrackRow(
                     )
             }
             Spacer(Modifier.width(dimensionResource(R.dimen.listview_items_margin_left)))
-            Column(Modifier.weight(1f)) {
+            val artworkSize = dimensionResource(R.dimen.listview_item_image_width)
+            Box(Modifier.size(artworkSize)) {
+                SmartisanMediaArtwork(
+                    item,
+                    with(density) { artworkSize.roundToPx() },
+                    R.drawable.noalbumcover_120,
+                    Modifier.fillMaxSize(),
+                    artwork,
+                )
+                Image(
+                    rememberSmartisanDrawablePainter(R.drawable.mask_albumcover_list),
+                    null,
+                    Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds,
+                )
+            }
+            Column(
+                Modifier.weight(1f).padding(start = dimensionResource(R.dimen.common_padding_left))
+            ) {
                 CompositionLocalProvider(LocalLayoutDirection provides locale) {
                     val title =
                         item.mediaMetadata.displayTitle?.toString()
