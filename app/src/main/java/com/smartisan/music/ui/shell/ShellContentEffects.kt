@@ -10,6 +10,7 @@ import androidx.media3.session.MediaController
 import com.smartisan.music.AppDispatchers
 import com.smartisan.music.ExternalAudioLaunchRequest
 import com.smartisan.music.data.favorite.LovedSongsCloudSync
+import com.smartisan.music.data.playlist.PlaylistOnlineItemResolver
 import com.smartisan.music.data.settings.NavigationSettings
 import com.smartisan.music.data.settings.NavigationSettingsStore
 import com.smartisan.music.data.settings.restoredDestination
@@ -36,6 +37,9 @@ internal fun ShellContentEffects(
     onlineLovedRefreshVersion: MutableState<Int>,
     onlineLovedMediaItems: MutableState<List<MediaItem>>,
     lovedSongsCloudSync: LovedSongsCloudSync,
+    playlistOnlineItemResolver: PlaylistOnlineItemResolver,
+    onlinePlaylistMediaIds: List<String>,
+    onlinePlaylistMediaItems: MutableState<List<MediaItem>>,
     favoriteIds: Set<String>,
     libraryLoaded: Boolean,
     currentOnStartupReady: () -> Unit,
@@ -82,6 +86,19 @@ internal fun ShellContentEffects(
             lovedSongsPageActive = uiState.currentDestination == MusicDestination.LovedSongs,
             localFavoriteMediaIds = favoriteIds,
         )
+    }
+
+    // 本地歌单里的在线条目：进播放列表页且确有在线 mediaId 时反查物料。
+    // 离开页面保留上次结果，避免返回时在线行先消失再重建；清空由数据变化驱动（见 onlinePlaylistMediaIds）。
+    LaunchedEffect(
+        uiState.currentDestination,
+        onlinePlaylistMediaIds,
+    ) {
+        if (uiState.currentDestination != MusicDestination.Playlist) {
+            return@LaunchedEffect
+        }
+        val resolved = playlistOnlineItemResolver.resolveOnlineMediaItems(onlinePlaylistMediaIds)
+        onlinePlaylistMediaItems.value = resolved
     }
 
     LaunchedEffect(navigationStateRestored.value, libraryLoaded, controller) {

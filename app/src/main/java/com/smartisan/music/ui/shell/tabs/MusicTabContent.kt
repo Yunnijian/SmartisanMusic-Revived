@@ -41,6 +41,7 @@ internal fun MusicTabContent(
     overflowDestinations: List<MusicDestination>,
     mediaItems: List<MediaItem>,
     onlineLovedMediaItems: List<MediaItem> = emptyList(),
+    onlinePlaylistMediaItems: List<MediaItem> = emptyList(),
     favoriteRecords: List<FavoriteSongRecord>,
     libraryLoaded: Boolean,
     songsEditMode: Boolean,
@@ -160,6 +161,7 @@ internal fun MusicTabContent(
             MusicDestination.Playlist ->
                 PlaylistPage(
                     mediaItems = mediaItems,
+                    onlineMediaItems = onlinePlaylistMediaItems,
                     libraryLoaded = libraryLoaded,
                     active = true,
                     hiddenMediaIds = hiddenMediaIds,

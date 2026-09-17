@@ -87,6 +87,7 @@ internal fun PlaylistPage(
     onSearchClick: () -> Unit,
     onClose: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onlineMediaItems: List<MediaItem> = emptyList(),
 ) {
     val context = LocalContext.current
     val browser = LocalPlaybackBrowser.current
@@ -100,9 +101,11 @@ internal fun PlaylistPage(
         remember(mediaItems, hiddenMediaIds) {
             mediaItems.filterNot { item -> item.mediaId in hiddenMediaIds }
         }
+    // 歌单里的在线条目不在本地媒体库中，需并入同一查找表，曲目行才能解析出标题/艺人与可播条目。
     val songsById =
-        remember(visibleSongs) {
-            visibleSongs.associateBy(MediaItem::mediaId)
+        remember(visibleSongs, onlineMediaItems) {
+            (visibleSongs + onlineMediaItems).distinctBy(MediaItem::mediaId)
+                .associateBy(MediaItem::mediaId)
         }
 
     var target by remember { mutableStateOf<PlaylistTarget?>(null) }

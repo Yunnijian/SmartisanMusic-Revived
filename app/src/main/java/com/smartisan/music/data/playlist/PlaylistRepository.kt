@@ -27,6 +27,14 @@ class PlaylistRepository private constructor(
             }
         }
 
+    /**
+     * 所有歌单里带指定前缀的去重 mediaId（在线条目形如 `online:netease:<trackId>`）。
+     * 前缀由调用方传入，数据层不依赖具体在线来源；供壳层反查在线物料。
+     */
+    fun observeMediaIdsWithPrefix(prefix: String): Flow<List<String>> {
+        return playlistDao.observeMediaIdsWithPrefix(prefix)
+    }
+
     fun observePlaylistDetail(playlistId: String): Flow<UserPlaylistDetail?> {
         return playlistDao.observePlaylistDetail(playlistId)
             .map { record ->
@@ -46,6 +54,24 @@ class PlaylistRepository private constructor(
         return nextUntitledPlaylistName(
             existingNames = playlistDao.getPlaylistNames(),
             baseName = appContext.getString(R.string.playlist_default_name),
+        )
+    }
+
+    /**
+     * 按指定名字取一个可用的歌单名：未被占用直接用，已占用则按「名字 N」取最小可用序号。
+     * 供「导入为播放列表」用导入源的歌单名建本地歌单，避免重名导致创建失败。
+     */
+    suspend fun suggestPlaylistName(baseName: String): String {
+        val normalized = normalizePlaylistName(baseName)
+        if (normalized.isEmpty()) {
+            return suggestNextUntitledName()
+        }
+        if (!playlistDao.hasPlaylistWithName(normalized)) {
+            return normalized
+        }
+        return nextUntitledPlaylistName(
+            existingNames = playlistDao.getPlaylistNames(),
+            baseName = normalized,
         )
     }
 

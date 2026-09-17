@@ -1,7 +1,9 @@
 package com.smartisan.music.ui.cloud.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +33,7 @@ import com.smartisan.music.data.online.OnlineAlbum
 import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.data.online.OnlineRadio
+import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 
 /**
  * 竖排封面结果列表：48dp 圆角封面 + 标题/副标题两行，行高分隔线。
@@ -47,6 +50,7 @@ internal fun <T> CloudMusicVerticalCoverList(
     itemKey: (T) -> Any,
     modifier: Modifier = Modifier,
     listState: LazyListState? = null,
+    onMoreClick: ((T) -> Unit)? = null,
 ) {
     LazyColumn(
         state = listState ?: rememberLazyListState(),
@@ -97,6 +101,21 @@ internal fun <T> CloudMusicVerticalCoverList(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                    if (onMoreClick != null) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(40.dp)
+                                .cloudMusicPressable(onClick = { onMoreClick(item) }),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Image(
+                                painter = rememberSmartisanDrawablePainter(R.drawable.btn_more_selector),
+                                contentDescription = stringResource(R.string.player_more_actions),
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }

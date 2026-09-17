@@ -154,6 +154,14 @@ internal interface PlaylistDao {
     )
     suspend fun getPlaylistIdsContainingMediaIds(mediaIds: Set<String>): List<String>
 
+    @Query(
+        """
+        SELECT DISTINCT mediaId FROM user_playlist_entries
+        WHERE mediaId LIKE :prefix || '%'
+        """,
+    )
+    fun observeMediaIdsWithPrefix(prefix: String): Flow<List<String>>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPlaylistEntries(entries: List<PlaylistEntryEntity>)
 

@@ -33,8 +33,10 @@ import com.smartisan.music.data.favorite.FavoriteSongsRepository
 import com.smartisan.music.data.favorite.LovedSongsCloudSync
 import com.smartisan.music.data.library.LibraryExclusions
 import com.smartisan.music.data.library.LibraryExclusionsStore
+import com.smartisan.music.data.online.OnlineMediaIdPrefix
 import com.smartisan.music.data.online.OnlineMusicRepositoryRouter
 import com.smartisan.music.data.playback.PlaybackStatsRepository
+import com.smartisan.music.data.playlist.PlaylistOnlineItemResolver
 import com.smartisan.music.data.playlist.PlaylistRepository
 import com.smartisan.music.data.playlist.UserPlaylistSummary
 import com.smartisan.music.data.settings.ArtistSettings
@@ -118,6 +120,13 @@ private fun MusicAppShellContent(
     val collected = rememberShellCollectedState(container, favoriteRepository, playlistRepository)
     val onlineLovedMediaItems = remember { mutableStateOf(emptyList<MediaItem>()) }
     val onlineLovedRefreshVersion = remember { mutableStateOf(0) }
+    val playlistOnlineItemResolver =
+        remember(appContext) { PlaylistOnlineItemResolver.getInstance(appContext) }
+    val onlinePlaylistMediaItems = remember { mutableStateOf(emptyList<MediaItem>()) }
+    val onlinePlaylistMediaIds by
+        remember(playlistRepository) {
+            playlistRepository.observeMediaIdsWithPrefix(OnlineMediaIdPrefix)
+        }.collectAsState(initial = emptyList())
     val navigationLayoutInitialized = remember { mutableStateOf(false) }
     val navigationStateRestored = remember { mutableStateOf(false) }
 
@@ -174,6 +183,9 @@ private fun MusicAppShellContent(
         onlineLovedRefreshVersion = onlineLovedRefreshVersion,
         onlineLovedMediaItems = onlineLovedMediaItems,
         lovedSongsCloudSync = lovedSongsCloudSync,
+        playlistOnlineItemResolver = playlistOnlineItemResolver,
+        onlinePlaylistMediaIds = onlinePlaylistMediaIds,
+        onlinePlaylistMediaItems = onlinePlaylistMediaItems,
         favoriteIds = collected.favoriteIds,
         libraryLoaded = library.loaded,
         currentOnStartupReady = currentOnStartupReady,
@@ -222,6 +234,7 @@ private fun MusicAppShellContent(
         albumViewMode = collected.albumViewMode,
         libraryLoaded = library.loaded,
         onlineLovedMediaItems = onlineLovedMediaItems.value,
+        onlinePlaylistMediaItems = onlinePlaylistMediaItems.value,
         favoriteRecords = collected.favoriteRecords,
         overflowDestinations = overflowDestinations,
         realTabContentBottomMargin = realTabContentBottomMargin,

@@ -24,6 +24,7 @@ import com.smartisan.music.data.online.OnlinePlaylist
 import com.smartisan.music.ui.cloud.components.CloudMusicArtistList
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
+import com.smartisan.music.ui.cloud.components.CloudMusicPlaylistActionsOverlay
 import com.smartisan.music.ui.cloud.components.CloudMusicSectionTitle
 import com.smartisan.music.ui.cloud.components.CloudMusicVerticalCoverList
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
@@ -31,6 +32,7 @@ import com.smartisan.music.ui.cloud.components.CloudPullRefresh
 import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.cloudAlbumSubtitle
 import com.smartisan.music.ui.cloud.components.cloudPlaylistSubtitle
+import com.smartisan.music.ui.cloud.components.rememberCloudPlaylistActionsState
 
 /**
  * 首页各分区「全部」对应的完整列表页。
@@ -65,6 +67,7 @@ internal fun CloudMusicFeaturedPage(
 ) {
     val homeSlot = data.home
     val listState = scrollStates.featured(page)
+    val playlistActionsState = rememberCloudPlaylistActionsState()
 
     LaunchedEffect(homeSlot, active) {
         if (active) {
@@ -119,6 +122,7 @@ internal fun CloudMusicFeaturedPage(
                         playbackBarOverlayHeight = playbackBarOverlayHeight,
                         listState = listState,
                         onPlaylistClick = onOpenPlaylist,
+                        onPlaylistMoreClick = playlistActionsState::show,
                         modifier = Modifier.fillMaxSize(),
                     )
                     CloudFeaturedPage.Charts -> CloudFeaturedPlaylistList(
@@ -156,6 +160,11 @@ internal fun CloudMusicFeaturedPage(
                     }
                 }
             }
+            CloudMusicPlaylistActionsOverlay(
+                state = playlistActionsState,
+                repository = data.repository,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         }
     }
@@ -168,6 +177,7 @@ private fun CloudFeaturedPlaylistList(
     listState: LazyListState,
     onPlaylistClick: (OnlinePlaylist) -> Unit,
     modifier: Modifier = Modifier,
+    onPlaylistMoreClick: ((OnlinePlaylist) -> Unit)? = null,
 ) {
     CloudMusicVerticalCoverList(
         items = playlists,
@@ -179,5 +189,6 @@ private fun CloudFeaturedPlaylistList(
         onItemClick = onPlaylistClick,
         itemKey = OnlinePlaylist::playlistId,
         modifier = modifier,
+        onMoreClick = onPlaylistMoreClick,
     )
 }
