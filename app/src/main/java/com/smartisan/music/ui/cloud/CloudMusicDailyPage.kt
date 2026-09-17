@@ -55,7 +55,9 @@ import com.smartisan.music.ui.cloud.components.CloudMusicTrackRow
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
 import com.smartisan.music.ui.cloud.components.CloudPullRefresh
 import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
+import com.smartisan.music.ui.cloud.components.CloudTrackActionsOverlays
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
+import com.smartisan.music.ui.cloud.components.rememberCloudTrackActionsState
 import kotlinx.coroutines.launch
 
 /** 「每日推荐」整页的两个并列 tab（对齐官方：默认推荐 / 风格推荐）。 */
@@ -83,6 +85,7 @@ internal fun CloudMusicDailyPage(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val trackActionsState = rememberCloudTrackActionsState()
     val homeSlot = data.home
     val styleSlot = data.dailyStyleHome
     val styleCategoriesSlot = data.dailyStyles
@@ -173,6 +176,7 @@ internal fun CloudMusicDailyPage(
                             listState = listState,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             styleChip = null,
+                            onTrackMoreClick = trackActionsState::show,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -191,11 +195,21 @@ internal fun CloudMusicDailyPage(
                                         onClick = { stylePickerVisible = true },
                                     )
                                 },
+                                onTrackMoreClick = trackActionsState::show,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } ?: DailyError(onRetry = { styleSlot.reload(Unit) })
                     }
                 }
+                CloudTrackActionsOverlays(
+                    state = trackActionsState,
+                    repository = data.repository,
+                    editablePlaylist = null,
+                    onTrackRemoved = {},
+                    onAccountLibraryChanged = {},
+                    onAddedToPlaylist = { data.detail.invalidateAll() },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
@@ -276,6 +290,7 @@ private fun CloudDailyTrackList(
     listState: LazyListState,
     playbackBarOverlayHeight: Dp,
     styleChip: (@Composable () -> Unit)?,
+    onTrackMoreClick: (OnlineTrack) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val playbackBrowser = LocalPlaybackBrowser.current
@@ -321,6 +336,7 @@ private fun CloudDailyTrackList(
                             startIndex = index,
                         )
                     },
+                    onMoreClick = { onTrackMoreClick(track) },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 CloudMusicDivider()
