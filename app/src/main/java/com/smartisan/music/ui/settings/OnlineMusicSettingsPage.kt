@@ -22,6 +22,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.smartisan.music.R
 import com.smartisan.music.data.settings.NeteaseAudioQuality
+import com.smartisan.music.data.settings.NeteaseVipLevel
+import com.smartisan.music.data.settings.isAvailableFor
 import com.smartisan.music.ui.components.SmartisanDialogButton
 import com.smartisan.music.ui.components.SmartisanMenuTitleBar
 import com.smartisan.music.ui.components.SmartisanModal
@@ -30,7 +32,12 @@ import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
 import com.smartisan.music.ui.components.smartisanPainterBackground
 
-/** 在线播放音质选择页：八档单选，选中即写入 [com.smartisan.music.data.settings.OnlineMusicSettingsStore]。 */
+/**
+ * 在线播放音质选择页：档位单选，选中即写入 [com.smartisan.music.data.settings.OnlineMusicSettingsStore]。
+ *
+ * [vipLevel] 非空时按账号权益灰置不可用档位（保留展示，便于用户知道更高档位的存在）；
+ * 为 null（未登录或拉取失败）时不灰置，保持全部可选——播放链路本身有逐档降级兜底。
+ */
 @Composable
 internal fun OnlineQualitySettingsPage(
     active: Boolean,
@@ -38,6 +45,7 @@ internal fun OnlineQualitySettingsPage(
     onClose: () -> Unit,
     onQualityChange: (NeteaseAudioQuality) -> Unit,
     modifier: Modifier = Modifier,
+    vipLevel: NeteaseVipLevel? = null,
 ) {
     val qualities = NeteaseAudioQuality.entries
     SettingsScaffold(
@@ -51,16 +59,18 @@ internal fun OnlineQualitySettingsPage(
             qualities.forEachIndexed { index, item ->
                 val source = remember { MutableInteractionSource() }
                 val pressed by source.collectSmartisanPressedAsState()
+                val selectable = vipLevel == null || item.isAvailableFor(vipLevel)
                 SettingsRow(
                     item.labelRes(),
                     stringResource(item.summaryRes()),
                     RowShape.at(index, qualities.size),
-                    true,
+                    selectable,
                     source,
                     Modifier.selectable(
                         item == quality,
                         source,
                         null,
+                        enabled = selectable,
                         role = Role.RadioButton,
                         onClick = smartisanClick { onQualityChange(item) },
                     ),

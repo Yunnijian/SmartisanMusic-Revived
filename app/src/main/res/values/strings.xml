@@ -269,6 +269,8 @@
     <string name="online_music_quality_hd_surround">高清环绕声</string>
     <string name="online_music_quality_surround">沉浸环绕声</string>
     <string name="online_music_quality_master">超清母带</string>
+    <string name="online_music_quality_dolby">杜比全景声</string>
+    <string name="online_music_quality_vivid">臻音全景声</string>
     <string name="online_music_quality_summary_standard">MP3 · 128K</string>
     <string name="online_music_quality_summary_higher">MP3 · 192K</string>
     <string name="online_music_quality_summary_exhigh">MP3 · 320K</string>

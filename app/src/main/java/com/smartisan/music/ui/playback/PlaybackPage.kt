@@ -9,6 +9,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.C
@@ -248,6 +250,7 @@ internal fun PlaybackPage(
         PlaybackTitleBar(
             title = titleState.title,
             artist = titleState.artist,
+            qualityLabel = titleState.qualityLabel,
             queueVisible = queueVisible,
             onCollapse = onCollapse,
             onQueueClick = {
@@ -262,6 +265,7 @@ internal fun PlaybackPage(
 private fun PlaybackTitleBar(
     title: String,
     artist: String,
+    qualityLabel: String?,
     queueVisible: Boolean,
     onCollapse: () -> Unit,
     onQueueClick: () -> Unit,
@@ -290,13 +294,13 @@ private fun PlaybackTitleBar(
         centerContent =
             if (queueVisible) null
             else {
-                { PlaybackCenterTitle(title, artist) }
+                { PlaybackCenterTitle(title, artist, qualityLabel) }
             },
     )
 }
 
 @Composable
-private fun PlaybackCenterTitle(title: String, artist: String) {
+private fun PlaybackCenterTitle(title: String, artist: String, qualityLabel: String?) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // The previous horizontally-scrolling TextView sizes against a very wide area:
         // its 16..20sp auto-size range therefore stays at 20sp before marquee starts.
@@ -313,20 +317,35 @@ private fun PlaybackCenterTitle(title: String, artist: String) {
                 ),
             maxLines = 1,
         )
-        if (artist.isNotBlank())
-            BasicText(
-                artist,
-                Modifier.fillMaxWidth(),
-                style =
-                    TextStyle(
-                        fontSize = 10.sp,
-                        color = colorResource(R.color.sub_title_text_color),
-                        textAlign = TextAlign.Center,
-                        platformStyle = PlatformTextStyle(includeFontPadding = true),
-                    ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        if (artist.isNotBlank() || !qualityLabel.isNullOrBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (artist.isNotBlank())
+                    BasicText(
+                        artist,
+                        style =
+                            TextStyle(
+                                fontSize = 10.sp,
+                                color = colorResource(R.color.sub_title_text_color),
+                                platformStyle = PlatformTextStyle(includeFontPadding = true),
+                            ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                if (!qualityLabel.isNullOrBlank())
+                    BasicText(
+                        qualityLabel,
+                        Modifier.padding(start = 5.dp),
+                        style =
+                            TextStyle(
+                                fontSize = 10.sp,
+                                color = colorResource(R.color.sub_title_text_color),
+                                platformStyle = PlatformTextStyle(includeFontPadding = true),
+                            ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+            }
+        }
     }
 }
 
@@ -360,10 +379,12 @@ private fun rememberPlaybackTitleState(): PlaybackTitleState {
 private data class PlaybackTitleState(
     val title: String,
     val artist: String,
+    val qualityLabel: String?,
 )
 
 private fun Player?.toPlaybackTitleState(context: Context): PlaybackTitleState {
-    val metadata = this?.currentMediaItem?.mediaMetadata
+    val mediaItem = this?.currentMediaItem
+    val metadata = mediaItem?.mediaMetadata
     val title =
         metadata?.displayTitle?.toString()?.takeIf(String::isNotBlank)
             ?: metadata?.title?.toString()?.takeIf(String::isNotBlank)
@@ -376,7 +397,11 @@ private fun Player?.toPlaybackTitleState(context: Context): PlaybackTitleState {
                 it.isNotBlank() && !it.equals("<unknown>", ignoreCase = true)
             }
             ?: ""
-    return PlaybackTitleState(title = title, artist = artist)
+    return PlaybackTitleState(
+        title = title,
+        artist = artist,
+        qualityLabel = mediaItem?.resolvePlaybackQualityLabel(context),
+    )
 }
 
 private fun Player?.toPlaybackQueueSnapshot(

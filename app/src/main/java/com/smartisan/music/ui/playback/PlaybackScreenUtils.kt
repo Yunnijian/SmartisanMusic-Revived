@@ -9,9 +9,13 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.annotation.DrawableRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisan.music.R
+import com.smartisan.music.data.online.OnlinePlaybackBitrateExtraKey
+import com.smartisan.music.data.online.OnlinePlaybackLevelExtraKey
 import com.smartisan.music.data.online.onlineIdentityOrNull
 import com.smartisan.music.platform.media.audioMediaItemUri
 import com.smartisan.music.playback.LocalAudioLibrary
@@ -59,6 +63,58 @@ internal fun MediaItem.resolveDeleteTarget(): PlaybackDeleteTargetResult {
 
 internal fun MediaItem.canShareAudio(): Boolean {
     return localConfiguration?.uri?.scheme == ContentResolver.SCHEME_CONTENT
+}
+
+/** 播放页展示的音质档位文案（中文名）；未知 level 返回 null。 */
+private fun playbackLevelLabel(level: String): Int? =
+    when (level) {
+        "standard" -> R.string.online_music_quality_standard
+        "higher" -> R.string.online_music_quality_higher
+        "exhigh" -> R.string.online_music_quality_exhigh
+        "lossless" -> R.string.online_music_quality_lossless
+        "hires" -> R.string.online_music_quality_hires
+        "jyeffect" -> R.string.online_music_quality_hd_surround
+        "sky" -> R.string.online_music_quality_surround
+        "jymaster" -> R.string.online_music_quality_master
+        "dolby" -> R.string.online_music_quality_dolby
+        "vivid" -> R.string.online_music_quality_vivid
+        else -> null
+    }
+
+/**
+ * 播放页顶部的音质描述，形如「超清母带 · 5244kbps」。
+ *
+ * 在线条目取服务端回显的**实际**档位与码率（请求高档位而权益或资源不足时服务端会静默降级，
+ * 回显值才是真实结果）；本地条目没有档位概念，按格式给出。都拿不到时返回 null。
+ *
+ * 非 Composable：标题栏状态由 Player 监听器在非组合环境重建，这里用 [Context] 取文案。
+ */
+internal fun MediaItem.resolvePlaybackQualityLabel(context: Context): String? {
+    val extras = mediaMetadata.extras
+    val level = extras?.getString(OnlinePlaybackLevelExtraKey)?.takeIf(String::isNotBlank)
+    val bitrate = extras?.getLong(OnlinePlaybackBitrateExtraKey)?.takeIf { it > 0L }
+    val levelLabel = level?.let(::playbackLevelLabel)?.let(context::getString)
+    if (levelLabel != null) {
+        return listOfNotNull(levelLabel, bitrate?.formatBitrateKbps()).joinToString(" · ")
+    }
+    // 本地条目：按文件格式给出（复用歌曲行的音质角标判据），无码率信息。
+    val formatLabel = when (
+        extras?.getString(LocalAudioLibrary.AudioQualityBadgeExtraKey)
+    ) {
+        "flac" -> "FLAC"
+        "ape" -> "APE"
+        "wav" -> "WAV"
+        "aiff" -> "AIFF"
+        "alac" -> "ALAC"
+        else -> null
+    }
+    return formatLabel?.let { label ->
+        listOfNotNull(label, bitrate?.formatBitrateKbps()).joinToString(" · ")
+    }
+}
+
+private fun Long.formatBitrateKbps(): String {
+    return "${this / 1000L}kbps"
 }
 
 /** 分享纯文本（邀请链接、歌曲链接等），失败返回 false。 */

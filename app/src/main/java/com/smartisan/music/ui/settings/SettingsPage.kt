@@ -69,6 +69,27 @@ internal fun SettingsPage(
         }
     }
 
+    // 进入音质设置页时按需拉取账号权益，用于灰置不可用档位；未登录/失败为 null（不灰置）。
+    var vipLevel by remember { mutableStateOf<NeteaseVipLevel?>(null) }
+    LaunchedEffect(active, secondaryPage) {
+        if (active && secondaryPage == SettingsSecondaryPage.OnlineQuality) {
+            vipLevel = container.onlineRepositoryRouter.vipLevel()
+        }
+    }
+    // 权益不足时把已选档位回落到最高可用档位，避免选中项停在灰置状态。
+    LaunchedEffect(vipLevel, onlineSettings.neteasePlaybackQuality) {
+        val level = vipLevel ?: return@LaunchedEffect
+        val current = onlineSettings.neteasePlaybackQuality
+        if (!current.isAvailableFor(level)) {
+            val fallback = NeteaseAudioQuality.entries
+                .filter { quality -> quality.isAvailableFor(level) }
+                .maxByOrNull(NeteaseAudioQuality::ordinal)
+            if (fallback != null && fallback != current) {
+                onlineSettingsStore.setNeteasePlaybackQuality(fallback)
+            }
+        }
+    }
+
     val neteaseLoginLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -155,6 +176,7 @@ internal fun SettingsPage(
                             }
                         },
                         modifier = Modifier.fillMaxSize(),
+                        vipLevel = vipLevel,
                     )
                 SettingsSecondaryPage.AudioFx ->
                     AudioFxSettingsPage(
