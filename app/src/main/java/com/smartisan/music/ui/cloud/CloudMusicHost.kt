@@ -154,21 +154,8 @@ internal fun CloudMusicHost(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (!viewModel.authState.isLoggedIn) {
-            CloudMusicBlankState(
-                title = stringResource(R.string.cloud_music_empty_title),
-                subtitle = stringResource(R.string.cloud_music_login_prompt),
-                actionText = stringResource(R.string.cloud_music_login_action),
-                onActionClick = {
-                    loginLauncher.launch(NeteaseLoginActivity.createIntent(context))
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            return@Column
-        }
-
+        // 不整页拦截登录：访客可浏览推荐/搜索/详情，播放走 outer/url 访客兜底
+        // （旧版同样只把「我的 / 电台 / 账号歌单」留给已登录用户）。
         if (!viewModel.searchVisible) {
             CloudMusicHomeEntryRow(
                 selectedEntry = when {
@@ -218,6 +205,9 @@ internal fun CloudMusicHost(
                             active = active,
                             playbackBarOverlayHeight = playbackBarOverlayHeight,
                             viewModel = viewModel,
+                            onLoginClick = {
+                                loginLauncher.launch(NeteaseLoginActivity.createIntent(context))
+                            },
                         )
                     }
                 },
@@ -259,7 +249,9 @@ private fun CloudMusicHostPrimaryContent(
     active: Boolean,
     playbackBarOverlayHeight: Dp,
     viewModel: CloudMusicHostViewModel,
+    onLoginClick: () -> Unit,
 ) {
+    val loggedIn = viewModel.authState.isLoggedIn
     when (page) {
         CloudPrimaryPage.Daily -> CloudMusicDailyPage(
             data = data,
@@ -287,16 +279,24 @@ private fun CloudMusicHostPrimaryContent(
             onOpenArtist = viewModel::openArtistDetail,
             modifier = Modifier.fillMaxSize(),
         )
-        CloudPrimaryPage.Radio -> CloudMusicRadioPage(
-            data = data,
-            scrollStates = scrollStates,
-            active = active,
-            playbackBarOverlayHeight = playbackBarOverlayHeight,
-            subPage = viewModel.radioSubPage,
-            onSubPageChange = { viewModel.radioSubPage = it },
-            onOpenRadio = viewModel::openRadioDetail,
-            modifier = Modifier.fillMaxSize(),
-        )
+        CloudPrimaryPage.Radio ->
+            if (loggedIn) {
+                CloudMusicRadioPage(
+                    data = data,
+                    scrollStates = scrollStates,
+                    active = active,
+                    playbackBarOverlayHeight = playbackBarOverlayHeight,
+                    subPage = viewModel.radioSubPage,
+                    onSubPageChange = { viewModel.radioSubPage = it },
+                    onOpenRadio = viewModel::openRadioDetail,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                CloudMusicLoginRequiredState(
+                    onLoginClick = onLoginClick,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         is CloudPrimaryPage.Featured -> CloudMusicFeaturedPage(
             page = page.page,
             data = data,
@@ -322,33 +322,56 @@ private fun CloudMusicHostPrimaryContent(
                 onOpenDaily = viewModel::openDaily,
                 modifier = Modifier.fillMaxSize(),
             )
-            CloudSubPage.Mine -> CloudMusicMinePage(
-                data = data,
-                scrollStates = scrollStates,
-                authStore = authStore,
-                active = active,
-                libraryRevision = viewModel.accountLibraryRevision,
-                selectedFilter = viewModel.mineFilter,
-                onFilterChange = { viewModel.mineFilter = it },
-                selectedPlaylistId = viewModel.selectedAccountPlaylistId,
-                playbackBarOverlayHeight = playbackBarOverlayHeight,
-                onOpenPlaylist = { item ->
-                    viewModel.selectedAccountPlaylistId = item.playlistId
-                    viewModel.selectedDetail = CloudDetailTarget.Playlist(
-                        id = item.playlistId,
-                        title = item.title,
-                        accountEditable = item.isEditable,
-                        artworkUrl = item.artworkUrl,
-                        subtitle = item.subtitle,
-                        trackCount = item.trackCount,
+            CloudSubPage.Mine ->
+                if (loggedIn) {
+                    CloudMusicMinePage(
+                        data = data,
+                        scrollStates = scrollStates,
+                        authStore = authStore,
+                        active = active,
+                        libraryRevision = viewModel.accountLibraryRevision,
+                        selectedFilter = viewModel.mineFilter,
+                        onFilterChange = { viewModel.mineFilter = it },
+                        selectedPlaylistId = viewModel.selectedAccountPlaylistId,
+                        playbackBarOverlayHeight = playbackBarOverlayHeight,
+                        onOpenPlaylist = { item ->
+                            viewModel.selectedAccountPlaylistId = item.playlistId
+                            viewModel.selectedDetail = CloudDetailTarget.Playlist(
+                                id = item.playlistId,
+                                title = item.title,
+                                accountEditable = item.isEditable,
+                                artworkUrl = item.artworkUrl,
+                                subtitle = item.subtitle,
+                                trackCount = item.trackCount,
+                            )
+                        },
+                        onOpenAlbum = viewModel::openAlbumDetail,
+                        onOpenRadio = viewModel::openRadioDetail,
+                        modifier = Modifier.fillMaxSize(),
                     )
-                },
-                onOpenAlbum = viewModel::openAlbumDetail,
-                onOpenRadio = viewModel::openRadioDetail,
-                modifier = Modifier.fillMaxSize(),
-            )
+                } else {
+                    CloudMusicLoginRequiredState(
+                        onLoginClick = onLoginClick,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
         }
     }
+}
+
+/** 需要账号的板块（我的 / 电台）在未登录时的页内引导，取代原来的整页登录墙。 */
+@Composable
+private fun CloudMusicLoginRequiredState(
+    onLoginClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    CloudMusicBlankState(
+        title = stringResource(R.string.cloud_music_empty_title),
+        subtitle = stringResource(R.string.cloud_music_login_prompt),
+        actionText = stringResource(R.string.cloud_music_login_action),
+        onActionClick = onLoginClick,
+        modifier = modifier,
+    )
 }
 
 /** 搜索全页覆盖层：zIndex 分层，从结果进详情时暂隐、返回后带着原 query 恢复。 */

@@ -122,50 +122,20 @@ internal fun CloudMusicPlaylistCreateDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(CloudSearchFieldBackgroundColor)
-                        .cloudMusicPressable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.cloud_music_cancel),
-                        style = TextStyle(
-                            fontSize = 14.sp,
-                            color = CloudTrackTitleColor,
-                        ),
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(
-                            if (confirmEnabled) {
-                                CloudAccentColor
-                            } else {
-                                CloudAccentColor.copy(alpha = 0.4f)
-                            },
-                        )
-                        .cloudMusicPressable(enabled = confirmEnabled, onClick = {
-                            onConfirm(name.trim())
-                        }),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.cloud_music_confirm),
-                        style = TextStyle(
-                            fontSize = 14.sp,
-                            color = Color.White,
-                        ),
-                    )
-                }
+                CloudMusicActionButton(
+                    text = stringResource(R.string.cloud_music_cancel),
+                    enabled = true,
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                CloudMusicActionButton(
+                    text = stringResource(R.string.cloud_music_confirm),
+                    enabled = confirmEnabled,
+                    onClick = { onConfirm(name.trim()) },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }

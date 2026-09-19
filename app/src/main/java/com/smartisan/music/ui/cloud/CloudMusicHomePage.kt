@@ -26,16 +26,12 @@ import com.smartisan.music.data.online.OnlineBanner
 import com.smartisan.music.data.online.OnlineArtist
 import com.smartisan.music.data.online.OnlineMusicProvider
 import com.smartisan.music.data.online.OnlinePlaylist
-import com.smartisan.music.data.online.OnlineTrack
-import com.smartisan.music.data.online.toMediaItem
-import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
-import com.smartisan.music.playback.LocalPlaybackBrowser
-import com.smartisan.music.playback.replaceQueueAndPlay
 import com.smartisan.music.ui.cloud.components.CloudHomeAnimatedSection
 import com.smartisan.music.ui.cloud.components.CloudHomeSectionAnimation
 import com.smartisan.music.ui.cloud.components.CloudMusicBanner
 import com.smartisan.music.ui.cloud.components.CloudMusicBlankState
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverCard
+import com.smartisan.music.ui.cloud.components.CloudHomeDailyRecommendSection
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverCardSection
 import com.smartisan.music.ui.cloud.components.CloudMusicDelayedLoadingState
 import com.smartisan.music.ui.cloud.components.CloudPageBackgroundColor
@@ -65,7 +61,6 @@ internal fun CloudMusicHomePage(
     onOpenDaily: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val playbackBrowser = LocalPlaybackBrowser.current
     val homeSlot = data.home
     val sectionAnimation = data.homeSectionAnimation
     val homeLoaded = homeSlot.state(Unit) is CloudSlotState.Success
@@ -139,15 +134,6 @@ internal fun CloudMusicHomePage(
                     onOpenFeatured = onOpenFeatured,
                     onOpenBannerTrack = onOpenBannerTrack,
                     onOpenDaily = onOpenDaily,
-                    onPlayDailyTracks = { tracks, index ->
-                        val items = tracks.map {
-                            it.toMediaItem().withOnlinePlaybackPlaceholderUri()
-                        }
-                        playbackBrowser?.replaceQueueAndPlay(
-                            mediaItems = items,
-                            startIndex = index,
-                        )
-                    },
                 )
             }
             }
@@ -169,7 +155,6 @@ private fun CloudMusicHomeContent(
     onOpenFeatured: (CloudFeaturedPage) -> Unit,
     onOpenBannerTrack: (OnlineBanner) -> Unit,
     onOpenDaily: () -> Unit,
-    onPlayDailyTracks: (tracks: List<OnlineTrack>, index: Int) -> Unit,
 ) {
     val home = bundle.home
     val banners = bundle.banners
@@ -221,23 +206,11 @@ private fun CloudMusicHomeContent(
             item(key = "cloud-home-section-daily") {
                 val tracks = dailyTracks
                 CloudHomeAnimatedSection(visibleState = sectionAnimation.stateAt(animationIndex)) {
-                    CloudMusicCoverCardSection(
+                    CloudHomeDailyRecommendSection(
                         title = dailyTracksTitle,
-                        actionText = viewAllText,
-                        onActionClick = onOpenDaily,
-                    ) {
-                        itemsIndexed(
-                            items = tracks,
-                            key = { index, track -> "${track.mediaId}:$index" },
-                        ) { index, track ->
-                            CloudMusicCoverCard(
-                                imageUrl = track.artworkUrl,
-                                title = track.title,
-                                subtitle = track.artist,
-                                onClick = { onPlayDailyTracks(tracks, index) },
-                            )
-                        }
-                    }
+                        tracks = tracks,
+                        onClick = onOpenDaily,
+                    )
                 }
             }
         }

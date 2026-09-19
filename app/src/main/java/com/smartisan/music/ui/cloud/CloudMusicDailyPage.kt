@@ -1,6 +1,8 @@
 package com.smartisan.music.ui.cloud
 
 import android.widget.Toast
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -27,13 +30,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
 import com.smartisan.music.data.online.NeteaseAccountActionStatus
 import com.smartisan.music.data.online.NeteaseDailyStyleTag
@@ -42,7 +49,6 @@ import com.smartisan.music.data.online.toMediaItem
 import com.smartisan.music.data.online.withOnlinePlaybackPlaceholderUri
 import com.smartisan.music.playback.LocalPlaybackBrowser
 import com.smartisan.music.playback.replaceQueueAndPlay
-import com.smartisan.music.ui.cloud.components.CloudAccentColor
 import com.smartisan.music.ui.cloud.components.CloudDailyStyleChip
 import com.smartisan.music.ui.cloud.components.CloudDailyStylePickerOverlay
 import com.smartisan.music.ui.cloud.components.CloudFilterChipIdleBackgroundColor
@@ -58,12 +64,20 @@ import com.smartisan.music.ui.cloud.components.CloudSurfaceColor
 import com.smartisan.music.ui.cloud.components.CloudTrackActionsOverlays
 import com.smartisan.music.ui.cloud.components.cloudMusicPressable
 import com.smartisan.music.ui.cloud.components.rememberCloudTrackActionsState
+import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
+import com.smartisan.music.ui.components.smartisanPainterBackground
+import com.smartisan.music.ui.components.smartisanTextSize
 import kotlinx.coroutines.launch
 
-/** 「每日推荐」整页的两个并列 tab（对齐官方：默认推荐 / 风格推荐）。 */
-internal enum class CloudDailyTab(val labelRes: Int) {
-    Default(R.string.cloud_music_section_daily_default),
-    Style(R.string.cloud_music_section_daily_style),
+/**
+ * 「每日推荐」整页的两个并列 tab（对齐官方：默认推荐 / 风格推荐）。
+ *
+ * 官方这两段是纯文字分段控件、没有图标；这里按仓内要求补前置图标，取原版 `net_icon_*`
+ * 里语义最近的两个（推荐 / 合集）——原版图标集没有"风格"语义的图标。
+ */
+internal enum class CloudDailyTab(val labelRes: Int, @DrawableRes val iconRes: Int) {
+    Default(R.string.cloud_music_section_daily_default, R.drawable.net_icon_recommend),
+    Style(R.string.cloud_music_section_daily_style, R.drawable.net_icon_collection),
 }
 
 /**
@@ -225,7 +239,10 @@ internal fun CloudMusicDailyPage(
     }
 }
 
-/** 分段控件：等宽两段，选中段强调色 12% 底 + 强调色文字（与「我的」页筛选胶囊同款）。 */
+/**
+ * 分段控件：等宽两段，规格与云音乐页内操作按钮一致
+ * （30dp 高、圆角 6、选中段浅粉底红字加粗、前置原版图标、两段间距 6dp）。
+ */
 @Composable
 private fun CloudDailyTabBar(
     selected: CloudDailyTab,
@@ -234,30 +251,52 @@ private fun CloudDailyTabBar(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         CloudDailyTab.entries.forEach { tab ->
             val active = tab == selected
-            Box(
+            val activeBackground = rememberSmartisanDrawablePainter(R.drawable.btn_red_bg_selector)
+            val contentColor =
+                if (active) {
+                    colorResource(R.color.btn_text_color_red)
+                } else {
+                    CloudFilterChipIdleTextColor
+                }
+            Row(
                 modifier = Modifier
                     .height(30.dp)
                     .weight(1f)
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(
-                        if (active) CloudAccentColor.copy(alpha = 0.12f)
-                        else CloudFilterChipIdleBackgroundColor,
+                    .clip(RoundedCornerShape(6.dp))
+                    .then(
+                        if (active) {
+                            Modifier.smartisanPainterBackground(activeBackground)
+                        } else {
+                            Modifier.background(CloudFilterChipIdleBackgroundColor)
+                        }
                     )
-                    .cloudMusicPressable(onClick = { onSelect(tab) }),
-                contentAlignment = Alignment.Center,
+                    .cloudMusicPressable(onClick = { onSelect(tab) })
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Image(
+                    painter = painterResource(tab.iconRes),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(contentColor),
+                    modifier = Modifier.size(16.dp),
+                )
                 Text(
                     text = stringResource(tab.labelRes),
-                    style = TextStyle(
-                        fontSize = 13.sp,
-                        color = if (active) CloudAccentColor else CloudFilterChipIdleTextColor,
-                    ),
+                    style =
+                        TextStyle(
+                            fontSize = smartisanTextSize(R.dimen.settings_item_tips_text_size),
+                            color = contentColor,
+                            fontWeight = FontWeight.Bold,
+                            platformStyle = PlatformTextStyle(includeFontPadding = true),
+                        ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 6.dp),
                 )
             }
         }

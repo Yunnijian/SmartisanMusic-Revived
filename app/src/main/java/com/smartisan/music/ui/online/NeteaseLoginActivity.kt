@@ -20,6 +20,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -34,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -49,10 +51,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,7 +75,10 @@ import com.smartisan.music.ui.components.SmartisanDialogButton
 import com.smartisan.music.ui.components.SmartisanEditor
 import com.smartisan.music.ui.components.SmartisanTitleBar
 import com.smartisan.music.ui.components.SmartisanTitleBarAction
+import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
+import com.smartisan.music.ui.components.smartisanPainterBackground
+import com.smartisan.music.ui.components.smartisanTextSize
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -358,7 +367,12 @@ private fun NeteaseLoginPage(
     }
 }
 
-/** 三枚并列 tab（选中态与云音乐日推分段控件一致）。 */
+/**
+ * 三枚并列 tab：规格与云音乐页内操作按钮一致（30dp 高、圆角 6、浅粉底红字加粗、前置图标）。
+ *
+ * 选中态用原版 `btn_red_bg_selector` 的浅粉底 + 红字红图标，未选中态沿用本页原有的
+ * `tab_bar_top_background` + 主文本色，保留"哪个选着"的可读性。
+ */
 @Composable
 private fun NeteaseLoginMethodBar(
     selected: NeteaseLoginMethod,
@@ -370,41 +384,62 @@ private fun NeteaseLoginMethodBar(
         NeteaseLoginMethod.QrCode to R.string.netease_login_tab_qrcode,
         NeteaseLoginMethod.Web to R.string.netease_login_tab_web,
     )
+    val icons = mapOf(
+        NeteaseLoginMethod.Phone to R.drawable.ic_login_phone,
+        NeteaseLoginMethod.QrCode to R.drawable.ic_login_qrcode,
+        NeteaseLoginMethod.Web to R.drawable.ic_login_web,
+    )
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         NeteaseLoginMethod.entries.forEach { entry ->
             val active = entry == selected
-            Box(
+            val activeBackground = rememberSmartisanDrawablePainter(R.drawable.btn_red_bg_selector)
+            val contentColor =
+                if (active) {
+                    colorResource(R.color.btn_text_color_red)
+                } else {
+                    colorResource(R.color.title_text_color)
+                }
+            Row(
                 modifier = Modifier
-                    .height(32.dp)
+                    .height(30.dp)
                     .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
+                    .clip(RoundedCornerShape(6.dp))
+                    .then(
                         if (active) {
-                            colorResource(R.color.btn_text_color_red).copy(alpha = 0.12f)
+                            Modifier.smartisanPainterBackground(activeBackground)
                         } else {
-                            colorResource(R.color.tab_bar_top_background)
+                            Modifier.background(colorResource(R.color.tab_bar_top_background))
                         }
                     )
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
                         onClick = smartisanClick { onSelect(entry) },
-                    ),
-                contentAlignment = Alignment.Center,
+                    )
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Image(
+                    painter = painterResource(icons.getValue(entry)),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(contentColor),
+                    modifier = Modifier.size(16.dp),
+                )
                 Text(
                     text = stringResource(labels.getValue(entry)),
-                    style = TextStyle(
-                        fontSize = 14.sp,
-                        color = if (active) {
-                            colorResource(R.color.btn_text_color_red)
-                        } else {
-                            colorResource(R.color.title_text_color)
-                        },
-                    ),
+                    style =
+                        TextStyle(
+                            fontSize = smartisanTextSize(R.dimen.settings_item_tips_text_size),
+                            color = contentColor,
+                            fontWeight = FontWeight.Bold,
+                            platformStyle = PlatformTextStyle(includeFontPadding = true),
+                        ),
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = 6.dp),
                 )
             }
         }

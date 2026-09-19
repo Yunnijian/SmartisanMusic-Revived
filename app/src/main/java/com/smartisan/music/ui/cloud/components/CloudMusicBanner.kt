@@ -16,17 +16,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import com.smartisan.music.data.online.OnlineBanner
 import kotlinx.coroutines.delay
 
@@ -41,6 +46,14 @@ internal val CloudMusicBannerCornerRadius = 8.dp
 
 /** Banner 自动轮播间隔：对齐旧版 CloudBannerAutoScrollMs。 */
 internal const val CloudMusicBannerAutoScrollIntervalMs = 5_000L
+
+/**
+ * Banner 素材请求宽度（px）：对齐旧版 CloudBannerArtworkWidthPx。
+ *
+ * 约等于绘制宽度（1200px 屏减去左右 12dp），配合 INEXACT 让 Coil 就近取图，
+ * 不放大也不方裁——不能复用 96dp 卡片那套 `param=260y260` 的封面请求。
+ */
+private const val CloudMusicBannerArtworkWidthPx = 900
 
 /** 未选中圆点颜色。 */
 private val CloudMusicBannerDotColor = Color(0x80FFFFFF)
@@ -97,10 +110,9 @@ internal fun CloudMusicBanner(
                         },
                     ),
             ) {
-                CloudMusicCoverImage(
+                CloudMusicBannerArtwork(
                     imageUrl = banner.imageUrl,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
                 )
                 // 底部渐变蒙层 + 标题 / 副标题，保持与旧版云音乐 Banner 文案样式一致。
                 if (banner.title.isNotBlank() || !banner.subtitle.isNullOrBlank()) {
@@ -171,6 +183,43 @@ internal fun CloudMusicBanner(
                 }
             }
         }
+    }
+}
+
+/**
+ * Banner 专用素材：原图 URL（不带 `param`，不方裁）+ 大请求宽度 + INEXACT。
+ *
+ * 复用封面加载器会把宽幅素材压成 260px 方图再放大到整屏宽，视觉上是"被放大且缺内容"。
+ */
+@Composable
+private fun CloudMusicBannerArtwork(
+    imageUrl: String?,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val safeUrl =
+        imageUrl
+            ?.replaceFirst("http://", "https://")
+            ?.takeIf(String::isNotBlank)
+    if (safeUrl == null) {
+        Box(modifier = modifier.background(CloudArtworkPlaceholderColor))
+        return
+    }
+    val request =
+        remember(context, safeUrl) {
+            ImageRequest.Builder(context)
+                .data(safeUrl)
+                .size(CloudMusicBannerArtworkWidthPx)
+                .precision(Precision.INEXACT)
+                .build()
+        }
+    Box(modifier = modifier.background(CloudArtworkPlaceholderColor)) {
+        AsyncImage(
+            model = request,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
+        )
     }
 }
 

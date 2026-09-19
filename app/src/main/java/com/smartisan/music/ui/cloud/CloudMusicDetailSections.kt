@@ -226,42 +226,20 @@ internal fun CloudMusicDeletePlaylistConfirmDialog(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(CloudSearchFieldBackgroundColor)
-                        .cloudMusicPressable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.cloud_music_cancel),
-                        style = TextStyle(
-                            fontSize = 14.sp,
-                            color = CloudTrackTitleColor,
-                        ),
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(CloudAccentColor)
-                        .cloudMusicPressable(onClick = onConfirm),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.cloud_music_delete),
-                        style = TextStyle(
-                            fontSize = 14.sp,
-                            color = Color.White,
-                        ),
-                    )
-                }
+                CloudMusicActionButton(
+                    text = stringResource(R.string.cloud_music_cancel),
+                    enabled = true,
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                CloudMusicActionButton(
+                    text = stringResource(R.string.cloud_music_delete),
+                    enabled = true,
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }

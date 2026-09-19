@@ -2,11 +2,11 @@ package com.smartisan.music.ui.cloud
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -27,6 +27,12 @@ import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
 import com.smartisan.music.data.online.OnlineTrack
 import com.smartisan.music.ui.cloud.components.*
+
+/** 头部行最小高度与封面边长：对齐旧版 CloudDetailHeaderHeight / CloudDetailHeaderArtworkSize。
+ *
+ * 旧版封面写 64dp，但被 88dp 行高减去 16dp 上下内边距约束成 56dp，这里直接按实际值写。 */
+private val CloudDetailHeaderMinHeight = 88.dp
+private val CloudDetailHeaderArtworkSize = 56.dp
 
 /**
  * 详情页顶部 header：封面 + 标题/副标题 + 播放全部 / 随机播放。
@@ -66,17 +72,21 @@ internal fun CloudMusicDetailHeader(
     val playEnabled = tracks.isNotEmpty()
 
     Column(Modifier.fillMaxWidth()) {
-        // 封面 + 标题 + 副标题。
+        // 封面 + 标题 + 副标题（对齐旧版：88dp 行高、小封面、大号标题）。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .heightIn(min = CloudDetailHeaderMinHeight)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             CloudMusicCoverImage(
                 imageUrl = artworkUrl,
                 modifier = Modifier
-                    .size(120.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .size(CloudDetailHeaderArtworkSize)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(CloudSearchFieldBackgroundColor),
+                contentScale = ContentScale.Fit,
             )
             Column(
                 modifier = Modifier
@@ -87,7 +97,7 @@ internal fun CloudMusicDetailHeader(
                 Text(
                     text = title,
                     style = TextStyle(
-                        fontSize = 18.sp,
+                        fontSize = 19.sp,
                         fontWeight = FontWeight.Medium,
                         color = CloudTrackTitleColor,
                     ),
@@ -97,12 +107,12 @@ internal fun CloudMusicDetailHeader(
                 Text(
                     text = subtitle,
                     style = TextStyle(
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         color = CloudSecondaryTextColor,
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 6.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
@@ -146,22 +156,25 @@ internal fun CloudMusicDetailHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                CloudMusicDetailActionButton(
+                CloudMusicActionButton(
                     text = stringResource(R.string.cloud_music_detail_shuffle),
+                    iconRes = R.drawable.btn_icon_shuffle_selector,
                     enabled = playEnabled,
                     onClick = onShuffle,
                     modifier = Modifier.weight(1f),
                 )
-                CloudMusicDetailActionButton(
+                CloudMusicActionButton(
                     text = stringResource(R.string.cloud_music_delete_playlist),
+                    iconRes = R.drawable.btn_deletelist2_selector,
                     enabled = true,
                     onClick = onDeletePlaylist,
                     modifier = Modifier.weight(1f),
                 )
-                CloudMusicDetailActionButton(
+                CloudMusicActionButton(
                     text = stringResource(R.string.cloud_music_edit_playlist),
+                    iconRes = R.drawable.btn_editlist2_selector,
                     enabled = playEnabled,
                     onClick = { onEditClick?.invoke() },
                     modifier = Modifier.weight(1f),
@@ -171,16 +184,18 @@ internal fun CloudMusicDetailHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                CloudMusicDetailActionButton(
+                CloudMusicActionButton(
                     text = stringResource(R.string.cloud_music_detail_play_all),
+                    iconRes = R.drawable.btn_icon_play_selector,
                     enabled = playEnabled,
                     onClick = onPlayAll,
                     modifier = Modifier.weight(1f),
                 )
-                CloudMusicDetailActionButton(
+                CloudMusicActionButton(
                     text = stringResource(R.string.cloud_music_detail_shuffle),
+                    iconRes = R.drawable.btn_icon_shuffle_selector,
                     enabled = playEnabled,
                     onClick = onShuffle,
                     modifier = Modifier.weight(1f),
@@ -267,30 +282,4 @@ private fun cloudDetailSubtitle(target: CloudDetailTarget, loadedTrackCount: Int
         }
     }
     return parts.joinToString(" · ").ifBlank { kindLabel }
-}
-
-/** header 中的强调色圆角操作按钮。 */
-@Composable
-private fun CloudMusicDetailActionButton(
-    text: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(if (enabled) CloudAccentColor else CloudAccentColor.copy(alpha = 0.4f))
-            .cloudMusicPressable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = TextStyle(
-                fontSize = 14.sp,
-                color = Color.White,
-            ),
-        )
-    }
 }
