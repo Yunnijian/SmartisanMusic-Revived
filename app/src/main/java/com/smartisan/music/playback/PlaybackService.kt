@@ -13,6 +13,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.LibraryResult
@@ -192,7 +194,22 @@ class PlaybackService : MediaLibraryService() {
                 upstreamFactory = dataSourceFactory,
             ),
         )
-        val exoPlayer = ExoPlayer.Builder(this)
+        // 平台 FLAC 解码器（c2.android.flac.decoder）的输入缓冲硬性 32768 字节，
+        // 24bit/192kHz 母带等大帧 FLAC（block size 16384，单帧可达 73KB）会触发
+        // DecoderInputBuffer$InsufficientCapacityException 永久缓冲；启用 libFLAC 扩展渲染器
+        // 走软件解码，绕开平台解码器的缓冲上限。
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+        val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
+            .setLoadControl(
+                // 超高码率（24bit/192kHz 母带）会先占满 DefaultLoadControl 的「字节」上限
+                // (DEFAULT_AUDIO_BUFFER_SIZE=12.5MB) 而缓冲时长仍不足，于是加载器停摆、位置冻结。
+                // media3 只对本地播放默认开了时间优先（DEFAULT_PRIORITIZE_TIME_OVER_SIZE_THRESHOLDS_FOR_LOCAL_PLAYBACK），
+                // 网络播放仍是 false，这里显式打开以取得同样的保护。
+                DefaultLoadControl.Builder()
+                    .setPrioritizeTimeOverSizeThresholds(true)
+                    .build(),
+            )
             .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)

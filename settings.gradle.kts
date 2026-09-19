@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Music"
 include(":app")
+include(":media3-flac")
