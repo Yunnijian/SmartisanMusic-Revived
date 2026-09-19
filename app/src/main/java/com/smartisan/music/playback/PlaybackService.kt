@@ -200,6 +200,16 @@ class PlaybackService : MediaLibraryService() {
         // 走软件解码，绕开平台解码器的缓冲上限。
         val renderersFactory = DefaultRenderersFactory(this)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            // libFLAC 扩展解码器按原始位深输出（flac_parser.cc 接受 8/16/24/32bit，24bit 打包成 3 字节），
+            // 但 DefaultAudioSink 只在 float 分支保留高位深：非 float 走 ToInt16PcmAudioProcessor，
+            // 母带的 24bit 会在进 AudioTrack 前被截成 16bit（DefaultAudioSink.java:750-757）。
+            // shouldUseFloatOutput() 只对 ENCODING_PCM_24BIT/32BIT/FLOAT 生效，16bit 源完全不受影响。
+            .setEnableAudioFloatOutput(true)
+            // float 分支整条 audioProcessorChain 都不挂，Sonic 自然也在链外，
+            // shouldApplyAudioProcessorPlaybackParameters() 因此对高位深源返回 false（DefaultAudioSink.java:1658-1668），
+            // 变速请求会被丢成 PlaybackParameters.DEFAULT。改由 AudioTrack 自身的 playbackParams 承担，
+            // 这条开关正是 media3 为「处理器链用不了」的场景留的旁路。
+            .setEnableAudioOutputPlaybackParameters(true)
         val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
             .setLoadControl(
                 // 超高码率（24bit/192kHz 母带）会先占满 DefaultLoadControl 的「字节」上限
