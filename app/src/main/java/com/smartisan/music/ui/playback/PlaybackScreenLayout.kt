@@ -302,7 +302,7 @@ private fun ColumnScope.PlaybackScreenStageSection(
     screenHeightPx: Float,
     onTurntableWidthChanged: (Dp) -> Unit,
 ) {
-    val interactions = remember { PlaybackStageInteractions(host) }
+    val interactions = remember(host) { PlaybackStageInteractions(host) }
             Box(
                 modifier =
                     Modifier.fillMaxWidth()

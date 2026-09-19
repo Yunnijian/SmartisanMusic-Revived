@@ -90,6 +90,20 @@ internal class PlaybackScreenHost(
     coverPageStateState: MutableState<PlaybackCoverPageState>,
     scratchFlingJobState: MutableState<Job?>,
     discManualRotationOffsetState: MutableFloatState,
+    titleState: MutableState<String>,
+    artistState: MutableState<String>,
+    durationMsState: MutableLongState,
+    currentMediaItemState: MutableState<MediaItem?>,
+    currentMediaIdState: MutableState<String?>,
+    currentIsExternalAudioState: MutableState<Boolean>,
+    favoriteEnabledState: MutableState<Boolean>,
+    coverPreviewPositionMsState: MutableState<Long?>,
+    boundedLivePositionMsState: MutableLongState,
+    displayPositionMsState: MutableLongState,
+    scratchSourceUriState: MutableState<Uri?>,
+    fallbackLyricsLinesState: MutableState<List<String>>,
+    embeddedLyricsState: MutableState<EmbeddedLyrics?>,
+    albumArtworkState: MutableState<ImageBitmap?>,
 ) {
     val favoriteIds: Set<String>
         get() = favoriteIdsState.value
@@ -109,20 +123,20 @@ internal class PlaybackScreenHost(
     var scratchFlingJob by scratchFlingJobState
     var discManualRotationOffsetDegrees by discManualRotationOffsetState
 
-    var title: String by mutableStateOf("")
-    var artist: String by mutableStateOf("")
-    var durationMs: Long by mutableStateOf(0L)
-    var currentMediaItem: MediaItem? by mutableStateOf(null)
-    var currentMediaId: String? by mutableStateOf(null)
-    var currentIsExternalAudio: Boolean by mutableStateOf(false)
-    var favoriteEnabled: Boolean by mutableStateOf(false)
-    var coverPreviewPositionMs: Long? by mutableStateOf(null)
-    var boundedLivePositionMs: Long by mutableStateOf(0L)
-    var displayPositionMs: Long by mutableStateOf(0L)
-    var scratchSourceUri: Uri? by mutableStateOf(null)
-    var fallbackLyricsLines: List<String> by mutableStateOf(emptyList())
-    var embeddedLyrics: EmbeddedLyrics? by mutableStateOf(null)
-    var albumArtwork: ImageBitmap? by mutableStateOf(null)
+    var title: String by titleState
+    var artist: String by artistState
+    var durationMs: Long by durationMsState
+    var currentMediaItem: MediaItem? by currentMediaItemState
+    var currentMediaId: String? by currentMediaIdState
+    var currentIsExternalAudio: Boolean by currentIsExternalAudioState
+    var favoriteEnabled: Boolean by favoriteEnabledState
+    var coverPreviewPositionMs: Long? by coverPreviewPositionMsState
+    var boundedLivePositionMs: Long by boundedLivePositionMsState
+    var displayPositionMs: Long by displayPositionMsState
+    var scratchSourceUri: Uri? by scratchSourceUriState
+    var fallbackLyricsLines: List<String> by fallbackLyricsLinesState
+    var embeddedLyrics: EmbeddedLyrics? by embeddedLyricsState
+    var albumArtwork: ImageBitmap? by albumArtworkState
 
     fun resetCoverPageInteraction(resumePlayback: Boolean) {
         scratchFlingJob?.cancel()
@@ -322,11 +336,28 @@ internal fun rememberPlaybackScreenHost(
     val keepLyricsScreenAwakeState = rememberSaveable { mutableStateOf(false) }
     val sleepTimerWasActiveState = remember { mutableStateOf(false) }
     val coverPageStateState =
-        remember(snapshotState.value.mediaItem?.mediaId) {
+        remember {
+            // 键里不能放 mediaId：换歌会换一份状态对象，而手势层（pointerInput 的长生命周期闭包）
+            // 仍持有旧对象，于是搓碟/拖针写进上一首的状态、进度条读不到 —— 表现为「换首之后进度条不跟手」。
+            // 换歌的重置改由 PlaybackScreenCoverEffects 的 effect 显式做。
             mutableStateOf(PlaybackCoverPageState())
         }
     val scratchFlingJobState = remember { mutableStateOf<Job?>(null) }
     val discManualRotationOffsetState = remember { mutableFloatStateOf(0f) }
+    val titleState = remember { mutableStateOf("") }
+    val artistState = remember { mutableStateOf("") }
+    val durationMsState = remember { mutableLongStateOf(0L) }
+    val currentMediaItemState = remember { mutableStateOf<MediaItem?>(null) }
+    val currentMediaIdState = remember { mutableStateOf<String?>(null) }
+    val currentIsExternalAudioState = remember { mutableStateOf(false) }
+    val favoriteEnabledState = remember { mutableStateOf(false) }
+    val coverPreviewPositionMsState = remember { mutableStateOf<Long?>(null) }
+    val boundedLivePositionMsState = remember { mutableLongStateOf(0L) }
+    val displayPositionMsState = remember { mutableLongStateOf(0L) }
+    val scratchSourceUriState = remember { mutableStateOf<Uri?>(null) }
+    val fallbackLyricsLinesState = remember { mutableStateOf<List<String>>(emptyList()) }
+    val embeddedLyricsState = remember { mutableStateOf<EmbeddedLyrics?>(null) }
+    val albumArtworkState = remember { mutableStateOf<ImageBitmap?>(null) }
     val sleepTimerStateState = PlaybackSleepTimer.state.collectAsStateWithLifecycle()
 
     PlaybackScreenEntranceEffect(entranceTimeMillis)
@@ -377,6 +408,20 @@ internal fun rememberPlaybackScreenHost(
             coverPageStateState = coverPageStateState,
             scratchFlingJobState = scratchFlingJobState,
             discManualRotationOffsetState = discManualRotationOffsetState,
+            titleState = titleState,
+            artistState = artistState,
+            durationMsState = durationMsState,
+            currentMediaItemState = currentMediaItemState,
+            currentMediaIdState = currentMediaIdState,
+            currentIsExternalAudioState = currentIsExternalAudioState,
+            favoriteEnabledState = favoriteEnabledState,
+            coverPreviewPositionMsState = coverPreviewPositionMsState,
+            boundedLivePositionMsState = boundedLivePositionMsState,
+            displayPositionMsState = displayPositionMsState,
+            scratchSourceUriState = scratchSourceUriState,
+            fallbackLyricsLinesState = fallbackLyricsLinesState,
+            embeddedLyricsState = embeddedLyricsState,
+            albumArtworkState = albumArtworkState,
         )
 
     PlaybackScreenSessionEffects(host)

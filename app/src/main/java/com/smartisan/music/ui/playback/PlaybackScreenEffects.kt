@@ -325,6 +325,11 @@ internal fun PlaybackScreenDerivedValues(host: PlaybackScreenHost) {
 
 @Composable
 internal fun PlaybackScreenCoverEffects(host: PlaybackScreenHost) {
+    // coverPageState 现在是跨重组的同一份对象，换歌时的复位必须显式做（原先靠 remember(mediaId) 换对象）。
+    LaunchedEffect(host.currentMediaId) {
+        host.resetCoverPageInteraction(resumePlayback = false)
+    }
+
     LaunchedEffect(
         host.currentVisualPage,
         host.coverPageState.dragMode,
