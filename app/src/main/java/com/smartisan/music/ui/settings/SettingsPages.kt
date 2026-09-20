@@ -34,6 +34,7 @@ internal fun SettingsRootPage(
     artistSettings: ArtistSettings,
     navigationSettings: NavigationSettings,
     themeMode: ThemeMode,
+    turntableStyle: TurntableStyle,
     appIcon: AppIcon,
     neteaseSignedIn: Boolean,
     playbackQuality: NeteaseAudioQuality,
@@ -47,6 +48,7 @@ internal fun SettingsRootPage(
     onArtistSeparatorsClick: () -> Unit,
     onNavigationClick: () -> Unit,
     onAppIconClick: () -> Unit,
+    onTurntableStyleClick: () -> Unit,
     onThemeClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -91,6 +93,13 @@ internal fun SettingsRootPage(
                 playbackSettings.hidePlayerAxisEnabled,
                 RowShape.Middle,
                 onHidePlayerAxisEnabledChange,
+                enabled = turntableStyle == TurntableStyle.Original,
+                lockedSummary =
+                    if (turntableStyle == TurntableStyle.Netease) {
+                        stringResource(R.string.turntable_style_axis_netease_summary)
+                    } else {
+                        null
+                    },
             )
             SettingsSwitchRow(
                 R.string.popcorn_sound,
@@ -138,6 +147,13 @@ internal fun SettingsRootPage(
                 true,
                 RowShape.Top,
                 onThemeClick,
+            )
+            SettingsValueRow(
+                R.string.turntable_style,
+                stringResource(turntableStyle.labelRes),
+                true,
+                RowShape.Middle,
+                onTurntableStyleClick,
             )
             SettingsValueRow(
                 R.string.app_icon,

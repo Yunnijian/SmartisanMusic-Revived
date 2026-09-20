@@ -12,7 +12,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -26,12 +28,22 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
@@ -47,7 +59,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.smartisan.music.R
+import com.smartisan.music.data.settings.TurntableStyle
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
+import androidx.core.graphics.PathParser
 import kotlin.math.roundToInt
 
 /**
@@ -152,6 +166,307 @@ private fun PlaybackTurntableAxisOverlay(
             dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
         )
     }
+}
+
+@Composable
+internal fun NeteaseTurntableDisc(
+    albumArtwork: ImageBitmap?,
+    running: Boolean,
+    rotationCycleDurationMs: Float,
+    manualRotationOffsetDegrees: Float,
+    turntableWidth: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val discRotation =
+        rememberSmoothDiscRotation(
+            running = running,
+            cycleDurationMs = rotationCycleDurationMs,
+            manualRotationOffsetDegrees = manualRotationOffsetDegrees,
+        )
+    val discDiameter = turntableWidth * NeteaseDiscDiameterRatio
+    val coverDiameter = discDiameter * NeteaseCoverHoleDiameterRatio
+
+    BoxWithConstraints(modifier = modifier) {
+        val discCenterY = maxHeight * NeteaseDiscCenterYRatio
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val discRadius = discDiameter.toPx() / 2f
+            val center = Offset(size.width / 2f, size.height * NeteaseDiscCenterYRatio)
+            drawNeteaseDiscGlow(center = center, discRadius = discRadius)
+            drawNeteaseVinylRing(center = center, radius = discRadius)
+        }
+        val coverModifier =
+            Modifier.align(Alignment.TopCenter)
+                .offset(y = discCenterY - coverDiameter / 2)
+                .size(coverDiameter)
+        if (albumArtwork != null) {
+            Image(
+                bitmap = albumArtwork,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier =
+                    coverModifier.graphicsLayer {
+                        rotationZ = discRotation.value
+                    }.clip(CircleShape),
+            )
+        } else {
+            Canvas(modifier = coverModifier.clip(CircleShape)) {
+                drawRect(NeteaseCoverPlaceholderColor)
+            }
+        }
+    }
+}
+
+private val NeteaseCoverPlaceholderColor = Color(0xFF2A2A2C)
+
+/** 碟缘向外的柔光；碟片随后覆盖内侧，只留碟外一圈渐隐亮边。 */
+private fun DrawScope.drawNeteaseDiscGlow(
+    center: Offset,
+    discRadius: Float,
+) {
+    val glowRadius = discRadius * NeteaseDiscGlowRadiusRatio
+    drawCircle(
+        brush =
+            Brush.radialGradient(
+                colorStops =
+                    arrayOf(
+                        0f to Color.Transparent,
+                        (discRadius / glowRadius) to Color.White.copy(alpha = 0.13f),
+                        0.82f to Color.White.copy(alpha = 0.05f),
+                        1f to Color.Transparent,
+                    ),
+                center = center,
+                radius = glowRadius,
+            ),
+        radius = glowRadius,
+        center = center,
+    )
+}
+
+private fun DrawScope.drawNeteaseVinylRing(
+    center: Offset,
+    radius: Float,
+) {
+    val holeRadius = radius * NeteaseCoverHoleDiameterRatio
+    drawCircle(
+        brush =
+            Brush.radialGradient(
+                colorStops =
+                    arrayOf(
+                        0f to Color(0xFF2E2E30),
+                        NeteaseCoverHoleDiameterRatio to Color(0xFF232325),
+                        0.9f to Color(0xFF171719),
+                        1f to Color(0xFF101012),
+                    ),
+                center = center,
+                radius = radius,
+            ),
+        radius = radius,
+        center = center,
+    )
+    val grooveCount = 24
+    val grooveSpan = radius - holeRadius
+    val grooveWidth = (radius * 0.006f).coerceAtLeast(0.5f)
+    for (index in 1..grooveCount) {
+        val fraction = index.toFloat() / (grooveCount + 1)
+        drawCircle(
+            color = Color.White.copy(alpha = if (index % 6 == 0) 0.045f else 0.024f),
+            radius = holeRadius + grooveSpan * fraction,
+            center = center,
+            style = Stroke(width = grooveWidth),
+        )
+    }
+    val sheenRadius = radius * 0.62f
+    val sheenOffset = radius * 0.78f
+    drawCircle(
+        brush =
+            Brush.radialGradient(
+                colorStops =
+                    arrayOf(0f to Color.White.copy(alpha = 0.10f), 1f to Color.Transparent),
+                center = Offset(center.x, center.y - sheenOffset),
+                radius = sheenRadius,
+            ),
+        radius = sheenRadius,
+        center = Offset(center.x, center.y - sheenOffset),
+    )
+    drawCircle(
+        brush =
+            Brush.radialGradient(
+                colorStops =
+                    arrayOf(0f to Color.White.copy(alpha = 0.07f), 1f to Color.Transparent),
+                center = Offset(center.x, center.y + sheenOffset),
+                radius = sheenRadius,
+            ),
+        radius = sheenRadius,
+        center = Offset(center.x, center.y + sheenOffset),
+    )
+    drawCircle(
+        color = Color.White.copy(alpha = 0.05f),
+        radius = radius * 0.995f,
+        center = center,
+        style = Stroke(width = (radius * 0.012f).coerceAtLeast(0.5f)),
+    )
+    drawCircle(
+        brush =
+            Brush.radialGradient(
+                colorStops =
+                    arrayOf(
+                        0.94f to Color.Transparent,
+                        0.985f to Color.White.copy(alpha = 0.08f),
+                        1f to Color.Transparent,
+                    ),
+                center = center,
+                radius = radius,
+            ),
+        radius = radius,
+        center = center,
+    )
+    drawCircle(
+        color = Color.Black.copy(alpha = 0.35f),
+        radius = holeRadius * 1.02f,
+        center = center,
+        style = Stroke(width = (radius * 0.012f).coerceAtLeast(0.5f)),
+    )
+    drawCircle(
+        color = Color.White.copy(alpha = 0.07f),
+        radius = holeRadius,
+        center = center,
+        style = Stroke(width = (radius * 0.008f).coerceAtLeast(0.5f)),
+    )
+}
+
+// 官方唱针内联 SVG（viewBox 0 0 114 174）的 path 数据，逐字取自
+// subApp.chunk.4b8efd5.js 的 handle_svg__ 段；填充/描边参数亦对照源码。
+// arc 旗标补显式空格：Android PathParser 不接受 "011.508" 这类紧凑写法。
+private val NeteaseNeedleArmPath =
+    PathParser.createPathFromPathData(
+        "M78.665 142.637s-20.72-18.081-35.721-34.604C28.646 85.53 17 16.559 17 16.559",
+    ).asComposePath()
+private val NeteaseNeedleArmShadowPath =
+    PathParser.createPathFromPathData(
+        "M71.316 136.199 a1.068 1.068 0 0 1 1.508 -.085 l8.425 7.44 " +
+            "a1.07 1.07 0 0 1 -1.424 1.593 l-8.425 -7.44 a1.068 1.068 0 0 1 -.084 -1.508 z",
+    ).asComposePath()
+private val NeteaseNeedleHeadShadePath =
+    PathParser.createPathFromPathData("M93.144 138.942h19.941v27.776H93.144z").asComposePath()
+private val NeteaseNeedleTipPath =
+    PathParser.createPathFromPathData(
+        "M92.14 160.046 l6.838 -8.15 a3.193 3.193 0 0 1 4.496 -.394 l8.149 6.839 " +
+            "a3.19 3.19 0 0 1 .394 4.496 l-6.838 8.15 a3.192 3.192 0 0 1 -4.497 .393 " +
+            "l-8.15 -6.838 a3.191 3.191 0 0 1 -.393 -4.496 z",
+    ).asComposePath()
+private val NeteaseNeedleTipTexturePath =
+    PathParser.createPathFromPathData(
+        "M95.081 161.111 a.713 .713 0 0 1 1.003 -.088 l8.395 6.817 " +
+            "a.711 .711 0 1 1 -.915 1.091 l-8.396 -6.816 a.713 .713 0 0 1 -.087 -1.004 z " +
+            "m4.984 -6.055 a.713 .713 0 0 1 1.003 -.086 l8.397 6.815 " +
+            "a.713 .713 0 0 1 -.916 1.091 l-8.396 -6.816 a.714 .714 0 0 1 -.088 -1.004 z",
+    ).asComposePath()
+private val NeteaseNeedleHeadRect =
+    RoundRect(
+        left = 79.949f,
+        top = 136.405f,
+        right = 79.949f + 29.2f,
+        bottom = 136.405f + 11.395f,
+        cornerRadius = CornerRadius(2.849f, 2.849f),
+    )
+private val NeteaseNeedleHeadPivot = Offset(79.949f, 136.405f)
+private val NeteaseNeedleHeadShadePivot = Offset(93.144f, 138.942f)
+
+@Composable
+internal fun NeteaseNeedle(
+    needleRotation: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier) {
+        // 唱针几何与碟片同基准：支点在碟心正上方，长度按手机版实测标定。
+        val discDiameter = size.width * NeteaseDiscDiameterRatio
+        val svgScale = NeteaseNeedleScaleToDiscRatio * discDiameter
+        val pivot =
+            Offset(
+                x = size.width / 2f,
+                y = (size.height * NeteaseDiscCenterYRatio) -
+                    (NeteaseNeedlePivotOffsetToDiscRatio * discDiameter),
+            )
+        val renderLeft = pivot.x - (NeteaseNeedlePivotSvgX * svgScale)
+        val renderTop = pivot.y - (NeteaseNeedlePivotSvgY * svgScale)
+        rotate(degrees = needleRotation.value, pivot = pivot) {
+            withTransform({
+                translate(renderLeft, renderTop)
+                scale(svgScale, svgScale, pivot = Offset.Zero)
+            }) {
+                drawNeteaseNeedleSvg()
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawNeteaseNeedleSvg() {
+    val pivotBase = Offset(17f, 16.558f)
+    drawCircle(
+        color = Color.Black.copy(alpha = 0.1f),
+        radius = 15.454f,
+        center = pivotBase,
+    )
+    drawCircle(
+        color = Color.White.copy(alpha = 0.05f),
+        radius = 15.454f,
+        center = pivotBase,
+        style = Stroke(width = 0.552f),
+    )
+    drawPath(NeteaseNeedleArmPath, Color.White, style = Stroke(width = 6.623f))
+    drawPath(NeteaseNeedleArmShadowPath, Color.Black.copy(alpha = 0.7f))
+    val headPath = Path().apply { addRoundRect(NeteaseNeedleHeadRect) }
+    withTransform({ rotate(40f, NeteaseNeedleHeadPivot) }) {
+        drawPath(headPath, Color.White)
+    }
+    withTransform({ rotate(40f, NeteaseNeedleHeadPivot) }) {
+        clipPath(headPath) {
+            withTransform({ rotate(40f, NeteaseNeedleHeadShadePivot) }) {
+                drawPath(
+                    NeteaseNeedleHeadShadePath,
+                    Brush.horizontalGradient(
+                        0f to Color.Black.copy(alpha = 0.001f),
+                        1f to Color.Black.copy(alpha = 0.1f),
+                        startX = 93.144f,
+                        endX = 113.085f,
+                    ),
+                )
+                drawPath(
+                    NeteaseNeedleHeadShadePath,
+                    Brush.horizontalGradient(
+                        0f to Color.Black.copy(alpha = 0.001f),
+                        1f to Color.Black.copy(alpha = 0.1f),
+                        startX = 103.115f,
+                        endX = 113.085f,
+                    ),
+                )
+            }
+        }
+    }
+    drawPath(NeteaseNeedleTipPath, Color.White)
+    drawPath(NeteaseNeedleTipTexturePath, Color.Black.copy(alpha = 0.09f))
+    val capCenter = Offset(16.999f, 16.559f)
+    drawCircle(
+        color = Color.Black.copy(alpha = 0.18f),
+        radius = 8.831f + 0.552f,
+        center = capCenter,
+    )
+    drawCircle(color = Color.White, radius = 8.831f, center = capCenter)
+    drawCircle(
+        brush =
+            Brush.verticalGradient(
+                colorStops =
+                    arrayOf(
+                        0f to Color(0xFFECE7E7),
+                        0.471f to Color(0xFFD9D9D9),
+                        1f to Color(0xFFF0EBEB),
+                    ),
+                startY = capCenter.y - 3.312f,
+                endY = capCenter.y + 3.312f,
+            ),
+        radius = 3.312f,
+        center = capCenter,
+    )
 }
 
 private data class OriginalNeedleLayoutPx(
@@ -321,6 +636,7 @@ internal fun playbackVisualPageTransform(enteringLyrics: Boolean): ContentTransf
 internal fun PlaybackCoverPage(
     turntableWidth: Dp,
     scale: Float,
+    turntableStyleSpec: TurntableStyleSpec,
     currentPositionMs: Long,
     durationMs: Long,
     scratchEnabled: Boolean,
@@ -348,6 +664,7 @@ internal fun PlaybackCoverPage(
 ) {
     val needleGestureState =
         rememberNeedleGestureState(
+            turntableStyleSpec = turntableStyleSpec,
             currentPositionMs = currentPositionMs,
             durationMs = durationMs,
             hasMediaItem = hasMediaItem,
@@ -384,19 +701,31 @@ internal fun PlaybackCoverPage(
         if (coverDragMode == CoverDragMode.DiscScratch) {
             ScratchCycleDurationMs
         } else {
-            PlaybackDiscCycleDurationMs
+            turntableStyleSpec.discCycleDurationMs
         }
 
     Box(modifier = modifier) {
-        PlaybackTurntableDisc(
-            albumArtwork = albumArtwork,
-            running = discRunning,
-            rotationCycleDurationMs = discRotationCycleDurationMs,
-            manualRotationOffsetDegrees = discManualRotationOffsetDegrees,
-            hidePlayerAxisEnabled = hidePlayerAxisEnabled,
-            turntableWidth = turntableWidth,
-            modifier = Modifier.matchParentSize(),
-        )
+        when (turntableStyleSpec.style) {
+            TurntableStyle.Original ->
+                PlaybackTurntableDisc(
+                    albumArtwork = albumArtwork,
+                    running = discRunning,
+                    rotationCycleDurationMs = discRotationCycleDurationMs,
+                    manualRotationOffsetDegrees = discManualRotationOffsetDegrees,
+                    hidePlayerAxisEnabled = hidePlayerAxisEnabled,
+                    turntableWidth = turntableWidth,
+                    modifier = Modifier.matchParentSize(),
+                )
+            TurntableStyle.Netease ->
+                NeteaseTurntableDisc(
+                    albumArtwork = albumArtwork,
+                    running = discRunning,
+                    rotationCycleDurationMs = discRotationCycleDurationMs,
+                    manualRotationOffsetDegrees = discManualRotationOffsetDegrees,
+                    turntableWidth = turntableWidth,
+                    modifier = Modifier.matchParentSize(),
+                )
+        }
         Box(
             modifier =
                 Modifier.matchParentSize()
@@ -407,6 +736,7 @@ internal fun PlaybackCoverPage(
                         needleSeekAvailable = needleSeekAvailable,
                         densityPxPerDp = densityPxPerDp,
                         scale = scale,
+                        spec = turntableStyleSpec,
                         needleAnimatable = needleAnimatable,
                         latestDiscSize = latestDiscSize,
                         latestPositionMs = latestPositionMs,
@@ -423,11 +753,19 @@ internal fun PlaybackCoverPage(
                         latestNeedleSeekCancel = latestNeedleSeekCancel,
                     )
         )
-        OriginalNeedleStack(
-            needleRotation = needleRotation,
-            needleLiftFraction = needleLiftFraction,
-            scale = scale,
-            modifier = Modifier.matchParentSize().zIndex(2f),
-        )
+        when (turntableStyleSpec.style) {
+            TurntableStyle.Original ->
+                OriginalNeedleStack(
+                    needleRotation = needleRotation,
+                    needleLiftFraction = needleLiftFraction,
+                    scale = scale,
+                    modifier = Modifier.matchParentSize().zIndex(2f),
+                )
+            TurntableStyle.Netease ->
+                NeteaseNeedle(
+                    needleRotation = needleRotation,
+                    modifier = Modifier.matchParentSize().zIndex(2f),
+                )
+        }
     }
 }

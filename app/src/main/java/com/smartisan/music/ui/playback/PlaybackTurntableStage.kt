@@ -36,6 +36,7 @@ import com.smartisan.music.ui.listentogether.ListenTogetherStatusOverlay
 @Composable
 internal fun PlaybackVisualStage(
     currentVisualPage: PlaybackVisualPage,
+    turntableStyleSpec: TurntableStyleSpec,
     coverPositionMs: Long,
     lyricsPositionMs: Long,
     durationMs: Long,
@@ -131,6 +132,7 @@ internal fun PlaybackVisualStage(
             ) {
                 PlaybackStagePages(
                     currentVisualPage = currentVisualPage,
+                    turntableStyleSpec = turntableStyleSpec,
                     turntableWidth = turntableWidth,
                     scale = scale,
                     coverPositionMs = coverPositionMs,
@@ -172,7 +174,7 @@ private fun playbackVisualStageWidth(maxWidth: Dp, maxHeight: Dp): Dp {
     return width.dp
 }
 
-private const val PlaybackTurntableHeightToWidthRatio = 356.5938f / OriginalTurntableBaseWidthDp
+internal const val PlaybackTurntableHeightToWidthRatio = 356.5938f / OriginalTurntableBaseWidthDp
 private const val PlaybackVisualStageHeightToWidthRatio =
     (356.5938f + 52f) / OriginalTurntableBaseWidthDp
 
@@ -265,6 +267,7 @@ private fun BoxScope.PlaybackStageTopActions(
 @Composable
 private fun BoxScope.PlaybackStagePages(
     currentVisualPage: PlaybackVisualPage,
+    turntableStyleSpec: TurntableStyleSpec,
     turntableWidth: Dp,
     scale: Float,
     coverPositionMs: Long,
@@ -309,6 +312,7 @@ private fun BoxScope.PlaybackStagePages(
                 PlaybackCoverPage(
                     turntableWidth = turntableWidth,
                     scale = scale,
+                    turntableStyleSpec = turntableStyleSpec,
                     currentPositionMs = coverPositionMs,
                     durationMs = durationMs,
                     scratchEnabled = scratchEnabled,

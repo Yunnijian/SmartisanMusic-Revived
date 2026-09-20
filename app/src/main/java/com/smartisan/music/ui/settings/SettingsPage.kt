@@ -62,6 +62,11 @@ internal fun SettingsPage(
     )
     val onlineSettingsScope = rememberCoroutineScope()
 
+    val turntableStyleStore = container.turntableStyleStore
+    val turntableStyle by turntableStyleStore.style.collectAsStateWithLifecycle(
+        initialValue = turntableStyleStore.currentStyle(),
+    )
+
     // 登录也可能发生在云音乐 tab 内，进入设置页时按存储重读一次，避免行值停留在旧登录态。
     LaunchedEffect(active) {
         if (active) {
@@ -125,6 +130,7 @@ internal fun SettingsPage(
                 artistSettings = artistSettings,
                 navigationSettings = navigationSettings,
                 themeMode = themeMode,
+                turntableStyle = turntableStyle,
                 appIcon = appIcon,
                 neteaseSignedIn = neteaseSignedIn,
                 playbackQuality = onlineSettings.neteasePlaybackQuality,
@@ -154,6 +160,9 @@ internal fun SettingsPage(
                 },
                 onAppIconClick = {
                     onSecondaryPageChange(SettingsSecondaryPage.AppIcon)
+                },
+                onTurntableStyleClick = {
+                    onSecondaryPageChange(SettingsSecondaryPage.Turntable)
                 },
                 onThemeClick = {
                     onSecondaryPageChange(SettingsSecondaryPage.Theme)
@@ -208,6 +217,18 @@ internal fun SettingsPage(
                             onSecondaryPageChange(null)
                         },
                         onThemeModeChange = onThemeModeChange,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                SettingsSecondaryPage.Turntable ->
+                    TurntableStyleSettingsPage(
+                        active = active,
+                        selectedStyle = turntableStyle,
+                        onClose = {
+                            onSecondaryPageChange(null)
+                        },
+                        onStyleSelected = { style ->
+                            turntableStyleStore.setStyle(style)
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 SettingsSecondaryPage.AppIcon ->
@@ -275,5 +296,6 @@ internal enum class SettingsSecondaryPage {
     AudioFx,
     Navigation,
     Theme,
+    Turntable,
     AppIcon,
 }

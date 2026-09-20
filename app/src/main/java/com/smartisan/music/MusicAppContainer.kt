@@ -12,6 +12,7 @@ import com.smartisan.music.data.settings.NavigationSettingsStore
 import com.smartisan.music.data.settings.OnlineMusicSettingsStore
 import com.smartisan.music.data.settings.PlaybackSettingsStore
 import com.smartisan.music.data.settings.ThemeSettingsStore
+import com.smartisan.music.data.settings.TurntableStyleStore
 import com.smartisan.music.listentogether.ListenTogetherStore
 
 /**
@@ -47,6 +48,7 @@ internal class MusicAppContainer private constructor(context: Context) {
         NavigationSettingsStore(appContext)
     }
     val themeSettingsStore: ThemeSettingsStore by lazy { ThemeSettingsStore(appContext) }
+    val turntableStyleStore: TurntableStyleStore by lazy { TurntableStyleStore(appContext) }
 
     companion object {
         @Volatile

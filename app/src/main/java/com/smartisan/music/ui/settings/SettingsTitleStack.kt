@@ -47,6 +47,7 @@ internal fun SettingsTitleStack(
                             SettingsSecondaryPage.AudioFx -> R.string.audio_fx
                             SettingsSecondaryPage.Navigation -> R.string.bottom_tab_visibility
                             SettingsSecondaryPage.Theme -> R.string.theme_settings
+                            SettingsSecondaryPage.Turntable -> R.string.turntable_style
                             SettingsSecondaryPage.AppIcon -> R.string.app_icon
                         }
                     ),

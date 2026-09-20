@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntSize
+import com.smartisan.music.data.settings.TurntableStyle
 import kotlin.math.abs
 import kotlin.math.max
 import kotlinx.coroutines.delay
@@ -41,6 +42,7 @@ internal fun Modifier.playbackCoverPointerInput(
     needleSeekAvailable: Boolean,
     densityPxPerDp: Float,
     scale: Float,
+    spec: TurntableStyleSpec,
     needleAnimatable: Animatable<Float, AnimationVector1D>,
     latestDiscSize: IntSize,
     latestPositionMs: Long,
@@ -56,7 +58,7 @@ internal fun Modifier.playbackCoverPointerInput(
     latestNeedleSeekEnd: (Float, Long?) -> Unit,
     latestNeedleSeekCancel: () -> Unit,
 ): Modifier =
-    pointerInput(scratchAvailable, needleSeekAvailable, densityPxPerDp, scale) {
+    pointerInput(scratchAvailable, needleSeekAvailable, densityPxPerDp, scale, spec.style) {
             val tapTouchSlop = viewConfiguration.touchSlop
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -65,7 +67,7 @@ internal fun Modifier.playbackCoverPointerInput(
                 val radius = discRadius(size)
                 val withinNeedleSeekRegion =
                     needleSeekAvailable &&
-                        isWithinNeedleSeekRegion(
+                        spec.isWithinNeedleSeekRegion(
                             point = down.position,
                             containerSize = size,
                             densityPxPerDp = densityPxPerDp,
@@ -114,6 +116,7 @@ internal fun Modifier.playbackCoverPointerInput(
                             size = size,
                             densityPxPerDp = densityPxPerDp,
                             scale = scale,
+                            spec = spec,
                             tapTouchSlop = tapTouchSlop,
                             needleAnimatable = needleAnimatable,
                             latestDurationMs = latestDurationMs,
@@ -212,6 +215,7 @@ internal class NeedleGestureState(
 
 @Composable
 internal fun rememberNeedleGestureState(
+    turntableStyleSpec: TurntableStyleSpec,
     currentPositionMs: Long,
     durationMs: Long,
     hasMediaItem: Boolean,
@@ -228,13 +232,12 @@ internal fun rememberNeedleGestureState(
                 ?.coerceIn(0f, 1f) ?: 0f
         val targetNeedleRotation =
             needlePreviewRotationDegrees
-                ?: run {
-                    if (hasMediaItem && !(needleParkedOutside && !isPlaying)) {
-                        NeedlePlaybackStartRotationDegrees + (progress * NeedlePlaybackSweepDegrees)
-                    } else {
-                        NeedleRestRotationDegrees
-                    }
-                }
+                ?: turntableStyleSpec.needleTargetRotation(
+                    hasMediaItem = hasMediaItem,
+                    isPlaying = isPlaying,
+                    needleParkedOutside = needleParkedOutside,
+                    progress = progress,
+                )
 
         val needleAnimatable = remember { Animatable(targetNeedleRotation) }
         val needleSeekDragging = coverDragMode == CoverDragMode.NeedleSeek
@@ -261,12 +264,21 @@ internal fun rememberNeedleGestureState(
         // 播放位置约每 250ms 推进一次，与 tween(220) 同量级：位置派生目标不进 key（否则每次位置更新
         // 都会重建协程并取消在途补间），只按切歌/拖拽态建一次协程，目标变化交给 snapshotFlow 追踪。
         val latestTargetNeedleRotation by rememberUpdatedState(targetNeedleRotation)
+        val needleTweenSpec =
+            if (turntableStyleSpec.style == TurntableStyle.Original) {
+                tween<Float>(220)
+            } else {
+                tween(
+                    durationMillis = turntableStyleSpec.needleAnimationDurationMs,
+                    easing = turntableStyleSpec.needleAnimationEasing,
+                )
+            }
         LaunchedEffect(mediaId, needleSeekDragging) {
             snapshotFlow { latestTargetNeedleRotation }.collect { target ->
                 if (needleSeekDragging) {
                     needleAnimatable.snapTo(target)
                 } else {
-                    needleAnimatable.animateTo(target, animationSpec = tween(220))
+                    needleAnimatable.animateTo(target, animationSpec = needleTweenSpec)
                 }
             }
         }
@@ -475,6 +487,7 @@ private suspend fun AwaitPointerEventScope.handleNeedleSeekGesture(
     size: IntSize,
     densityPxPerDp: Float,
     scale: Float,
+    spec: TurntableStyleSpec,
     tapTouchSlop: Float,
     needleAnimatable: Animatable<Float, AnimationVector1D>,
     latestDurationMs: Long,
@@ -487,21 +500,20 @@ private suspend fun AwaitPointerEventScope.handleNeedleSeekGesture(
     var maxMoveDistance = 0f
     var needleRotationDegrees =
         needleAnimatable.value.coerceIn(
-            NeedleRestRotationDegrees,
-            NeedlePlaybackEndRotationDegrees,
+            spec.needleDragMinRotationDegrees,
+            spec.needleDragMaxRotationDegrees,
         )
     var needlePositionMs =
-        needleSeekPositionFromRotation(
+        spec.needlePositionFromRotation(
             rotationDegrees = needleRotationDegrees,
             durationMs = latestDurationMs,
         )
     var needleSeekHadPlayablePosition = needlePositionMs != null
     var needlePivot =
-        playbackNeedleGeometry(
+        spec.needleGeometry(
                 containerSize = size,
                 densityPxPerDp = densityPxPerDp,
                 turntableScale = scale,
-                rotationDegrees = needleRotationDegrees,
             )
             .pivot
     var lastNeedleAngleDegrees =
@@ -557,6 +569,7 @@ private suspend fun AwaitPointerEventScope.handleNeedleSeekGesture(
                     containerSize = size,
                     densityPxPerDp = densityPxPerDp,
                     turntableScale = scale,
+                    spec = spec,
                     durationMs = latestDurationMs,
                 ) ?: continue
             needleSeekStarted = true
@@ -589,11 +602,11 @@ private suspend fun AwaitPointerEventScope.handleNeedleSeekGesture(
         lastNeedleAngleDegrees = currentNeedleAngleDegrees
         needleRotationDegrees =
             (needleRotationDegrees + deltaNeedleAngle).coerceIn(
-                NeedleRestRotationDegrees,
-                NeedlePlaybackEndRotationDegrees,
+                spec.needleDragMinRotationDegrees,
+                spec.needleDragMaxRotationDegrees,
             )
         needlePositionMs =
-            needleSeekPositionFromRotation(
+            spec.needlePositionFromRotation(
                 rotationDegrees = needleRotationDegrees,
                 durationMs = latestDurationMs,
             )
@@ -630,6 +643,7 @@ private fun resolveNeedleSeekStartCandidate(
     containerSize: IntSize,
     densityPxPerDp: Float,
     turntableScale: Float,
+    spec: TurntableStyleSpec,
     durationMs: Long,
 ): NeedleSeekStartCandidate? {
     val candidateNeedleAngleDegrees = angleDegrees(pointerPosition, needlePivot)
@@ -642,11 +656,11 @@ private fun resolveNeedleSeekStartCandidate(
     val candidateNeedleRotationDegrees =
         (currentRotationDegrees + candidateDeltaNeedleAngle)
             .coerceIn(
-                NeedleRestRotationDegrees,
-                NeedlePlaybackEndRotationDegrees,
+                spec.needleDragMinRotationDegrees,
+                spec.needleDragMaxRotationDegrees,
             )
     val candidateNeedlePositionMs =
-        needleSeekPositionFromRotation(
+        spec.needlePositionFromRotation(
             rotationDegrees = candidateNeedleRotationDegrees,
             durationMs = durationMs,
         )
@@ -661,11 +675,10 @@ private fun resolveNeedleSeekStartCandidate(
         return null
     }
     val nextPivot =
-        playbackNeedleGeometry(
+        spec.needleGeometry(
                 containerSize = containerSize,
                 densityPxPerDp = densityPxPerDp,
                 turntableScale = turntableScale,
-                rotationDegrees = candidateNeedleRotationDegrees,
             )
             .pivot
     return NeedleSeekStartCandidate(

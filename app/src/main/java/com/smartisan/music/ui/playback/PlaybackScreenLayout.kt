@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.smartisan.music.LocalMusicAppContainer
 import com.smartisan.music.R
 import com.smartisan.music.data.online.NeteaseSourceId
@@ -56,6 +57,11 @@ internal fun PlaybackScreenLayout(
             with(density) {
                 WindowInsets.safeDrawing.getBottom(this).toDp()
             }
+        val container = LocalMusicAppContainer.current
+        val turntableStyle by container.turntableStyleStore.style.collectAsStateWithLifecycle(
+            initialValue = container.turntableStyleStore.currentStyle(),
+        )
+        val turntableSpec = remember(turntableStyle) { turntableStyleSpec(turntableStyle) }
         var turntableWidth by
             remember(maxWidth, maxHeight) {
                 mutableStateOf<Dp?>(null)
@@ -74,6 +80,7 @@ internal fun PlaybackScreenLayout(
             PlaybackScreenStageSection(
                 host = host,
                 playbackSettings = playbackSettings,
+                turntableSpec = turntableSpec,
                 screenHeightPx = screenHeightPx,
                 onTurntableWidthChanged = { resolvedWidth -> turntableWidth = resolvedWidth },
             )
@@ -299,6 +306,7 @@ private fun PlaybackScreenBottomControlsSection(
 private fun ColumnScope.PlaybackScreenStageSection(
     host: PlaybackScreenHost,
     playbackSettings: PlaybackSettings,
+    turntableSpec: TurntableStyleSpec,
     screenHeightPx: Float,
     onTurntableWidthChanged: (Dp) -> Unit,
 ) {
@@ -323,6 +331,7 @@ private fun ColumnScope.PlaybackScreenStageSection(
                 PlaybackVisualStage(
                     modifier = Modifier.fillMaxSize(),
                     currentVisualPage = host.currentVisualPage,
+                    turntableStyleSpec = turntableSpec,
                     coverPositionMs = host.displayPositionMs,
                     lyricsPositionMs = host.boundedLivePositionMs,
                     durationMs = host.durationMs,

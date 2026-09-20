@@ -69,6 +69,32 @@ internal const val NeedleLiftShadowRotationOffsetDegrees = 4f
 internal const val PlaybackAlbumArtDiameterRatio = 405f / 1080f
 internal const val PlaybackTurntableAxisDiameterRatio = 62f / 1080f
 internal const val PlaybackTurntableAxisSourceDiameterPx = 60
+internal const val NeteaseDiscCycleDurationMs = 20_000f
+internal const val NeteaseCoverHoleDiameterRatio = 0.685f
+// 碟径相对转盘宽度。官方 mac 端为父容器的 85%，手机版实测 0.756 屏宽；
+// 此处取 0.72 以容纳整支唱针（见下方支点偏移）不越出舞台。
+internal const val NeteaseDiscDiameterRatio = 0.72f
+// 碟心在舞台内的纵向位置：偏下留出唱针空间，与手机版碟顶留白一致。
+internal const val NeteaseDiscCenterYRatio = 0.616f
+// 碟片外圈柔光：半径倍数（1 = 碟缘），向外渐隐。
+internal const val NeteaseDiscGlowRadiusRatio = 1.14f
+// 唱针几何按手机版实测：支点在碟心正上方 0.7777 碟径处，
+// 支点到唱头中心 0.5087 碟径（官方 SVG 内该距离为 146.6 单位）。
+internal const val NeteaseNeedlePivotOffsetToDiscRatio = 0.7777f
+internal const val NeteaseNeedleScaleToDiscRatio = 0.5087f / 146.6f
+internal const val NeteaseNeedleSvgViewBoxWidth = 114f
+internal const val NeteaseNeedleSvgViewBoxHeight = 174f
+internal const val NeteaseNeedlePivotSvgX = 20f
+internal const val NeteaseNeedlePivotSvgY = 20f
+// 唱头中心（SVG 坐标），用于校验播放态针尖落点。
+internal const val NeteaseNeedleTipSvgX = 100f
+internal const val NeteaseNeedleTipSvgY = 170f
+// 唱头矩形旋转 40° 后的几何中心（SVG 坐标），距支点 146.6 单位。
+internal const val NeteaseNeedleHeadCenterSvgX = 87.469f
+internal const val NeteaseNeedleHeadCenterSvgY = 150.157f
+internal const val NeteaseNeedlePlayingRotationDegrees = 0f
+internal const val NeteaseNeedlePausedRotationDegrees = -35f
+internal const val NeteaseNeedleDropDurationMs = 300
 
 internal val PlaybackVisualStageTopPadding = 16.dp
 // Music 8.1.0: audio_player.xml and the source xxhdpi playback assets.
