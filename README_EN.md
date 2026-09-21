@@ -15,11 +15,47 @@
   <a href="README.md">中文</a> · English
 </p>
 
+## About this project
+
+This project is a second-round development based on [**SmartisanMusic-Revived**](https://github.com/Mangi-11/SmartisanMusic-Revived) by [**Mangi-11**](https://github.com/Mangi-11/SmartisanMusic-Revived/commits?author=Mangi-11).
+
+[**Mangi-11**](https://github.com/Mangi-11/SmartisanMusic-Revived/commits?author=Mangi-11) added Netease Cloud Music online features in an early version, which is why I abandoned the official Netease Cloud Music app entirely. Those features were removed in a later update. This project brings the Netease online features back and adds a number of improvements and features tailored to my own usage. The main differences from the upstream project are:
+
+### 1. Netease Cloud Music online features
+
+Most of the code comes from Mangi-11's deleted old repository, with part of the UI rewritten in modern Compose.
+
+1. **Listen Together**: create a room, or join a room shared by a friend, to listen together with synchronized playlists and playback progress.
+2. **Online music sharing**: share online tracks.
+3. **Current quality and bitrate display**: shown below the track title on the playback screen, alongside the artist.
+4. **Style recommendations**: daily recommendations gain a style-based feed.
+5. **Online playlist import**: online playlists can be added to a local playlist.
+6. **Merged account favorites**: once signed in, "Loved Songs" shows the tracks from the account's liked playlist alongside local favorites.
+7. **Improved sign-in flow**: phone number, QR code, and web sign-in are all supported.
+8. **Smartisan-style pull to refresh**: the Cloud Music page gains a Smartisan-style pull-to-refresh, with component motion taken from [Mail_7.1.0.apk](https://github.com/People-11/SmartisanOS_APP_Port/blob/master/Mail_7.1.0.apk) inside [**SmartisanOS_APP_Port**](https://github.com/People-11/SmartisanOS_APP_Port) by [**People-11**](https://github.com/People-11/SmartisanOS_APP_Port/commits?author=People-11).
+
+### 2. Appearance
+
+1. An optional Netease Cloud Music classic vinyl turntable style is added; the original style remains the default.
+2. Lyrics are no longer cut off abruptly on the lyrics page; they fade out instead.
+
+### 3. Player
+
+After my device updated to HyperOS 4, the system's built-in audio decoders all stopped working, which left players without a bundled decoder unable to play FLAC and other high-quality audio. This project therefore adds a bundled `media3-flac` extension module for decoding.
+
+### 4. Other
+
+A number of other changes that are not visible on the surface.
+
+---
+
+## Project overview
+
 Smartisan never saw itself as a company concerned with visuals alone. A beautiful interface was only the beginning; a product still had to solve real problems. Design, functionality, and interaction were meant to feel coherent—easy to understand on first use, yet rich enough to reveal small surprises over time. The “artisan” in Smartisan was not about placing a polished skin over a product, but about caring for every touch, response, and pause.
 
 Smartisan Music is one of the clearest expressions of that idea. Its turntable, tonearm, scratching, and vinyl crackle make digital music feel tangible, while songs, albums, and the library remain calm and legible. The physical playfulness should never come at the expense of playback or organization; what deserves to be preserved is the balance between texture, order, and utility.
 
-Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as its visual and interaction reference and rebuilds it with a modern Android stack. The interface is built entirely with Jetpack Compose and custom Smartisan components, preserving the original drawables, NinePatch assets, selectors, visual language, and layout proportions. Media scanning, background playback, queues, favorites, playlists, and persistence are rebuilt entirely on public Android APIs. Alongside the complete local playback experience, an optional NetEase Cloud Music account login adds online music: search, online playback, lyrics, and playlists once you sign in. Signing in is entirely voluntary, and the credentials are stored encrypted on the device only.
+Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as its visual and interaction reference and rebuilds it with a modern Android stack. The interface is built entirely with Jetpack Compose and custom Smartisan components, preserving the original drawables, NinePatch assets, selectors, visual language, and layout proportions. Media scanning, background playback, queues, favorites, playlists, and persistence are rebuilt entirely on public Android APIs. Alongside the complete local playback experience, optional NetEase Cloud Music online features are available: search, recommendations, playlists, albums, and lyrics need no account, while account playlists and "Loved Songs" sync require a voluntary sign-in. Credentials are stored encrypted on the device only.
 
 ## Improvements over the original
 
@@ -29,6 +65,7 @@ Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as i
 - **Rebuilt local library**: MediaStore indexes songs and provides song, album, artist, genre, and folder views, along with library exclusions, rescanning, sorting, filtering, and an alphabetical sidebar.
 - **Rebuilt favorites and playlists**: The original favorites and user-created playlists are retained, with persistence and play statistics reimplemented in Room. The queue, current item, and playback position are saved and restored as well.
 - **Expanded playback screen**: Embedded lyrics, a sleep timer, and a reorderable queue complement the original turntable and controls.
+- **Switchable turntable styles**: Two turntable styles ship in the app, "Original Turntable" and "Netease Cloud Music Turntable", switchable from Settings and persisted. The original keeps the Smartisan Music 8.1.0 skeuomorphic deck; the Netease style uses the vinyl artwork and tonearm SVG from Netease Cloud Music for macOS 3.1.11, with its own geometry, drag mapping, and needle animation calibration.
 - **New personalization options**: Custom artist separators, reorderable and pinnable bottom navigation, switchable Home screen icons, and lightweight sound effects are added. The yellow vinyl icon from realme UI 7.0 Music is the default, with color and monochrome layers adapted to Android's adaptive-icon specification, while the original icon remains available. Sound effects include several presets and a custom equalizer curve.
 - **Refined turntable interaction**: Tonearm dragging, vinyl rotation, scratching, crackle audio, and playback-state transitions are reimplemented for modern touch handling, lifecycles, and frame timing.
 - **Richer library actions**: Multi-select, swipe actions, playlist insertion, audio-file sharing, and version-appropriate MediaStore deletion authorization are supported. Audio can also be opened directly from file managers and other apps.
@@ -48,13 +85,14 @@ Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as i
 - Sequential, shuffle, repeat-one, and repeat-all playback modes
 - Expandable queue, drag-to-reorder, and queue and position recovery
 - Vinyl turntable, draggable tonearm, scratching, and crackle audio
+- Two turntable styles, "Original Turntable" and "Netease Cloud Music Turntable", switchable and persisted from Settings
 - Static, line-synchronized, and word-timed lyrics embedded in audio files
 - Original, Bass, Clear, Vocal, Rock, and custom sound profiles
 - Sleep timer and system music volume control
 - External audio opening, audio-file sharing, and MediaStore-backed media deletion
 - Custom artist separators, bottom-navigation order and pinned items, and switchable app icons
 
-Cloud Music (optional, requires a NetEase Cloud Music account):
+Cloud Music (optional; browsing and search need no account, while account features require a NetEase Cloud Music login):
 
 - Account login with credentials encrypted and stored locally on the device
 - Online search and playback; playback URLs are resolved automatically, refreshed periodically, and the audio stream is cached to disk
@@ -63,11 +101,12 @@ Cloud Music (optional, requires a NetEase Cloud Music account):
 - Playlist, album, and artist detail pages with play-all and shuffle; radio listening
 - Two-way synchronization of likes with the account's "favorites", with the local loved-songs list merging local and online tracks
 - Playlist management: add tracks to a playlist, remove them, and create or delete playlists
+- Listen Together: create or accept an invitation, sync playback and queue between two devices, and show connection duration
 - Publishes live lyrics to SuperLyric for desktop and overlay lyric modules
 
 ## Permissions and privacy
 
-The app is a local player by default. The `INTERNET` permission is used only for online music requests once you voluntarily sign in to a NetEase Cloud Music account (search, playback, lyrics, playlists, and favorites sync). Login credentials are stored encrypted via `EncryptedSharedPreferences` on the device only, and the app never uploads your songs, artwork, lyrics, or library metadata.
+The app is a local player by default. The `INTERNET` permission is used for online music requests. Guests can browse recommendations, search, and detail pages without signing in, and playback falls back to the guest path; account features such as account playlists and like sync require a voluntary NetEase Cloud Music login. Login credentials are stored encrypted via `EncryptedSharedPreferences` on the device only, and the app never uploads your songs, artwork, lyrics, or library metadata.
 
 - Android 13 and later use `READ_MEDIA_AUDIO` to read device audio. Android 8.1 through Android 12 use the version-limited `READ_EXTERNAL_STORAGE` permission.
 - `FOREGROUND_SERVICE_MEDIA_PLAYBACK` is used only to keep user-initiated playback and its media notification active in the background.
@@ -92,10 +131,10 @@ Album artwork, artist information, and music content visible in screenshots rema
 | Build | Android Gradle Plugin `9.3.2`, Gradle `9.5.0`, JDK 21 (Java 11 bytecode) |
 | Language | Kotlin `2.4.0` |
 | UI | Jetpack Compose, custom Smartisan components, Drawable / NinePatch rendering |
-| Playback | Media3 `1.10.1`, ExoPlayer, MediaLibraryService, MediaSession |
+| Playback | Media3 `1.10.1`, ExoPlayer, MediaLibraryService, MediaSession, purpose-built libFLAC extension decoder (`:media3-flac`) |
 | State | Lifecycle, StateFlow, Coroutines |
 | Storage | Room `2.8.4`, DataStore `1.2.1`, MediaStore |
-| Online | OkHttp, Coil 3 (artwork loading) |
+| Online | Purpose-built Netease client (`HttpURLConnection` with AES/RSA signing), Coil 3 (artwork loading) |
 | SDK | `minSdk 27` / `targetSdk 36` / `compileSdk 37` |
 
 See [UI architecture](docs/ui-architecture.md) for package boundaries, shared components, and state ownership.
@@ -103,6 +142,8 @@ See [UI architecture](docs/ui-architecture.md) for package boundaries, shared co
 ## Third-party libraries
 
 Live lyrics publishing is powered by [SuperLyricApi](https://github.com/HChenX/SuperLyricApi) (LGPL-2.1, via JitPack).
+
+The Netease turntable style uses the official vinyl artwork `outline.png` and `disc.png` from Netease Cloud Music for macOS 3.1.11. See [Third-Party Notices](THIRD_PARTY_NOTICES.md) for source paths, version, and SHA-256 checksums.
 
 ## Build
 

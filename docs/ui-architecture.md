@@ -1,6 +1,6 @@
 # UI 架构
 
-更新日期：2026-09-15。应用 UI 已完整使用 Jetpack Compose；当前视觉基线来自迁移前经过校准的实现。工程保持单 `:app` 模块，源码根包为 `com.smartisan.music`，applicationId 为 `app.smartisanmusic.revived`。迁移范围、验证状态与待验收项见 [Compose 迁移记录](compose-migration.md)。
+更新日期：2026-09-21。应用 UI 已完整使用 Jetpack Compose；当前视觉基线来自迁移前经过校准的实现。工程为 `:app` 与 `:media3-flac` 两个 Gradle 模块，UI 与业务代码集中在 `:app`，源码根包为 `com.smartisan.music`，applicationId 为 `app.smartisanmusic.revived`。迁移范围、验证状态与待验收项见 [Compose 迁移记录](compose-migration.md)。
 
 ## 状态与系统边界
 
@@ -29,8 +29,8 @@ Room schema、DataStore key、稳定媒体 ID、队列顺序、当前项及恢�
 | [ui/folder](../app/src/main/java/com/smartisan/music/ui/folder/)、[ui/genre](../app/src/main/java/com/smartisan/music/ui/genre/) | 文件夹排除、刷新、删除与歌曲详情；流派浏览与详情 |
 | [ui/loved](../app/src/main/java/com/smartisan/music/ui/loved/)、[ui/playlist](../app/src/main/java/com/smartisan/music/ui/playlist/) | 收藏、播放列表根页、歌曲编辑、排序和选择弹层 |
 | [ui/search](../app/src/main/java/com/smartisan/music/ui/search/) | 全局搜索、结果分组、历史和详情覆盖层 |
-| [ui/more](../app/src/main/java/com/smartisan/music/ui/more/)、[ui/settings](../app/src/main/java/com/smartisan/music/ui/settings/) | 动态溢出入口、设置及图标/主题选择 |
-| [ui/playback](../app/src/main/java/com/smartisan/music/ui/playback/) | 播放页、黑胶/歌词舞台、唱针与搓碟、播放队列、音量、音效和睡眠定时 |
+| [ui/more](../app/src/main/java/com/smartisan/music/ui/more/)、[ui/settings](../app/src/main/java/com/smartisan/music/ui/settings/) | 动态溢出入口、设置及图标/主题/唱机样式选择 |
+| [ui/playback](../app/src/main/java/com/smartisan/music/ui/playback/) | 播放页、黑胶/歌词舞台、原版与网易云两套唱机样式、唱针与搓碟、播放队列、音量、音效和睡眠定时 |
 | [ui/artwork](../app/src/main/java/com/smartisan/music/ui/artwork/) | `AlbumArtworkLoader`、共享 LRU、请求合并及封面浏览转场 |
 | [ui/components](../app/src/main/java/com/smartisan/music/ui/components/) | Smartisan 标题、资源 Painter、弹层、开关、评分、滚动条、滑选和拖拽 |
 | [ui/navigation](../app/src/main/java/com/smartisan/music/ui/navigation/)、[ui/theme](../app/src/main/java/com/smartisan/music/ui/theme/) | 目的地/导航配置模型与主题接入 |
