@@ -18,7 +18,11 @@ class NeteaseTurntableStyleSpecTest {
             turntableStyleSpec(TurntableStyle.Netease),
         )
         assertEquals(20000f, NeteaseTurntableStyleSpec.discCycleDurationMs, 0.001f)
-        assertEquals(0.685f, NeteaseCoverHoleDiameterRatio, 0.0001f)
+        // 碟径加大后封面保持原绝对尺寸，黑胶环因此更宽。
+        assertEquals(0.72f * 0.685f, NeteaseCoverDiameterRatio, 0.0001f)
+        assertEquals(0.78f, NeteaseDiscDiameterRatio, 0.0001f)
+        // 唱针几何与碟径解耦：针按手机版标定的参考直径缩放，不随碟放大。
+        assertEquals(0.72f, NeteaseNeedleReferenceDiameterRatio, 0.0001f)
         assertEquals(300, NeteaseTurntableStyleSpec.needleAnimationDurationMs)
         assertEquals(-35f, NeteaseTurntableStyleSpec.needleDragMinRotationDegrees, 0.001f)
         assertEquals(0f, NeteaseTurntableStyleSpec.needleDragMaxRotationDegrees, 0.001f)
@@ -48,58 +52,56 @@ class NeteaseTurntableStyleSpecTest {
     }
 
     @Test
-    fun `netease needle drops only while playing`() {
+    fun `netease needle tracks progress while playing and lifts when paused`() {
+        // 播放中指针随进度扫动：0% 落在最低点、100% 抬到最高点。
         assertEquals(
             0f,
-            NeteaseTurntableStyleSpec.needleTargetRotation(
-                hasMediaItem = true,
-                isPlaying = true,
-                needleParkedOutside = false,
-                progress = 0f,
-            ),
+            NeteaseTurntableStyleSpec.needleTargetRotation(true, true, false, 0f),
             0.001f,
         )
+        assertEquals(
+            -17.5f,
+            NeteaseTurntableStyleSpec.needleTargetRotation(true, true, false, 0.5f),
+            0.001f,
+        )
+        assertEquals(
+            -35f,
+            NeteaseTurntableStyleSpec.needleTargetRotation(true, true, false, 1f),
+            0.001f,
+        )
+        // 暂停抬针，与播放态形成可见变化。
+        assertEquals(
+            -35f,
+            NeteaseTurntableStyleSpec.needleTargetRotation(true, false, false, 0.5f),
+            0.001f,
+        )
+        // 无媒体抬起。
+        assertEquals(
+            -35f,
+            NeteaseTurntableStyleSpec.needleTargetRotation(false, false, false, 0f),
+            0.001f,
+        )
+    }
+
+    @Test
+    fun `netease drag start angle comes from progress not from lifted pose`() {
+        val durationMs = 200_000L
+
+        // 暂停时指针抬在最高点，直接拿它反推会得到满进度；起步角必须由进度给出。
         assertEquals(
             0f,
-            NeteaseTurntableStyleSpec.needleTargetRotation(
-                hasMediaItem = true,
-                isPlaying = true,
-                needleParkedOutside = false,
-                progress = 0.9f,
-            ),
-            0.001f,
-        )
-        // 暂停必须抬针：忽略 isPlaying 会让唱针停在播放角，播放/暂停看不出变化。
-        assertEquals(
-            -35f,
-            NeteaseTurntableStyleSpec.needleTargetRotation(
-                hasMediaItem = true,
-                isPlaying = false,
-                needleParkedOutside = false,
-                progress = 0.9f,
-            ),
+            NeteaseTurntableStyleSpec.needleRotationForProgress(0L, durationMs),
             0.001f,
         )
         assertEquals(
             -35f,
-            NeteaseTurntableStyleSpec.needleTargetRotation(
-                hasMediaItem = false,
-                isPlaying = false,
-                needleParkedOutside = false,
-                progress = 0f,
-            ),
+            NeteaseTurntableStyleSpec.needleRotationForProgress(200_000L, durationMs),
             0.001f,
         )
-        assertEquals(
-            -35f,
-            NeteaseTurntableStyleSpec.needleTargetRotation(
-                hasMediaItem = true,
-                isPlaying = false,
-                needleParkedOutside = true,
-                progress = 0.9f,
-            ),
-            0.001f,
-        )
+        val angle = NeteaseTurntableStyleSpec.needleRotationForProgress(100_000L, durationMs)
+        assertEquals(-17.5f, angle, 0.001f)
+        // 起步角与进度互逆：按下瞬间进度保持不跳。
+        assertEquals(100_000L, NeteaseTurntableStyleSpec.needleDragPosition(angle, durationMs))
     }
 
     @Test
@@ -127,34 +129,56 @@ class NeteaseTurntableStyleSpecTest {
     }
 
     @Test
-    fun `netease needle arc maps rotation to media position`() {
+    fun `netease drag maps needle angle straight to progress`() {
         val durationMs = 200_000L
 
-        assertNull(
-            NeteaseTurntableStyleSpec.needlePositionFromRotation(
-                rotationDegrees = -35f,
-                durationMs = durationMs,
-            ),
-        )
+        // 最低点（0°）= 0%，最高点（-35°）= 100%；向上拖即角度变小、进度前进。
+        assertEquals(0L, NeteaseTurntableStyleSpec.needleDragPosition(0f, durationMs))
+        assertEquals(100_000L, NeteaseTurntableStyleSpec.needleDragPosition(-17.5f, durationMs))
+        assertEquals(200_000L, NeteaseTurntableStyleSpec.needleDragPosition(-35f, durationMs))
+        // 超出范围按边界收敛。
+        assertEquals(0L, NeteaseTurntableStyleSpec.needleDragPosition(8f, durationMs))
+        assertEquals(200_000L, NeteaseTurntableStyleSpec.needleDragPosition(-50f, durationMs))
+        // 时长未就绪时不产生进度。
+        assertNull(NeteaseTurntableStyleSpec.needleDragPosition(-10f, 0L))
+    }
+
+    @Test
+    fun `original drag keeps absolute angle to progress mapping`() {
+        val durationMs = 200_000L
+
         assertEquals(
-            100_000L,
-            NeteaseTurntableStyleSpec.needlePositionFromRotation(
-                rotationDegrees = -17.5f,
+            0L,
+            OriginalTurntableStyleSpec.needleDragPosition(
+                rotationDegrees = NeedlePlaybackStartRotationDegrees,
                 durationMs = durationMs,
             ),
         )
         assertEquals(
             200_000L,
-            NeteaseTurntableStyleSpec.needlePositionFromRotation(
-                rotationDegrees = 0f,
+            OriginalTurntableStyleSpec.needleDragPosition(
+                rotationDegrees = NeedlePlaybackEndRotationDegrees,
                 durationMs = durationMs,
             ),
         )
-        assertNull(
-            NeteaseTurntableStyleSpec.needlePositionFromRotation(
-                rotationDegrees = -20f,
-                durationMs = 0L,
-            ),
+    }
+
+    @Test
+    fun `netease disc and glow fit inside stage page area`() {
+        // 页面区高度按 Netease 比例加高后，唱片与外圈光晕的底边都应落在页面区内；
+        // 否则超出部分会被 AnimatedContent 裁成一条水平直线（切页时最明显）。
+        val discBottomRatio = NeteaseDiscCenterYRatio + (NeteaseDiscDiameterRatio / 2f)
+        val glowBottomRatio =
+            NeteaseDiscCenterYRatio +
+                ((NeteaseDiscDiameterRatio / 2f) * NeteaseDiscGlowRadiusRatio)
+
+        assertTrue(
+            "唱片底边应落在页面区内",
+            discBottomRatio <= NeteaseTurntableHeightToWidthRatio,
+        )
+        assertTrue(
+            "光晕底边应落在页面区内",
+            glowBottomRatio <= NeteaseTurntableHeightToWidthRatio,
         )
     }
 
@@ -167,15 +191,15 @@ class NeteaseTurntableStyleSpecTest {
                 densityPxPerDp = 1f,
                 turntableScale = 1f,
             )
-        val discDiameter = containerSize.width * NeteaseDiscDiameterRatio
+        val needleDiameter = containerSize.width * NeteaseNeedleReferenceDiameterRatio
         val expectedPivotY =
             containerSize.height * NeteaseDiscCenterYRatio -
-                NeteaseNeedlePivotOffsetToDiscRatio * discDiameter
+                NeteaseNeedlePivotOffsetToDiscRatio * needleDiameter
 
         assertEquals(containerSize.width / 2f, geometry.pivot.x, 0.01f)
         assertEquals(expectedPivotY, geometry.pivot.y, 0.01f)
 
-        // 支点 → 唱头中心（官方 SVG 内相距 146.6 单位）应等于 0.5087 碟径。
+        // 支点 → 唱头中心（官方 SVG 内相距 146.6 单位）应等于 0.5087 参考碟径。
         val svgScale = geometry.width / NeteaseNeedleSvgViewBoxWidth
         val headCenter =
             Offset(
@@ -183,14 +207,14 @@ class NeteaseTurntableStyleSpecTest {
                 y = geometry.top + NeteaseNeedleHeadCenterSvgY * svgScale,
             )
         assertEquals(
-            0.5087f * discDiameter,
+            0.5087f * needleDiameter,
             distanceBetween(headCenter, geometry.pivot),
             0.5f,
         )
     }
 
     @Test
-    fun `netease needle tip rests on vinyl ring between cover edge and disc edge`() {
+    fun `netease needle tip rests on vinyl ring at cover edge boundary`() {
         val containerSize = IntSize(width = 360, height = 357)
         val geometry =
             NeteaseTurntableStyleSpec.needleGeometry(
@@ -211,10 +235,13 @@ class NeteaseTurntableStyleSpecTest {
                 containerSize.height * NeteaseDiscCenterYRatio,
             )
         val discRadius = containerSize.width * NeteaseDiscDiameterRatio / 2f
-        val coverRadius = discRadius * NeteaseCoverHoleDiameterRatio
+        val coverRadius = containerSize.width * NeteaseCoverDiameterRatio / 2f
         val tipRadius = distanceBetween(tip, discCenter)
 
-        assertTrue("针尖应落在封面圆外", tipRadius > coverRadius)
+        // 针尖贴合「黑胶内侧与封面交界」：落点半径≈封面半径（亚像素误差内），
+        // 不深入封面、也不越出碟面。
+        assertTrue("针尖应贴合封面边缘（不深入封面）", tipRadius >= coverRadius - 0.5f)
+        assertTrue("针尖不应偏离封面边缘过远", tipRadius <= coverRadius + 0.5f)
         assertTrue("针尖应落在碟面内", tipRadius < discRadius)
     }
 

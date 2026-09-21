@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.smartisan.music.R
+import com.smartisan.music.data.settings.TurntableStyle
 import com.smartisan.music.playback.EmbeddedLyrics
 import com.smartisan.music.ui.listentogether.ListenTogetherStatusOverlay
 
@@ -81,7 +82,15 @@ internal fun PlaybackVisualStage(
             onTurntableWidthChanged(turntableWidth)
         }
         val scale = turntableWidth.value / OriginalTurntableBaseWidthDp
-        val turntableHeight = turntableWidth * PlaybackTurntableHeightToWidthRatio
+        // Netease 唱片更大更靠下，页面区（AnimatedContent 的边界）必须相应加高，
+        // 否则碟底超出边界会被裁成一条水平直线（切页时尤其明显）。
+        val turntableHeightRatio =
+            if (turntableStyleSpec.style == TurntableStyle.Netease) {
+                NeteaseTurntableHeightToWidthRatio
+            } else {
+                PlaybackTurntableHeightToWidthRatio
+            }
+        val turntableHeight = turntableWidth * turntableHeightRatio
         val moreButtonMargin = 12.dp * scale
         val moreButtonTopMargin = 38.dp * scale
         val actionButtonSize = PlaybackActionButtonSize * scale
@@ -102,7 +111,7 @@ internal fun PlaybackVisualStage(
         Box(
             modifier =
                 Modifier.width(turntableWidth)
-                    .height(turntableWidth * PlaybackVisualStageHeightToWidthRatio)
+                    .height(turntableWidth * PlaybackVisualStageHeightToWidthRatio),
         ) {
             PlaybackStageTopActions(
                 isLyricsPage = isLyricsPage,
@@ -175,6 +184,15 @@ private fun playbackVisualStageWidth(maxWidth: Dp, maxHeight: Dp): Dp {
 }
 
 internal const val PlaybackTurntableHeightToWidthRatio = 356.5938f / OriginalTurntableBaseWidthDp
+/**
+ * Netease 页面区高度比。原版页面区高 0.9905 转盘宽，而 Netease 唱片底边在
+ * 0.6286×0.9905 + 0.78/2 ≈ 1.0126 转盘宽、外圈光晕底边更到约 1.0673 转盘宽处，
+ * 都超出原页面区，被 AnimatedContent 裁成一条水平直线（切页时一闪而过）。
+ * 转场时页面内容还叠加 1.015 倍缩放（底边外扩 0.008）与全高 1/36 的竖直位移
+ * （约 0.033），最坏情况 1.0673×1.015 + 0.033 ≈ 1.117，与 1.12 贴边仍有残余裁切，
+ * 故留足余量取 1.18。
+ */
+internal const val NeteaseTurntableHeightToWidthRatio = 1.18f
 private const val PlaybackVisualStageHeightToWidthRatio =
     (356.5938f + 52f) / OriginalTurntableBaseWidthDp
 
@@ -345,6 +363,7 @@ private fun BoxScope.PlaybackStagePages(
                     lyrics = embeddedLyrics,
                     fallbackLyricsLines = fallbackLyricsLines,
                     currentPositionMs = lyricsPositionMs,
+                    turntableStyleSpec = turntableStyleSpec,
                     onVisualPageToggle = onVisualPageToggle,
                     modifier = Modifier.matchParentSize(),
                 )
@@ -358,6 +377,7 @@ private fun PlaybackLyricsPage(
     lyrics: EmbeddedLyrics?,
     fallbackLyricsLines: List<String>,
     currentPositionMs: Long,
+    turntableStyleSpec: TurntableStyleSpec,
     onVisualPageToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -367,6 +387,7 @@ private fun PlaybackLyricsPage(
         lyrics = lyrics,
         fallbackLines = fallbackLyricsLines,
         currentPositionMs = currentPositionMs,
+        turntableStyleSpec = turntableStyleSpec,
         modifier =
             modifier.pointerInput(Unit) {
                 detectTapGestures(

@@ -63,8 +63,11 @@ internal fun turntableStyleSpec(style: TurntableStyle): TurntableStyleSpec =
     }
 
 /**
- * 播放/暂停的唱针目标角。Original 的针始终按播放进度定位，暂停也不抬起；
- * 网易云只有真正在播放时才落针，其余情况（暂停、无媒体、拖到碟外）一律抬起。
+ * 唱针目标角。Original 的针按播放进度扫动、暂停也不抬起。
+ *
+ * 网易云：播放中针角与进度绝对对应（0% 落在最低点、100% 抬到最高点），指针随进度扫动；
+ * 暂停则抬到最高点表示「离碟」，与播放态形成可见变化。拖动起步角由进度反推（见
+ * [needleRotationForProgress]），所以抬起姿态不会把进度读错。
  */
 internal fun TurntableStyleSpec.needleTargetRotation(
     hasMediaItem: Boolean,
@@ -81,25 +84,41 @@ internal fun TurntableStyleSpec.needleTargetRotation(
             }
         TurntableStyle.Netease ->
             if (hasMediaItem && isPlaying) {
-                NeteaseNeedlePlayingRotationDegrees
+                needleDragMinRotationDegrees * progress
             } else {
                 needleParkedRotationDegrees
             }
     }
 
-internal fun TurntableStyleSpec.needlePositionFromRotation(
+/** 网易云：由进度反推针角（0% → 最低点 0°，100% → 最高点 -35°）。 */
+internal fun TurntableStyleSpec.needleRotationForProgress(
+    positionMs: Long,
+    durationMs: Long,
+): Float {
+    if (durationMs <= 0L) {
+        return needleDragMaxRotationDegrees
+    }
+    val fraction = (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    return needleDragMinRotationDegrees * fraction
+}
+
+/**
+ * 拖针时的进度换算。
+ *
+ * 两种样式的针角度都携带进度，用绝对映射即可。网易云的 0° 是进度 0%、-35° 是进度 100%，
+ * 于是「向上拖 = 角度变小 = 快进」「拖到顶 = 满进度、拖到底 = 归零」自然成立。
+ */
+internal fun TurntableStyleSpec.needleDragPosition(
     rotationDegrees: Float,
     durationMs: Long,
 ): Long? =
     when (style) {
         TurntableStyle.Original -> needleSeekPositionFromRotation(rotationDegrees, durationMs)
         TurntableStyle.Netease -> {
-            if (durationMs <= 0L || rotationDegrees <= needleProgressStartRotationDegrees) {
+            if (durationMs <= 0L || needleDragMinRotationDegrees == 0f) {
                 null
             } else {
-                val fraction =
-                    ((rotationDegrees - needleProgressStartRotationDegrees) /
-                        needleProgressSweepDegrees).coerceIn(0f, 1f)
+                val fraction = (rotationDegrees / needleDragMinRotationDegrees).coerceIn(0f, 1f)
                 (durationMs.toFloat() * fraction).roundToLong().coerceIn(0L, durationMs)
             }
         }
@@ -170,12 +189,13 @@ internal fun TurntableStyleSpec.isWithinNeedleSeekRegion(
 
 /** 网易云唱针几何：支点在碟心正上方，长度按手机版实测标定（与绘制同源）。 */
 internal fun neteaseNeedleGeometry(containerSize: IntSize): PlaybackNeedleGeometry {
-    val discDiameter = containerSize.width * NeteaseDiscDiameterRatio
-    val svgScale = NeteaseNeedleScaleToDiscRatio * discDiameter
+    // 针不随碟径放大（0.72 标定下针顶已贴舞台上沿），缩放与支点偏移都按参考直径。
+    val needleDiameter = containerSize.width * NeteaseNeedleReferenceDiameterRatio
+    val svgScale = NeteaseNeedleScaleToDiscRatio * needleDiameter
     val pivot = Offset(
         x = containerSize.width / 2f,
         y = (containerSize.height * NeteaseDiscCenterYRatio) -
-            (NeteaseNeedlePivotOffsetToDiscRatio * discDiameter),
+            (NeteaseNeedlePivotOffsetToDiscRatio * needleDiameter),
     )
     val pivotLocal = Offset(
         x = NeteaseNeedlePivotSvgX * svgScale,

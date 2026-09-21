@@ -70,17 +70,25 @@ internal const val PlaybackAlbumArtDiameterRatio = 405f / 1080f
 internal const val PlaybackTurntableAxisDiameterRatio = 62f / 1080f
 internal const val PlaybackTurntableAxisSourceDiameterPx = 60
 internal const val NeteaseDiscCycleDurationMs = 20_000f
-internal const val NeteaseCoverHoleDiameterRatio = 0.685f
 // 碟径相对转盘宽度。官方 mac 端为父容器的 85%，手机版实测 0.756 屏宽；
-// 此处取 0.72 以容纳整支唱针（见下方支点偏移）不越出舞台。
-internal const val NeteaseDiscDiameterRatio = 0.72f
-// 碟心在舞台内的纵向位置：偏下留出唱针空间，与手机版碟顶留白一致。
-internal const val NeteaseDiscCenterYRatio = 0.616f
+// 用户要求比官方更饱满的黑胶环，碟径放大到 0.78（碟底轻微探入进度条区，被上层遮挡）。
+internal const val NeteaseDiscDiameterRatio = 0.78f
+// 封面径相对转盘宽度：沿用原 0.72×0.685 的绝对尺寸，碟径加大时封面保持不变。
+internal const val NeteaseCoverDiameterRatio = 0.72f * 0.685f
+// 碟心在舞台页面区内的纵向位置。页面区高度按 NeteaseTurntableHeightToWidthRatio 加高后，
+// 该比例使碟心落在与原版相同的位置（0.6286 × 原页面区高 = 0.5277 × 新页面区高），
+// 唱片大小与视觉位置不变。
+internal const val NeteaseDiscCenterYRatio = 0.5277f
 // 碟片外圈柔光：半径倍数（1 = 碟缘），向外渐隐。
 internal const val NeteaseDiscGlowRadiusRatio = 1.14f
-// 唱针几何按手机版实测：支点在碟心正上方 0.7777 碟径处，
-// 支点到唱头中心 0.5087 碟径（官方 SVG 内该距离为 146.6 单位）。
-internal const val NeteaseNeedlePivotOffsetToDiscRatio = 0.7777f
+// 唱针几何按手机版实测：支点在碟心正上方、支点到唱头中心 0.5087 碟径
+// （官方 SVG 内该距离为 146.6 单位）。原标定支点偏移 0.7777 碟径会让针尖落在
+// 黑胶环中部偏外；为让针尖默认贴合「黑胶内侧与封面交界」（封面外缘），把支点
+// 下移到 0.7211 碟径：针尖落点半径 = 封面半径 = NeteaseCoverDiameterRatio / 2。
+// 碟径放大后唱针不跟随：针顶在 0.72 标定下已贴舞台上沿，再放大必越界；
+// 故针的缩放与支点偏移都按此参考直径（手机版标定值）计算。
+internal const val NeteaseNeedleReferenceDiameterRatio = 0.72f
+internal const val NeteaseNeedlePivotOffsetToDiscRatio = 0.7211f
 internal const val NeteaseNeedleScaleToDiscRatio = 0.5087f / 146.6f
 internal const val NeteaseNeedleSvgViewBoxWidth = 114f
 internal const val NeteaseNeedleSvgViewBoxHeight = 174f

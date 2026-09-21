@@ -184,7 +184,7 @@ internal fun NeteaseTurntableDisc(
             manualRotationOffsetDegrees = manualRotationOffsetDegrees,
         )
     val discDiameter = turntableWidth * NeteaseDiscDiameterRatio
-    val coverDiameter = discDiameter * NeteaseCoverHoleDiameterRatio
+    val coverDiameter = turntableWidth * NeteaseCoverDiameterRatio
 
     BoxWithConstraints(modifier = modifier) {
         val discCenterY = maxHeight * NeteaseDiscCenterYRatio
@@ -192,7 +192,11 @@ internal fun NeteaseTurntableDisc(
             val discRadius = discDiameter.toPx() / 2f
             val center = Offset(size.width / 2f, size.height * NeteaseDiscCenterYRatio)
             drawNeteaseDiscGlow(center = center, discRadius = discRadius)
-            drawNeteaseVinylRing(center = center, radius = discRadius)
+            drawNeteaseVinylRing(
+                center = center,
+                radius = discRadius,
+                holeRadius = coverDiameter.toPx() / 2f,
+            )
         }
         val coverModifier =
             Modifier.align(Alignment.TopCenter)
@@ -245,15 +249,15 @@ private fun DrawScope.drawNeteaseDiscGlow(
 private fun DrawScope.drawNeteaseVinylRing(
     center: Offset,
     radius: Float,
+    holeRadius: Float,
 ) {
-    val holeRadius = radius * NeteaseCoverHoleDiameterRatio
     drawCircle(
         brush =
             Brush.radialGradient(
                 colorStops =
                     arrayOf(
                         0f to Color(0xFF2E2E30),
-                        NeteaseCoverHoleDiameterRatio to Color(0xFF232325),
+                        (holeRadius / radius) to Color(0xFF232325),
                         0.9f to Color(0xFF171719),
                         1f to Color(0xFF101012),
                     ),
@@ -378,14 +382,15 @@ internal fun NeteaseNeedle(
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier) {
-        // 唱针几何与碟片同基准：支点在碟心正上方，长度按手机版实测标定。
-        val discDiameter = size.width * NeteaseDiscDiameterRatio
-        val svgScale = NeteaseNeedleScaleToDiscRatio * discDiameter
+        // 唱针几何与碟片同基准：支点在碟心正上方，长度按手机版实测标定；
+        // 针不随碟径放大（0.72 标定下针顶已贴舞台上沿），按参考直径缩放。
+        val needleDiameter = size.width * NeteaseNeedleReferenceDiameterRatio
+        val svgScale = NeteaseNeedleScaleToDiscRatio * needleDiameter
         val pivot =
             Offset(
                 x = size.width / 2f,
                 y = (size.height * NeteaseDiscCenterYRatio) -
-                    (NeteaseNeedlePivotOffsetToDiscRatio * discDiameter),
+                    (NeteaseNeedlePivotOffsetToDiscRatio * needleDiameter),
             )
         val renderLeft = pivot.x - (NeteaseNeedlePivotSvgX * svgScale)
         val renderTop = pivot.y - (NeteaseNeedlePivotSvgY * svgScale)
@@ -680,13 +685,15 @@ internal fun PlaybackCoverPage(
     val density = LocalDensity.current
     val densityPxPerDp = density.density
     var discSize by remember { mutableStateOf(IntSize.Zero) }
-    val latestDiscSize by rememberUpdatedState(discSize)
+    // 手势协程只在 key 变化时重建，这些量必须按 State 下传、在事件里读 .value，
+    // 否则会被 lambda 捕获成首次组合时的旧值（拖针会按旧进度跳角）。
+    val latestDiscSize = rememberUpdatedState(discSize)
     val latestVisualPageToggle by rememberUpdatedState(onVisualPageToggle)
     val scratchAvailable by rememberUpdatedState(scratchEnabled && durationMs > 0L)
     val needleSeekAvailable by
         rememberUpdatedState(scratchEnabled && hasMediaItem && durationMs > 0L)
-    val latestPositionMs by rememberUpdatedState(currentPositionMs)
-    val latestDurationMs by rememberUpdatedState(durationMs)
+    val latestPositionMs = rememberUpdatedState(currentPositionMs)
+    val latestDurationMs = rememberUpdatedState(durationMs)
     val latestDiscScratchStart by rememberUpdatedState(onDiscScratchStart)
     val latestDiscScratchMotion by rememberUpdatedState(onDiscScratchMotion)
     val latestDiscScratchPositionChange by rememberUpdatedState(onDiscScratchPositionChange)

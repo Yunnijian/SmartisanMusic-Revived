@@ -44,9 +44,9 @@ internal fun Modifier.playbackCoverPointerInput(
     scale: Float,
     spec: TurntableStyleSpec,
     needleAnimatable: Animatable<Float, AnimationVector1D>,
-    latestDiscSize: IntSize,
-    latestPositionMs: Long,
-    latestDurationMs: Long,
+    latestDiscSize: State<IntSize>,
+    latestPositionMs: State<Long>,
+    latestDurationMs: State<Long>,
     latestVisualPageToggle: () -> Unit,
     latestDiscScratchStart: () -> Unit,
     latestDiscScratchMotion: (Long, Float) -> Unit,
@@ -62,7 +62,7 @@ internal fun Modifier.playbackCoverPointerInput(
             val tapTouchSlop = viewConfiguration.touchSlop
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
-                val size = latestDiscSize
+                val size = latestDiscSize.value
                 val center = discCenter(size)
                 val radius = discRadius(size)
                 val withinNeedleSeekRegion =
@@ -100,8 +100,8 @@ internal fun Modifier.playbackCoverPointerInput(
                             center = center,
                             radius = radius,
                             tapTouchSlop = tapTouchSlop,
-                            latestPositionMs = latestPositionMs,
-                            latestDurationMs = latestDurationMs,
+                            latestPositionMs = latestPositionMs.value,
+                            latestDurationMs = latestDurationMs.value,
                             latestDiscScratchStart = latestDiscScratchStart,
                             latestDiscScratchMotion = latestDiscScratchMotion,
                             latestDiscScratchPositionChange = latestDiscScratchPositionChange,
@@ -119,7 +119,8 @@ internal fun Modifier.playbackCoverPointerInput(
                             spec = spec,
                             tapTouchSlop = tapTouchSlop,
                             needleAnimatable = needleAnimatable,
-                            latestDurationMs = latestDurationMs,
+                            latestPositionMs = latestPositionMs.value,
+                            latestDurationMs = latestDurationMs.value,
                             latestNeedleSeekStart = latestNeedleSeekStart,
                             latestNeedleSeekPositionChange = latestNeedleSeekPositionChange,
                             latestNeedleSeekEnd = latestNeedleSeekEnd,
@@ -490,6 +491,7 @@ private suspend fun AwaitPointerEventScope.handleNeedleSeekGesture(
     spec: TurntableStyleSpec,
     tapTouchSlop: Float,
     needleAnimatable: Animatable<Float, AnimationVector1D>,
+    latestPositionMs: Long,
     latestDurationMs: Long,
     latestNeedleSeekStart: (Float, Long?) -> Unit,
     latestNeedleSeekPositionChange: (Float, Long?) -> Unit,
@@ -498,13 +500,19 @@ private suspend fun AwaitPointerEventScope.handleNeedleSeekGesture(
 ) {
     val initialPosition = down.position
     var maxMoveDistance = 0f
+    // 暂停时指针是抬起姿态、不携带进度，起步角必须由当前进度反推；
+    // 否则抬起角（= 最高点）会被读成满进度，一按下进度就跳。
     var needleRotationDegrees =
-        needleAnimatable.value.coerceIn(
-            spec.needleDragMinRotationDegrees,
-            spec.needleDragMaxRotationDegrees,
-        )
+        if (spec.style == TurntableStyle.Netease) {
+            spec.needleRotationForProgress(latestPositionMs, latestDurationMs)
+        } else {
+            needleAnimatable.value.coerceIn(
+                spec.needleDragMinRotationDegrees,
+                spec.needleDragMaxRotationDegrees,
+            )
+        }
     var needlePositionMs =
-        spec.needlePositionFromRotation(
+        spec.needleDragPosition(
             rotationDegrees = needleRotationDegrees,
             durationMs = latestDurationMs,
         )
@@ -606,7 +614,7 @@ private suspend fun AwaitPointerEventScope.handleNeedleSeekGesture(
                 spec.needleDragMaxRotationDegrees,
             )
         needlePositionMs =
-            spec.needlePositionFromRotation(
+            spec.needleDragPosition(
                 rotationDegrees = needleRotationDegrees,
                 durationMs = latestDurationMs,
             )
@@ -660,7 +668,7 @@ private fun resolveNeedleSeekStartCandidate(
                 spec.needleDragMaxRotationDegrees,
             )
     val candidateNeedlePositionMs =
-        spec.needlePositionFromRotation(
+        spec.needleDragPosition(
             rotationDegrees = candidateNeedleRotationDegrees,
             durationMs = durationMs,
         )

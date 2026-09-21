@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -32,8 +34,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -56,6 +62,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
+import com.smartisan.music.data.settings.TurntableStyle
 import com.smartisan.music.playback.EmbeddedLyrics
 import com.smartisan.music.playback.EmbeddedLyricsLine
 import kotlin.math.abs
@@ -87,6 +94,8 @@ private val PlaybackLyricsSecondaryStyle: TextStyle
 private val PlaybackLyricsHorizontalPadding = 53.6.dp
 private val PlaybackLyricsLineSpacing = 4.dp
 private val PlaybackLyricsRowHeight = 24.dp
+// 歌词可视区上下边界的羽化高度，对应原版 lrc_layout.xml 的 80dp fading edge。
+private val PlaybackLyricsFadeHeight = 80.dp
 private val PlaybackLyricsParagraphGap = 16.dp
 private const val PlaybackLyricsSmoothScrollMaxLineJump = 4
 private const val PlaybackLyricsManualScrollResumeDelayMillis = 2_800L
@@ -165,6 +174,7 @@ internal fun PlaybackLyricsOverlay(
     lyrics: EmbeddedLyrics?,
     fallbackLines: List<String>,
     currentPositionMs: Long,
+    turntableStyleSpec: TurntableStyleSpec,
     modifier: Modifier = Modifier,
 ) {
     val lyricsTimingKey = if (lyrics?.isTimeSynced == true) currentPositionMs else Long.MIN_VALUE
@@ -207,12 +217,20 @@ internal fun PlaybackLyricsOverlay(
             }
 
         BoxWithConstraints(modifier = modifier) {
+            // 页面区在 Netease 样式下加高以容纳唱片与光晕，但歌词的居中位置不应随之
+            // 改变：按原版页面区高度换算中心比例，保持与原版一致的绝对位置。
+            val lyricsCenterRatio =
+                if (turntableStyleSpec.style == TurntableStyle.Netease) {
+                    (PlaybackTurntableHeightToWidthRatio / NeteaseTurntableHeightToWidthRatio) / 2f
+                } else {
+                    0.5f
+                }
             val centerPadding =
-                remember(maxHeight, renderModel) {
+                remember(maxHeight, lyricsCenterRatio, renderModel) {
                     val focusRowHeight =
                         renderModel.lines.getOrNull(renderModel.focusIndex)?.rowHeight()
                             ?: PlaybackLyricsRowHeight
-                    ((maxHeight - focusRowHeight) / 2f).coerceAtLeast(0.dp)
+                    ((maxHeight * lyricsCenterRatio) - (focusRowHeight / 2f)).coerceAtLeast(0.dp)
                 }
             val visualCenterIndex by
                 remember(listState, renderModel) {
@@ -266,7 +284,20 @@ internal fun PlaybackLyricsOverlay(
                 }
             }
 
-            Box(modifier = Modifier.matchParentSize().clip(CircleShape)) {
+            // 歌词遮罩圆盘须与当前样式的唱片对齐：Netease 唱片更小更靠下，若沿用
+            // 原版「舞台大小」的圆形遮罩，切换动画时遮罩盘底部弧线会横穿唱片底部，
+            // 形成一条一闪而过的线。故 Netease 下按碟径/碟心重定位遮罩圆。
+            val lyricsMaskModifier =
+                if (turntableStyleSpec.style == TurntableStyle.Netease) {
+                    val discDiameter = maxWidth * NeteaseDiscDiameterRatio
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .size(discDiameter)
+                        .offset(y = (maxHeight * NeteaseDiscCenterYRatio) - (discDiameter / 2))
+                } else {
+                    Modifier.matchParentSize()
+                }
+            Box(modifier = lyricsMaskModifier.clip(CircleShape)) {
                 Image(
                     painter = painterResource(R.drawable.mask_playing_lyric),
                     contentDescription = stringResource(R.string.lyrics),
@@ -277,6 +308,25 @@ internal fun PlaybackLyricsOverlay(
             LazyColumn(
                 modifier =
                     Modifier.fillMaxSize()
+                        // 歌词在可视区上下边界羽化淡出，而不是被硬裁成一条直线。
+                        // DstIn 需要独立图层合成，否则渐变会作用到列表之外的内容。
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            val fadeFraction =
+                                (PlaybackLyricsFadeHeight.toPx() / size.height)
+                                    .coerceIn(0f, 0.5f)
+                            drawRect(
+                                brush =
+                                    Brush.verticalGradient(
+                                        0f to Color.Transparent,
+                                        fadeFraction to Color.Black,
+                                        (1f - fadeFraction) to Color.Black,
+                                        1f to Color.Transparent,
+                                    ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        }
                         .nestedScroll(manualScrollConnection)
                         .padding(horizontal = PlaybackLyricsHorizontalPadding),
                 state = listState,
