@@ -43,7 +43,11 @@ Most of the code comes from Mangi-11's deleted old repository, with part of the 
 
 After my device updated to HyperOS 4, the system's built-in audio decoders all stopped working, which left players without a bundled decoder unable to play FLAC and other high-quality audio. This project therefore adds a bundled `media3-flac` extension module for decoding.
 
-### 4. Other
+### 4. Lyrics and SuperLyric
+
+The SuperLyric API is integrated so the currently playing lyrics (including word-timed lines and translations) are published to SuperLyric, letting desktop and overlay lyric modules pick them up and display them. When no such module is installed, it degrades silently without affecting playback.
+
+### 5. Other
 
 A number of other changes that are not visible on the surface.
 
