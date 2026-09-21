@@ -30,11 +30,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -249,17 +249,17 @@ private fun TurntableStyleSettingsRow(
     }
 }
 
-/** 两种唱机样式的迷你矢量预览；仅示意布局差异，不播放动画。 */
+/** 两种唱机样式的迷你预览；Netease 用官方 outline/disc 位图，仅示意布局差异。 */
 @Composable
 private fun TurntableStylePreview(
     style: TurntableStyle,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier = modifier) {
-        val radius = size.minDimension / 2f
-        val center = Offset(size.width / 2f, size.height / 2f)
-        when (style) {
-            TurntableStyle.Original -> {
+    when (style) {
+        TurntableStyle.Original ->
+            Canvas(modifier = modifier) {
+                val radius = size.minDimension / 2f
+                val center = Offset(size.width / 2f, size.height / 2f)
                 drawCircle(Color(0xFF4A4A4C), radius, center)
                 drawCircle(Color(0xFF26262A), radius * 0.38f, center)
                 drawCircle(Color(0xFF111113), radius * 0.07f, center)
@@ -270,25 +270,21 @@ private fun TurntableStylePreview(
                     strokeWidth = radius * 0.10f,
                 )
             }
-            TurntableStyle.Netease -> {
-                drawCircle(Color(0xFF141416), radius, center)
-                for (step in 1..4) {
-                    drawCircle(
-                        Color.White.copy(alpha = 0.06f),
-                        radius * (0.74f + step * 0.055f),
-                        center,
-                        style = Stroke(width = radius * 0.02f),
-                    )
-                }
-                drawCircle(Color(0xFF2C2C30), radius * 0.66f, center)
-                drawLine(
-                    Color.White.copy(alpha = 0.92f),
-                    start = Offset(center.x + radius * 0.02f, center.y - radius * 1.04f),
-                    end = Offset(center.x + radius * 0.30f, center.y - radius * 0.60f),
-                    strokeWidth = radius * 0.10f,
+        TurntableStyle.Netease ->
+            Box(modifier = modifier, contentAlignment = Alignment.Center) {
+                Image(
+                    painter = painterResource(R.drawable.netease_vinyl_outline),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Image(
+                    painter = painterResource(R.drawable.netease_vinyl_disc),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-        }
     }
 }
 

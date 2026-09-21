@@ -70,25 +70,27 @@ internal const val PlaybackAlbumArtDiameterRatio = 405f / 1080f
 internal const val PlaybackTurntableAxisDiameterRatio = 62f / 1080f
 internal const val PlaybackTurntableAxisSourceDiameterPx = 60
 internal const val NeteaseDiscCycleDurationMs = 20_000f
-// 碟径相对转盘宽度。官方 mac 端为父容器的 85%，手机版实测 0.756 屏宽；
-// 用户要求比官方更饱满的黑胶环，碟径放大到 0.78（碟底轻微探入进度条区，被上层遮挡）。
-internal const val NeteaseDiscDiameterRatio = 0.78f
-// 封面径相对转盘宽度：沿用原 0.72×0.685 的绝对尺寸，碟径加大时封面保持不变。
-internal const val NeteaseCoverDiameterRatio = 0.72f * 0.685f
+// 可见黑胶直径相对转盘宽度，沿用真机校准后的 0.78。
+internal const val NeteaseVinylVisibleDiameterRatio = 0.78f
+// disc.png 的黑胶有效边界为 1167/1200 ≈ 0.9725，四周保留约 1.4% 透明边。
+internal const val NeteaseVinylBitmapVisibleDiameterRatio = 0.9725f
+// 官方播放页把 outline.png 与 disc.png 按同尺寸、同中心叠放，因此图像容器
+// 相对转盘宽度要按位图透明边补偿，使可见黑胶维持 0.78。
+internal const val NeteaseDiscDiameterRatio =
+    NeteaseVinylVisibleDiameterRatio / NeteaseVinylBitmapVisibleDiameterRatio
+// 封面径相对图像容器。官方 CenterImg 基准 400、封面 214/0.85，二者之比为 0.6294。
+internal const val NeteaseCoverDiameterRatio = NeteaseDiscDiameterRatio * 0.6294f
 // 碟心在舞台页面区内的纵向位置。页面区高度按 NeteaseTurntableHeightToWidthRatio 加高后，
 // 该比例使碟心落在与原版相同的位置（0.6286 × 原页面区高 = 0.5277 × 新页面区高），
 // 唱片大小与视觉位置不变。
 internal const val NeteaseDiscCenterYRatio = 0.5277f
-// 碟片外圈柔光：半径倍数（1 = 碟缘），向外渐隐。
-internal const val NeteaseDiscGlowRadiusRatio = 1.14f
 // 唱针几何按手机版实测：支点在碟心正上方、支点到唱头中心 0.5087 碟径
-// （官方 SVG 内该距离为 146.6 单位）。原标定支点偏移 0.7777 碟径会让针尖落在
-// 黑胶环中部偏外；为让针尖默认贴合「黑胶内侧与封面交界」（封面外缘），把支点
-// 下移到 0.7211 碟径：针尖落点半径 = 封面半径 = NeteaseCoverDiameterRatio / 2。
+// （官方 SVG 内该距离为 146.6 单位）。支点偏移解算为 0.7346 参考直径时，
+// 针尖落点半径恰好等于封面半径，即贴合「黑胶内侧与封面交界」。
 // 碟径放大后唱针不跟随：针顶在 0.72 标定下已贴舞台上沿，再放大必越界；
 // 故针的缩放与支点偏移都按此参考直径（手机版标定值）计算。
 internal const val NeteaseNeedleReferenceDiameterRatio = 0.72f
-internal const val NeteaseNeedlePivotOffsetToDiscRatio = 0.7211f
+internal const val NeteaseNeedlePivotOffsetToDiscRatio = 0.7346f
 internal const val NeteaseNeedleScaleToDiscRatio = 0.5087f / 146.6f
 internal const val NeteaseNeedleSvgViewBoxWidth = 114f
 internal const val NeteaseNeedleSvgViewBoxHeight = 174f

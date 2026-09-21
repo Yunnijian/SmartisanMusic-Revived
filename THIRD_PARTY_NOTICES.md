@@ -23,6 +23,25 @@ fd7c6f02a945d3dd45ad4c17c2032e8a6a7262f1ada31bc42ff40f56d5b42d62  monochrome.png
 
 No separate open-source license or license text accompanied these three firmware resources. They are not claimed as original project artwork and are not relicensed under the project's software license. The artwork, product names, and trademarks remain the property of their respective rights holders. Downstream redistributors are responsible for determining whether they have the permissions required for their intended use.
 
+## Netease Cloud Music Mac vinyl artwork
+
+The optional Netease turntable style reproduces the vinyl artwork distributed in the official Netease Cloud Music desktop client for macOS.
+
+- Source product: Netease Cloud Music for macOS `3.1.11` (build `3415`), bundle identifier `com.netease.163music`
+- Source container: `/Applications/NeteaseMusic.app/Contents/Resources/resources.pack`
+- Source entries: `webfiles/public/assets/img/vinyl/outline.png` and `webfiles/public/assets/img/vinyl/disc.png`
+- Extracted for this project: 2026-09-21
+- Project resource names: `netease_vinyl_outline.png` and `netease_vinyl_disc.png`
+
+SHA-256 checksums of the unmodified extracted files:
+
+```text
+e4a9fcc0008624f94849f4f39b857f4a931bf185e557f4cb8a88270972ae5ec7  outline.png
+0981bdfade68bd905360246b2280bf48e72000a9bf57ab08614b7c258fe738e5  disc.png
+```
+
+No separate open-source license or license text accompanied these two client resources. They are not claimed as original project artwork and are not relicensed under the project's software license. The artwork, product names, and trademarks remain the property of their respective rights holders. Downstream redistributors are responsible for determining whether they have the permissions required for their intended use.
+
 ## SuperLyricApi
 
 The online music features publish live lyrics to the [SuperLyric](https://github.com/HChenX/SuperLyric) ecosystem through [SuperLyricApi](https://github.com/HChenX/SuperLyricApi).

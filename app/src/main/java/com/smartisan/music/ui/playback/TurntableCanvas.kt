@@ -189,16 +189,24 @@ internal fun NeteaseTurntableDisc(
 
     BoxWithConstraints(modifier = modifier) {
         val discCenterY = maxHeight * NeteaseDiscCenterYRatio
-        Canvas(modifier = Modifier.matchParentSize()) {
-            val discRadius = discDiameter.toPx() / 2f
-            val center = Offset(size.width / 2f, size.height * NeteaseDiscCenterYRatio)
-            drawNeteaseDiscGlow(center = center, discRadius = discRadius)
-            drawNeteaseVinylRing(
-                center = center,
-                radius = discRadius,
-                holeRadius = coverDiameter.toPx() / 2f,
-            )
-        }
+        // 官方播放页用同尺寸、同中心的两张 1200×1200 位图叠出唱片：
+        // outline.png 是底层浅色圆盘，disc.png 是中心镂空的黑胶环。
+        val discModifier =
+            Modifier.align(Alignment.TopCenter)
+                .offset(y = discCenterY - discDiameter / 2)
+                .size(discDiameter)
+        Image(
+            painter = painterResource(R.drawable.netease_vinyl_outline),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = discModifier,
+        )
+        Image(
+            painter = painterResource(R.drawable.netease_vinyl_disc),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = discModifier,
+        )
         val coverModifier =
             Modifier.align(Alignment.TopCenter)
                 .offset(y = discCenterY - coverDiameter / 2)
@@ -222,122 +230,6 @@ internal fun NeteaseTurntableDisc(
 }
 
 private val NeteaseCoverPlaceholderColor = Color(0xFF2A2A2C)
-
-/** 碟缘向外的柔光；碟片随后覆盖内侧，只留碟外一圈渐隐亮边。 */
-private fun DrawScope.drawNeteaseDiscGlow(
-    center: Offset,
-    discRadius: Float,
-) {
-    val glowRadius = discRadius * NeteaseDiscGlowRadiusRatio
-    drawCircle(
-        brush =
-            Brush.radialGradient(
-                colorStops =
-                    arrayOf(
-                        0f to Color.Transparent,
-                        (discRadius / glowRadius) to Color.White.copy(alpha = 0.13f),
-                        0.82f to Color.White.copy(alpha = 0.05f),
-                        1f to Color.Transparent,
-                    ),
-                center = center,
-                radius = glowRadius,
-            ),
-        radius = glowRadius,
-        center = center,
-    )
-}
-
-private fun DrawScope.drawNeteaseVinylRing(
-    center: Offset,
-    radius: Float,
-    holeRadius: Float,
-) {
-    drawCircle(
-        brush =
-            Brush.radialGradient(
-                colorStops =
-                    arrayOf(
-                        0f to Color(0xFF2E2E30),
-                        (holeRadius / radius) to Color(0xFF232325),
-                        0.9f to Color(0xFF171719),
-                        1f to Color(0xFF101012),
-                    ),
-                center = center,
-                radius = radius,
-            ),
-        radius = radius,
-        center = center,
-    )
-    val grooveCount = 24
-    val grooveSpan = radius - holeRadius
-    val grooveWidth = (radius * 0.006f).coerceAtLeast(0.5f)
-    for (index in 1..grooveCount) {
-        val fraction = index.toFloat() / (grooveCount + 1)
-        drawCircle(
-            color = Color.White.copy(alpha = if (index % 6 == 0) 0.045f else 0.024f),
-            radius = holeRadius + grooveSpan * fraction,
-            center = center,
-            style = Stroke(width = grooveWidth),
-        )
-    }
-    val sheenRadius = radius * 0.62f
-    val sheenOffset = radius * 0.78f
-    drawCircle(
-        brush =
-            Brush.radialGradient(
-                colorStops =
-                    arrayOf(0f to Color.White.copy(alpha = 0.10f), 1f to Color.Transparent),
-                center = Offset(center.x, center.y - sheenOffset),
-                radius = sheenRadius,
-            ),
-        radius = sheenRadius,
-        center = Offset(center.x, center.y - sheenOffset),
-    )
-    drawCircle(
-        brush =
-            Brush.radialGradient(
-                colorStops =
-                    arrayOf(0f to Color.White.copy(alpha = 0.07f), 1f to Color.Transparent),
-                center = Offset(center.x, center.y + sheenOffset),
-                radius = sheenRadius,
-            ),
-        radius = sheenRadius,
-        center = Offset(center.x, center.y + sheenOffset),
-    )
-    drawCircle(
-        color = Color.White.copy(alpha = 0.05f),
-        radius = radius * 0.995f,
-        center = center,
-        style = Stroke(width = (radius * 0.012f).coerceAtLeast(0.5f)),
-    )
-    drawCircle(
-        brush =
-            Brush.radialGradient(
-                colorStops =
-                    arrayOf(
-                        0.94f to Color.Transparent,
-                        0.985f to Color.White.copy(alpha = 0.08f),
-                        1f to Color.Transparent,
-                    ),
-                center = center,
-                radius = radius,
-            ),
-        radius = radius,
-        center = center,
-    )
-    drawCircle(
-        color = Color.Black.copy(alpha = 0.35f),
-        radius = holeRadius * 1.02f,
-        center = center,
-        style = Stroke(width = (radius * 0.012f).coerceAtLeast(0.5f)),
-    )
-    drawCircle(
-        color = Color.White.copy(alpha = 0.07f),
-        radius = holeRadius,
-        center = center,
-        style = Stroke(width = (radius * 0.008f).coerceAtLeast(0.5f)),
-    )
-}
 
 // 官方唱针内联 SVG（viewBox 0 0 114 174）的 path 数据，逐字取自
 // subApp.chunk.4b8efd5.js 的 handle_svg__ 段；填充/描边参数亦对照源码。

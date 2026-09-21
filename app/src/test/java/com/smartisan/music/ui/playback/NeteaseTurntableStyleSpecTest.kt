@@ -18,9 +18,15 @@ class NeteaseTurntableStyleSpecTest {
             turntableStyleSpec(TurntableStyle.Netease),
         )
         assertEquals(20000f, NeteaseTurntableStyleSpec.discCycleDurationMs, 0.001f)
-        // 碟径加大后封面保持原绝对尺寸，黑胶环因此更宽。
-        assertEquals(0.72f * 0.685f, NeteaseCoverDiameterRatio, 0.0001f)
-        assertEquals(0.78f, NeteaseDiscDiameterRatio, 0.0001f)
+        // 可见黑胶沿用真机校准值；图像容器按位图透明边补偿。
+        assertEquals(0.78f, NeteaseVinylVisibleDiameterRatio, 0.0001f)
+        assertEquals(
+            NeteaseVinylVisibleDiameterRatio,
+            NeteaseDiscDiameterRatio * NeteaseVinylBitmapVisibleDiameterRatio,
+            0.0005f,
+        )
+        // 官方 CenterImg 基准 400、封面 214/0.85，封面与图像容器之比为 0.6294。
+        assertEquals(0.6294f, NeteaseCoverDiameterRatio / NeteaseDiscDiameterRatio, 0.0001f)
         // 唱针几何与碟径解耦：针按手机版标定的参考直径缩放，不随碟放大。
         assertEquals(0.72f, NeteaseNeedleReferenceDiameterRatio, 0.0001f)
         assertEquals(300, NeteaseTurntableStyleSpec.needleAnimationDurationMs)
@@ -164,21 +170,20 @@ class NeteaseTurntableStyleSpecTest {
     }
 
     @Test
-    fun `netease disc and glow fit inside stage page area`() {
-        // 页面区高度按 Netease 比例加高后，唱片与外圈光晕的底边都应落在页面区内；
+    fun `netease disc and visible vinyl fit inside stage page area`() {
+        // 页面区高度按 Netease 比例加高后，唱片图像容器与可见黑胶底边都应落在页面区内；
         // 否则超出部分会被 AnimatedContent 裁成一条水平直线（切页时最明显）。
         val discBottomRatio = NeteaseDiscCenterYRatio + (NeteaseDiscDiameterRatio / 2f)
-        val glowBottomRatio =
-            NeteaseDiscCenterYRatio +
-                ((NeteaseDiscDiameterRatio / 2f) * NeteaseDiscGlowRadiusRatio)
+        val visibleVinylBottomRatio =
+            NeteaseDiscCenterYRatio + (NeteaseVinylVisibleDiameterRatio / 2f)
 
         assertTrue(
-            "唱片底边应落在页面区内",
+            "唱片图像容器底边应落在页面区内",
             discBottomRatio <= NeteaseTurntableHeightToWidthRatio,
         )
         assertTrue(
-            "光晕底边应落在页面区内",
-            glowBottomRatio <= NeteaseTurntableHeightToWidthRatio,
+            "可见黑胶底边应落在页面区内",
+            visibleVinylBottomRatio <= NeteaseTurntableHeightToWidthRatio,
         )
     }
 
@@ -234,7 +239,7 @@ class NeteaseTurntableStyleSpecTest {
                 containerSize.width / 2f,
                 containerSize.height * NeteaseDiscCenterYRatio,
             )
-        val discRadius = containerSize.width * NeteaseDiscDiameterRatio / 2f
+        val discRadius = containerSize.width * NeteaseVinylVisibleDiameterRatio / 2f
         val coverRadius = containerSize.width * NeteaseCoverDiameterRatio / 2f
         val tipRadius = distanceBetween(tip, discCenter)
 
@@ -266,7 +271,7 @@ class NeteaseTurntableStyleSpecTest {
                 containerSize.width / 2f,
                 containerSize.height * NeteaseDiscCenterYRatio,
             )
-        val discRadius = containerSize.width * NeteaseDiscDiameterRatio / 2f
+        val discRadius = containerSize.width * NeteaseVinylVisibleDiameterRatio / 2f
 
         assertTrue(
             "暂停态针尖应抬离碟面",

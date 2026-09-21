@@ -289,7 +289,8 @@ internal fun PlaybackLyricsOverlay(
             // 形成一条一闪而过的线。故 Netease 下按碟径/碟心重定位遮罩圆。
             val lyricsMaskModifier =
                 if (turntableStyleSpec.style == TurntableStyle.Netease) {
-                    val discDiameter = maxWidth * NeteaseDiscDiameterRatio
+                    // 用可见黑胶直径，而非带透明边的图像容器，避免遮罩弧线落在碟缘之外。
+                    val discDiameter = maxWidth * NeteaseVinylVisibleDiameterRatio
                     Modifier
                         .align(Alignment.TopCenter)
                         .size(discDiameter)
