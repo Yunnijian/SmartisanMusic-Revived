@@ -11,9 +11,18 @@ private const val TurntableStyleKey = "turntable_style"
 enum class TurntableStyle(
     val preferenceValue: String,
     val labelRes: Int,
+    val summaryRes: Int,
 ) {
-    Original("original", com.smartisan.music.R.string.turntable_style_original),
-    Netease("netease", com.smartisan.music.R.string.turntable_style_netease),
+    Original(
+        preferenceValue = "original",
+        labelRes = com.smartisan.music.R.string.turntable_style_original,
+        summaryRes = com.smartisan.music.R.string.turntable_style_original_summary,
+    ),
+    Netease(
+        preferenceValue = "netease",
+        labelRes = com.smartisan.music.R.string.turntable_style_netease,
+        summaryRes = com.smartisan.music.R.string.turntable_style_netease_summary,
+    ),
     ;
 
     companion object {

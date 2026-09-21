@@ -88,6 +88,13 @@
     <string name="theme_mode_system">Follow system</string>
     <string name="theme_mode_light">Light mode</string>
     <string name="theme_mode_dark">Dark mode</string>
+    <string name="turntable_style">Turntable Style</string>
+    <string name="turntable_style_original">Original Turntable</string>
+    <string name="turntable_style_original_summary">Original skeuomorphic Smartisan Music turntable</string>
+    <string name="turntable_style_netease">Netease Cloud Music Turntable</string>
+    <string name="turntable_style_netease_summary">Classic Netease Cloud Music turntable</string>
+    <string name="turntable_style_option_description">%1$s, %2$s</string>
+    <string name="turntable_style_axis_netease_summary">The Netease style does not use a turntable spindle</string>
     <string name="app_icon">App Icon</string>
     <string name="app_icon_choose">Choose a Home Screen Icon</string>
     <string name="app_icon_original">Original Icon</string>

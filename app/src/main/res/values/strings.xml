@@ -101,8 +101,11 @@
     <string name="app_icon_change_failed">无法更换应用图标，请稍后重试</string>
     <string name="app_icon_option_description">%1$s，%2$s</string>
     <string name="turntable_style">唱机样式</string>
-    <string name="turntable_style_original">原版</string>
-    <string name="turntable_style_netease">网易云</string>
+    <string name="turntable_style_original">原版唱机</string>
+    <string name="turntable_style_original_summary">锤子音乐原版拟物唱机样式</string>
+    <string name="turntable_style_netease">网易云音乐唱机</string>
+    <string name="turntable_style_netease_summary">网易云音乐经典唱机样式</string>
+    <string name="turntable_style_option_description">%1$s，%2$s</string>
     <string name="turntable_style_axis_netease_summary">网易云样式不使用唱机中轴</string>
     <string name="search_no_result">无搜索结果</string>
     <string name="library_root">本地音乐</string>

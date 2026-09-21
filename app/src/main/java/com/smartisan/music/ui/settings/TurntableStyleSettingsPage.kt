@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.colorResource
@@ -166,6 +167,8 @@ private fun TurntableStyleSettingsRow(
     val pressed by interactionSource.collectSmartisanPressedAsState()
     val focused by interactionSource.collectIsFocusedAsState()
     val title = stringResource(style.labelRes)
+    val summary = stringResource(style.summaryRes)
+    val description = stringResource(R.string.turntable_style_option_description, title, summary)
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
@@ -186,7 +189,7 @@ private fun TurntableStyleSettingsRow(
                         role = Role.RadioButton,
                         onClick = smartisanClick(onClick),
                     )
-                    .semantics { contentDescription = title }
+                    .semantics { contentDescription = description }
                     .padding(
                         start = TurntableStyleSettingsMetrics.PreviewStartMargin,
                         end = TurntableStyleSettingsMetrics.SelectedEndMargin,
@@ -200,35 +203,56 @@ private fun TurntableStyleSettingsRow(
                         TurntableStyleSettingsMetrics.PreviewSize
                     ),
             )
-            BasicText(
-                text = title,
+            Column(
                 modifier =
                     Modifier.weight(1f)
                         .padding(
                             start = TurntableStyleSettingsMetrics.TextStartMargin,
                             end = TurntableStyleSettingsMetrics.TextEndMargin,
                         )
-                        .clearAndSetSemantics {},
-                maxLines = 1,
-                softWrap = false,
-                style =
-                    TextStyle(
-                        color =
-                            smartisanStateColor(
-                                R.color.setting_item_text_colorlist,
-                                pressed = pressed,
-                                selected = selected,
-                                focused = focused,
-                            ),
-                        fontSize = smartisanTextSize(R.dimen.primary_text_size),
-                        fontFamily = FontFamily.SansSerif,
-                        platformStyle = PlatformTextStyle(includeFontPadding = true),
-                        textDirection =
-                            if (isRtl) TextDirection.ContentOrRtl
-                            else TextDirection.ContentOrLtr,
-                        textAlign = if (isRtl) TextAlign.Right else TextAlign.Left,
-                    ),
-            )
+                        .clearAndSetSemantics {}
+            ) {
+                BasicText(
+                    text = title,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 1,
+                    softWrap = false,
+                    style =
+                        TextStyle(
+                            color =
+                                smartisanStateColor(
+                                    R.color.setting_item_text_colorlist,
+                                    pressed = pressed,
+                                    selected = selected,
+                                    focused = focused,
+                                ),
+                            fontSize = smartisanTextSize(R.dimen.primary_text_size),
+                            fontFamily = FontFamily.SansSerif,
+                            platformStyle = PlatformTextStyle(includeFontPadding = true),
+                            textDirection =
+                                if (isRtl) TextDirection.ContentOrRtl
+                                else TextDirection.ContentOrLtr,
+                            textAlign = if (isRtl) TextAlign.Right else TextAlign.Left,
+                        ),
+                )
+                BasicText(
+                    text = summary,
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 1,
+                    softWrap = false,
+                    style =
+                        TextStyle(
+                            color = colorResource(R.color.setting_item_summary_text_color),
+                            fontSize = smartisanTextSize(R.dimen.settings_item_tips_text_size),
+                            fontFamily = FontFamily.SansSerif,
+                            platformStyle = PlatformTextStyle(includeFontPadding = true),
+                            textDirection =
+                                if (isRtl) TextDirection.ContentOrRtl
+                                else TextDirection.ContentOrLtr,
+                            textAlign = if (isRtl) TextAlign.Right else TextAlign.Left,
+                        ),
+                )
+            }
             Box(
                 modifier = Modifier.size(TurntableStyleSettingsMetrics.SelectedSize)
             ) {
@@ -284,6 +308,18 @@ private fun TurntableStylePreview(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // 官方位图只含唱片，唱臂需单独绘制，与播放页保持一致的白唱臂。
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val radius = size.minDimension / 2f
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.92f),
+                        start = Offset(center.x + radius * 0.02f, center.y - radius * 1.02f),
+                        end = Offset(center.x + radius * 0.40f, center.y - radius * 0.34f),
+                        strokeWidth = radius * 0.11f,
+                        cap = StrokeCap.Round,
+                    )
+                }
             }
     }
 }
