@@ -11,6 +11,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
@@ -381,6 +382,10 @@ internal fun NeteaseNeedle(
     needleRotation: State<Float>,
     modifier: Modifier = Modifier,
 ) {
+    // 浅色背景（page_background 纯白）下，纯白唱针会与背景融为一体。处理方式和
+    // 原版 PNG 唱针一致：主体保持浅色，外围叠加一圈深灰描边，让整支唱针从背景
+    // 中浮现出清晰轮廓；黑胶上仍是白主体，视觉不受影响。深色模式维持纯白。
+    val isDark = isSystemInDarkTheme()
     Canvas(modifier) {
         // 唱针几何与碟片同基准：支点在碟心正上方，长度按手机版实测标定；
         // 针不随碟径放大（0.72 标定下针顶已贴舞台上沿），按参考直径缩放。
@@ -399,13 +404,19 @@ internal fun NeteaseNeedle(
                 translate(renderLeft, renderTop)
                 scale(svgScale, svgScale, pivot = Offset.Zero)
             }) {
-                drawNeteaseNeedleSvg()
+                drawNeteaseNeedleSvg(isDark = isDark)
             }
         }
     }
 }
 
-private fun DrawScope.drawNeteaseNeedleSvg() {
+/** 浅色模式下唱针外围描边色：取自原版 play_stylus_lp_original 的轮廓中位色。 */
+private const val NeteaseNeedleLightOutlineColor = 0xFF66666A
+
+private fun DrawScope.drawNeteaseNeedleSvg(isDark: Boolean) {
+    // 浅色模式下先描深灰边、再叠白主体；深色模式跳过描边保持纯白。
+    val outlineColor = if (isDark) null else Color(NeteaseNeedleLightOutlineColor)
+    val outlineInset = 1.2f
     val pivotBase = Offset(17f, 16.558f)
     drawCircle(
         color = Color.Black.copy(alpha = 0.1f),
@@ -418,9 +429,17 @@ private fun DrawScope.drawNeteaseNeedleSvg() {
         center = pivotBase,
         style = Stroke(width = 0.552f),
     )
+    outlineColor?.let {
+        drawPath(NeteaseNeedleArmPath, it, style = Stroke(width = 6.623f + outlineInset))
+    }
     drawPath(NeteaseNeedleArmPath, Color.White, style = Stroke(width = 6.623f))
     drawPath(NeteaseNeedleArmShadowPath, Color.Black.copy(alpha = 0.7f))
     val headPath = Path().apply { addRoundRect(NeteaseNeedleHeadRect) }
+    outlineColor?.let {
+        withTransform({ rotate(40f, NeteaseNeedleHeadPivot) }) {
+            drawPath(headPath, it, style = Stroke(width = outlineInset))
+        }
+    }
     withTransform({ rotate(40f, NeteaseNeedleHeadPivot) }) {
         drawPath(headPath, Color.White)
     }
@@ -448,6 +467,9 @@ private fun DrawScope.drawNeteaseNeedleSvg() {
             }
         }
     }
+    outlineColor?.let {
+        drawPath(NeteaseNeedleTipPath, it, style = Stroke(width = outlineInset))
+    }
     drawPath(NeteaseNeedleTipPath, Color.White)
     drawPath(NeteaseNeedleTipTexturePath, Color.Black.copy(alpha = 0.09f))
     val capCenter = Offset(16.999f, 16.559f)
@@ -456,6 +478,9 @@ private fun DrawScope.drawNeteaseNeedleSvg() {
         radius = 8.831f + 0.552f,
         center = capCenter,
     )
+    outlineColor?.let {
+        drawCircle(color = it, radius = 8.831f + 0.552f, center = capCenter)
+    }
     drawCircle(color = Color.White, radius = 8.831f, center = capCenter)
     drawCircle(
         brush =
