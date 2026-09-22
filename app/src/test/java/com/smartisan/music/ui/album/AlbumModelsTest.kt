@@ -93,6 +93,91 @@ class AlbumModelsTest {
     }
 
     @Test
+    fun selectedAlbumMediaIdsResolvesEveryTrackOfSelectedAlbums() {
+        val items =
+            listOf(
+                mediaItem(id = "alpha-1", title = "First", album = "Alpha", artist = "Artist A"),
+                mediaItem(id = "beta-1", title = "Intro", album = "Beta", artist = "Beta Artist"),
+                mediaItem(id = "alpha-2", title = "Second", album = "Alpha", artist = "Artist A"),
+            )
+        val albums =
+            buildAlbumSummaries(
+                mediaItems = items,
+                unknownAlbumTitle = "未知专辑",
+                multipleArtistsTitle = "多位艺术家",
+            )
+
+        assertEquals(
+            setOf("alpha-1", "alpha-2"),
+            selectedAlbumMediaIds(
+                mediaItems = items,
+                hiddenMediaIds = emptySet(),
+                albumIds = setOf(albums.first { it.title == "Alpha" }.id),
+                unknownAlbumTitle = "未知专辑",
+                multipleArtistsTitle = "多位艺术家",
+            ),
+        )
+    }
+
+    @Test
+    fun selectedAlbumMediaIdsIgnoresHiddenTracks() {
+        val items =
+            listOf(
+                mediaItem(id = "alpha-1", title = "First", album = "Alpha", artist = "Artist A"),
+                mediaItem(id = "alpha-2", title = "Second", album = "Alpha", artist = "Artist A"),
+            )
+        val alphaId =
+            buildAlbumSummaries(
+                mediaItems = items,
+                unknownAlbumTitle = "未知专辑",
+                multipleArtistsTitle = "多位艺术家",
+            ).single().id
+
+        assertEquals(
+            setOf("alpha-2"),
+            selectedAlbumMediaIds(
+                mediaItems = items,
+                hiddenMediaIds = setOf("alpha-1"),
+                albumIds = setOf(alphaId),
+                unknownAlbumTitle = "未知专辑",
+                multipleArtistsTitle = "多位艺术家",
+            ),
+        )
+    }
+
+    @Test
+    fun selectedAlbumMediaIdsIgnoresUnknownAlbumIds() {
+        assertEquals(
+            emptySet<String>(),
+            selectedAlbumMediaIds(
+                mediaItems = listOf(
+                    mediaItem(id = "alpha-1", title = "First", album = "Alpha", artist = "Artist A"),
+                ),
+                hiddenMediaIds = emptySet(),
+                albumIds = setOf("album:404"),
+                unknownAlbumTitle = "未知专辑",
+                multipleArtistsTitle = "多位艺术家",
+            ),
+        )
+    }
+
+    @Test
+    fun selectedAlbumMediaIdsIsEmptyWithoutSelection() {
+        assertEquals(
+            emptySet<String>(),
+            selectedAlbumMediaIds(
+                mediaItems = listOf(
+                    mediaItem(id = "alpha-1", title = "First", album = "Alpha", artist = "Artist A"),
+                ),
+                hiddenMediaIds = emptySet(),
+                albumIds = emptySet(),
+                unknownAlbumTitle = "未知专辑",
+                multipleArtistsTitle = "多位艺术家",
+            ),
+        )
+    }
+
+    @Test
     fun displayTrackNumberStripsDiscPrefix() {
         val item = mediaItem(
             id = "disc-track",

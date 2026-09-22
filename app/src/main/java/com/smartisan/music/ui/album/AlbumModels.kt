@@ -71,6 +71,36 @@ internal fun buildAlbumSummaries(
         .sortedBy { it.title.normalizedKey() }
 }
 
+/**
+ * 专辑多选的删除目标：把选中的专辑 id 解析成它们包含的全部曲目 mediaId。
+ *
+ * 分组规则必须与列表页相同，所以这里直接复用 [buildAlbumSummaries] 重算一次，
+ * 并且和专辑页一样先滤掉已隐藏的曲目——否则「选中的专辑」可能和屏幕上看到的不是同一批曲目。
+ */
+internal fun selectedAlbumMediaIds(
+    mediaItems: List<MediaItem>,
+    hiddenMediaIds: Set<String>,
+    albumIds: Set<String>,
+    unknownAlbumTitle: String,
+    multipleArtistsTitle: String,
+    artistSettings: ArtistSettings = ArtistSettings(),
+): Set<String> {
+    if (albumIds.isEmpty()) {
+        return emptySet()
+    }
+    return buildAlbumSummaries(
+            mediaItems = mediaItems.filterNot { item -> item.mediaId in hiddenMediaIds },
+            unknownAlbumTitle = unknownAlbumTitle,
+            multipleArtistsTitle = multipleArtistsTitle,
+            artistSettings = artistSettings,
+        )
+        .filter { album -> album.id in albumIds }
+        .flatMap { album -> album.songs }
+        .map { item -> item.mediaId }
+        .filter { mediaId -> mediaId.isNotBlank() }
+        .toCollection(linkedSetOf())
+}
+
 internal fun MediaItem.displayTrackNumber(): String {
     val rawTrackNumber = mediaMetadata.trackNumber ?: return MissingAlbumTrackNumberSymbol
     val trackNumber = rawTrackNumber % 1000

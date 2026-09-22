@@ -32,6 +32,7 @@
     <string name="playlist_delete_single_confirm">确认删除此播放列表？</string>
     <string name="playlist_remove_song_confirm">确认删除选中的歌曲?</string>
     <string name="delete_song_title_text">确认删除选中的歌曲?</string>
+    <string name="delete_album_title_text">确认删除选中专辑的所有歌曲?</string>
     <string name="dialog_delete_conform">确认删除</string>
     <plurals name="playlists_count">
         <item quantity="other">%1$d 个播放列表</item>
@@ -329,6 +330,7 @@
     <string name="cloud_music_action_failed">操作失败</string>
     <string name="cloud_music_removed_from_playlist">已从歌单移除</string>
     <string name="cloud_music_created_and_added">已创建并加入</string>
+    <string name="cloud_music_created_add_failed">歌单已创建，添加歌曲失败</string>
     <string name="cloud_music_create_failed">创建失败</string>
     <string name="cloud_music_deleted_playlist">已删除歌单</string>
     <string name="cloud_music_add_to_playlist">加入歌单</string>
@@ -359,6 +361,13 @@
     <string name="listen_together_listened_one_minute">一起听了1分钟</string>
     <string name="listen_together_listened_minutes">一起听了%1$d分钟</string>
     <string name="listen_together_listened_hours_minutes">一起听了%1$d小时%2$d分钟</string>
+    <string name="listen_together_invite_title">一起听邀请</string>
+    <string name="listen_together_invite_message">有人邀请你一起听歌</string>
+    <string name="listen_together_invite_room_id">房间号：%1$s</string>
+    <string name="listen_together_invite_inviter">发起方 ID：%1$s</string>
+    <string name="listen_together_invite_hint">加入后双方会同步歌曲与播放状态</string>
+    <string name="listen_together_invite_accept">加入一起听</string>
+    <string name="listen_together_leave_room">退出一起听</string>
     <string name="cloud_music_album_total_tracks">共 %1$d 首</string>
     <plurals name="cloud_music_album_count">
         <item quantity="other">%1$d 张专辑</item>

@@ -24,6 +24,7 @@ internal fun MainTitleBar(
     onRequestDeleteSelected: () -> Unit,
     onEnterAlbumEditMode: () -> Unit,
     onExitAlbumEditMode: () -> Unit,
+    onRequestDeleteSelectedAlbums: () -> Unit,
     onToggleAlbumViewMode: () -> Unit,
     onAlbumDetailBack: () -> Unit,
     onArtistBack: () -> Unit,
@@ -91,7 +92,7 @@ internal fun MainTitleBar(
                 icon(
                     R.drawable.titlebar_btn_delete_selector,
                     resources.getString(R.string.delete),
-                    {},
+                    onRequestDeleteSelectedAlbums,
                     selectedAlbumCount > 0,
                 )
         }
@@ -177,6 +178,7 @@ internal fun SearchDetailTitleBar(
         onRequestDeleteSelected = {},
         onEnterAlbumEditMode = {},
         onExitAlbumEditMode = {},
+        onRequestDeleteSelectedAlbums = {},
         onToggleAlbumViewMode = {},
         onAlbumDetailBack = onBack,
         onArtistBack = onBack,

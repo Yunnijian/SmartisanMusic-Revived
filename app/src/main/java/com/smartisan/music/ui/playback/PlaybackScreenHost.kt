@@ -78,6 +78,8 @@ internal class PlaybackScreenHost(
     val lifecycleOwner: LifecycleOwner,
     val latestVolume: State<Float>,
     val currentOnLibraryChanged: () -> Unit,
+    val onDismissQueue: () -> Unit,
+    private val queueVisibleState: State<Boolean>,
     volumeState: MutableFloatState,
     snapshotState: MutableState<PlaybackScreenState>,
     livePositionMsState: MutableLongState,
@@ -109,6 +111,10 @@ internal class PlaybackScreenHost(
         get() = favoriteIdsState.value
     val sleepTimerState: PlaybackSleepTimerState
         get() = sleepTimerStateState.value
+
+    /** 播放队列整页是否展开：返回仲裁要读当前值，所以按 State 保存而不是快照值。 */
+    val queueVisible: Boolean
+        get() = queueVisibleState.value
 
     var volume by volumeState
     var state by snapshotState
@@ -287,6 +293,8 @@ internal fun rememberPlaybackScreenHost(
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onLibraryChanged: () -> Unit,
     onFavoriteToggle: ((MediaItem) -> Unit)?,
+    queueVisible: Boolean,
+    onDismissQueue: () -> Unit,
 ): PlaybackScreenHost {
     val controller = LocalPlaybackController.current
     val context = LocalContext.current
@@ -308,6 +316,9 @@ internal fun rememberPlaybackScreenHost(
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnLibraryChanged by rememberUpdatedState(onLibraryChanged)
+    // 队列可见性与关闭动作都由 PlaybackPage 持有，这里按 State 保存最新值供返回仲裁读取。
+    val queueVisibleState = rememberUpdatedState(queueVisible)
+    val currentOnDismissQueue by rememberUpdatedState(onDismissQueue)
     val scratchSoundController =
         remember(context) {
             ScratchSoundController(context)
@@ -396,6 +407,8 @@ internal fun rememberPlaybackScreenHost(
             lifecycleOwner = lifecycleOwner,
             latestVolume = latestVolumeState,
             currentOnLibraryChanged = currentOnLibraryChanged,
+            onDismissQueue = { currentOnDismissQueue() },
+            queueVisibleState = queueVisibleState,
             volumeState = volumeState,
             snapshotState = snapshotState,
             livePositionMsState = livePositionMsState,

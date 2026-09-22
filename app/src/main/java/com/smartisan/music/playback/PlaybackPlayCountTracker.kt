@@ -1,10 +1,12 @@
 package com.smartisan.music.playback
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisan.music.AppDispatchers
+import com.smartisan.music.data.online.runSuspendCatching
 import com.smartisan.music.data.playback.PlaybackStatsRepository
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
@@ -118,7 +120,15 @@ internal class PlaybackPlayCountTracker(
         }
         playback.counted = true
         val countJob = scope.launch(AppDispatchers.IO, start = CoroutineStart.LAZY) {
-            repository.incrementPlayCount(playback.mediaId) ?: return@launch
+            // Room 写失败只记日志：播放计数不值得让服务（甚至进程）跟着倒下。
+            val writtenPlayCount = runSuspendCatching {
+                repository.incrementPlayCount(playback.mediaId)
+            }
+                .onFailure { error -> logPlayCountWriteFailure(error) }
+                .getOrNull()
+            if (writtenPlayCount == null) {
+                return@launch
+            }
             if (notifyAfterWrite) {
                 scope.launch(Dispatchers.Main.immediate) {
                     onPlayCountChanged()
@@ -156,6 +166,13 @@ private fun Set<Job>.snapshot(): List<Job> {
     return synchronized(this) {
         toList()
     }
+}
+
+private fun logPlayCountWriteFailure(error: Throwable) {
+    Log.w(
+        PlaybackDiagnosticsTag,
+        "Play count write failed type=${error.javaClass.simpleName} message=${error.message}",
+    )
 }
 
 private fun MediaItem.countableMediaId(): String? {

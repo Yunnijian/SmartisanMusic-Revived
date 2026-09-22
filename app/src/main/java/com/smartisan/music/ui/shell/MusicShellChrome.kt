@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
@@ -29,6 +30,7 @@ import com.smartisan.music.data.settings.ThemeMode
 import com.smartisan.music.ui.album.AlbumViewMode
 import com.smartisan.music.ui.navigation.MusicDestination
 import com.smartisan.music.ui.navigation.NavigationLayout
+import com.smartisan.music.ui.shell.dialogs.AlbumDeleteConfirmOverlay
 import com.smartisan.music.ui.shell.dialogs.SongDeleteConfirmOverlay
 import com.smartisan.music.ui.shell.playback.PlaybackBarHost
 import com.smartisan.music.ui.shell.tabs.MusicBottomChrome
@@ -295,6 +297,26 @@ private fun BoxScope.ShellChromeOverlays(
         SongDeleteConfirmOverlay(
             onDismiss = uiState::dismissSongDeleteConfirmation,
             onConfirm = { uiState.confirmSongDelete(actions::requestSystemDeleteMediaIds) },
+            modifier = Modifier.fillMaxSize().zIndex(2f),
+        )
+    }
+    if (uiState.showAlbumDeleteConfirm) {
+        // 专辑页展示的分组来自这里这份曲库快照，删除目标按同一规则重算，选中的专辑与屏幕上一致。
+        val unknownAlbumTitle = stringResource(R.string.unknown_album)
+        val multipleArtistsTitle = stringResource(R.string.many_artist)
+        AlbumDeleteConfirmOverlay(
+            onDismiss = uiState::dismissAlbumDeleteConfirmation,
+            onConfirm = {
+                requestAlbumDelete(
+                    viewModel = uiState,
+                    mediaItems = searchMediaItems,
+                    hiddenMediaIds = hiddenMediaIds,
+                    unknownAlbumTitle = unknownAlbumTitle,
+                    multipleArtistsTitle = multipleArtistsTitle,
+                    artistSettings = artistSettings,
+                    requestSystemDeleteMediaIds = actions::requestSystemDeleteMediaIds,
+                )
+            },
             modifier = Modifier.fillMaxSize().zIndex(2f),
         )
     }

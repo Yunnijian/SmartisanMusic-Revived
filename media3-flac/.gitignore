@@ -1,1 +1,4 @@
 /build
+
+# libFLAC checkout fetched by tools/build-flac.sh (see THIRD_PARTY_NOTICES.md).
+/src/main/jni/libflac/

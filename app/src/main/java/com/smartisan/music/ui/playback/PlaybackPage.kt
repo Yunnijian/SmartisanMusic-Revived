@@ -1,7 +1,6 @@
 package com.smartisan.music.ui.playback
 
 import android.content.Context
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -123,10 +122,6 @@ internal fun PlaybackPage(
         }
     }
 
-    BackHandler(enabled = queueVisible) {
-        queueVisible = false
-    }
-
     BoxWithConstraints(
         modifier = modifier.fillMaxSize().background(colorResource(R.color.page_background))
     ) {
@@ -236,6 +231,8 @@ internal fun PlaybackPage(
                 onScratchEnabledChange = onScratchEnabledChange,
                 onFavoriteToggle = onFavoriteToggle,
                 onCollapse = onCollapse,
+                queueVisible = queueVisible,
+                onDismissQueue = { queueVisible = false },
                 showTopBar = false,
                 modifier = Modifier.fillMaxSize().padding(top = titleTopPadding),
             )

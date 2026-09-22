@@ -71,9 +71,12 @@ class PlaybackSessionStateCoordinatorTest {
         val second = MediaItem.Builder().setMediaId("same").build()
         val snapshot =
             PlaybackSessionSnapshot(
-                mediaIds = listOf("same", "same"),
-                currentMediaId = "same",
-                currentIndex = 1,
+                queue = PlaybackSessionQueueSnapshot(mediaIds = listOf("same", "same")),
+                progress =
+                    PlaybackSessionProgressSnapshot(
+                        currentMediaId = "same",
+                        currentIndex = 1,
+                    ),
             )
 
         assertEquals(1, restoredQueueIndex(snapshot, listOf(first, second)))
@@ -85,15 +88,21 @@ class PlaybackSessionStateCoordinatorTest {
         val studio = MediaItem.Builder().setMediaId("studio").build()
         val snapshot =
             PlaybackSessionSnapshot(
-                mediaIds = listOf("missing", "live", "studio"),
-                queueItems =
-                    listOf(
-                        PlaybackQueueSnapshotItem(mediaId = "missing"),
-                        PlaybackQueueSnapshotItem(mediaId = "live"),
-                        PlaybackQueueSnapshotItem(mediaId = "studio"),
+                queue =
+                    PlaybackSessionQueueSnapshot(
+                        mediaIds = listOf("missing", "live", "studio"),
+                        queueItems =
+                            listOf(
+                                PlaybackQueueSnapshotItem(mediaId = "missing"),
+                                PlaybackQueueSnapshotItem(mediaId = "live"),
+                                PlaybackQueueSnapshotItem(mediaId = "studio"),
+                            ),
                     ),
-                currentMediaId = "live",
-                currentIndex = 1,
+                progress =
+                    PlaybackSessionProgressSnapshot(
+                        currentMediaId = "live",
+                        currentIndex = 1,
+                    ),
             )
 
         assertEquals(0, restoredQueueIndex(snapshot, listOf(live, studio)))

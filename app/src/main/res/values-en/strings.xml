@@ -32,6 +32,7 @@
     <string name="playlist_delete_single_confirm">Delete this playlist?</string>
     <string name="playlist_remove_song_confirm">Remove selected songs?</string>
     <string name="delete_song_title_text">Delete selected songs?</string>
+    <string name="delete_album_title_text">Delete every song in the selected albums?</string>
     <string name="dialog_delete_conform">Confirm delete</string>
     <plurals name="playlists_count">
         <item quantity="one">%1$d playlist</item>
@@ -228,4 +229,11 @@
     <string name="navigation_editor_unpin_replacing">Move to More and replace its first item</string>
     <string name="navigation_editor_item_moved">Moved %1$s</string>
     <string name="navigation_editor_items_swapped">Swapped %1$s and %2$s</string>
+    <string name="listen_together_invite_title">Listen together invite</string>
+    <string name="listen_together_invite_message">Someone invited you to listen together</string>
+    <string name="listen_together_invite_room_id">Room: %1$s</string>
+    <string name="listen_together_invite_inviter">Inviter ID: %1$s</string>
+    <string name="listen_together_invite_hint">Joining syncs songs and playback with each other</string>
+    <string name="listen_together_invite_accept">Join</string>
+    <string name="listen_together_leave_room">Leave listen together</string>
 </resources>

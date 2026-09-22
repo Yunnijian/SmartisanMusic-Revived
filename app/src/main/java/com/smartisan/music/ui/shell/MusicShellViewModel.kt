@@ -150,6 +150,7 @@ internal class MusicShellViewModel : ViewModel() {
     fun exitAlbumEditMode() {
         albumEditMode = false
         selectedAlbumIds = emptySet()
+        dismissAlbumDeleteConfirmation()
     }
 
     fun selectSongRow(mediaId: String, selected: Boolean) {
@@ -193,6 +194,8 @@ internal class MusicShellViewModel : ViewModel() {
     var showSongDeleteConfirm: Boolean by mutableStateOf(false)
     var pendingSongDeleteMediaIds: Set<String> by mutableStateOf(emptySet())
     var pendingSongDeleteDismissAction: (() -> Unit)? by mutableStateOf(null)
+    var showAlbumDeleteConfirm: Boolean by mutableStateOf(false)
+    var pendingAlbumDeleteAlbumIds: Set<String> by mutableStateOf(emptySet())
     var pendingPlaylistPickerMediaItems: List<MediaItem>? by mutableStateOf(null)
     var pendingTrackActionItem: MediaItem? by mutableStateOf(null)
     var pendingTrackActionSource: TrackActionSource by mutableStateOf(TrackActionSource.Library)
@@ -261,6 +264,32 @@ internal class MusicShellViewModel : ViewModel() {
         if (selectedSongIds.isNotEmpty()) {
             requestSongDeleteConfirmation(selectedSongIds)
         }
+    }
+
+    /** 专辑多选：没有选中项时不开确认弹层。 */
+    fun requestDeleteSelectedAlbums() {
+        if (selectedAlbumIds.isNotEmpty()) {
+            pendingAlbumDeleteAlbumIds = selectedAlbumIds
+            showAlbumDeleteConfirm = true
+        }
+    }
+
+    fun dismissAlbumDeleteConfirmation() {
+        showAlbumDeleteConfirm = false
+        pendingAlbumDeleteAlbumIds = emptySet()
+    }
+
+    /** 确认删除：先清界面状态（退出多选），再交给调用方按专辑解析曲目并走系统授权删除。 */
+    fun confirmAlbumDelete(onDeleted: (Set<String>) -> Unit) {
+        val albumIds = pendingAlbumDeleteAlbumIds
+        if (albumIds.isEmpty()) {
+            dismissAlbumDeleteConfirmation()
+            return
+        }
+        dismissAlbumDeleteConfirmation()
+        albumEditMode = false
+        selectedAlbumIds = emptySet()
+        onDeleted(albumIds)
     }
 
     fun dismissSongDeleteConfirmation() {

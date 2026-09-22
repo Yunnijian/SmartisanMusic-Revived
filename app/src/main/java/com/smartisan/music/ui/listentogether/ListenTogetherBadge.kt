@@ -4,6 +4,8 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +42,7 @@ import com.smartisan.music.LocalMusicAppContainer
 import com.smartisan.music.R
 import com.smartisan.music.listentogether.ListenTogetherConnectionState
 import com.smartisan.music.ui.cloud.components.CloudMusicCoverImage
+import com.smartisan.music.ui.components.smartisanClick
 
 /**
  * 播放页碟片下方的「一起听」状态：双头像 + 耳机装饰弧 + 累计时长。
@@ -89,6 +92,8 @@ internal fun ListenTogetherBadge(
 /**
  * 播放页舞台内的接线：自己头像只在会话开始后取一次（资料在房间存续期间不变），
  * 可见性由「已连上且房间里确实有对方」驱动，整块 300ms 淡入淡出。
+ *
+ * 徽标同时是「一起听」唯一的常驻入口：点一下弹房间面板，退出房间在里面。
  */
 @Composable
 internal fun ListenTogetherStatusOverlay(modifier: Modifier = Modifier) {
@@ -96,6 +101,7 @@ internal fun ListenTogetherStatusOverlay(modifier: Modifier = Modifier) {
     val store = container.listenTogetherStore
     val state by store.state.collectAsState()
     var selfAvatarUrl by remember { mutableStateOf<String?>(null) }
+    var roomSheetVisible by remember { mutableStateOf(false) }
     LaunchedEffect(store) {
         selfAvatarUrl = container.onlineRepositoryRouter.currentUserProfile()?.avatarUrl
     }
@@ -112,12 +118,28 @@ internal fun ListenTogetherStatusOverlay(modifier: Modifier = Modifier) {
     if (!visible && alpha == 0f) {
         return
     }
-    ListenTogetherBadge(
-        selfAvatarUrl = selfAvatarUrl,
-        otherAvatarUrl = state.otherMember?.avatarUrl,
-        totalSeconds = (state.accumulatedSeconds + state.thisRoomSeconds).coerceAtLeast(60L),
-        modifier = modifier.alpha(alpha),
-    )
+    Box(
+        modifier =
+            modifier.alpha(alpha).clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = smartisanClick { roomSheetVisible = true },
+            )
+    ) {
+        ListenTogetherBadge(
+            selfAvatarUrl = selfAvatarUrl,
+            otherAvatarUrl = state.otherMember?.avatarUrl,
+            totalSeconds = togetherTotalSeconds(state.accumulatedSeconds, state.thisRoomSeconds),
+        )
+    }
+    if (roomSheetVisible) {
+        ListenTogetherRoomSheet(onDismiss = { roomSheetVisible = false })
+    }
+}
+
+/** 徽标与房间面板共用的累计时长：历史累计 + 本房间本地计时，不足一分钟按一分钟展示。 */
+internal fun togetherTotalSeconds(accumulatedSeconds: Long, thisRoomSeconds: Long): Long {
+    return (accumulatedSeconds + thisRoomSeconds).coerceAtLeast(60L)
 }
 
 /**

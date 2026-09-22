@@ -6,6 +6,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -40,6 +41,7 @@ import com.smartisan.music.data.playback.PlaybackStatsRepository
 import com.smartisan.music.data.settings.PlaybackSettingsStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -74,7 +76,21 @@ class PlaybackService : MediaLibraryService() {
     private var playbackMetadataPreloader: PlaybackMetadataPreloader? = null
     private var mediaSessionArtworkBitmapLoader: MediaSessionArtworkBitmapLoader? = null
     private val onlinePlaybackErrorToastNotifier = OnlinePlaybackErrorToastNotifier()
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * 服务里跑的都是「可以失败但服务必须活着」的后台作业：DataStore/Room 写失败、
+     * 在线刷新异常之类不该把进程一起带走，统一在这里收敛成日志。
+     */
+    private val serviceCoroutineExceptionHandler = CoroutineExceptionHandler { _, error ->
+        Log.w(
+            PlaybackDiagnosticsTag,
+            "Service coroutine failed type=${error.javaClass.simpleName} message=${error.message}",
+            error,
+        )
+    }
+    private val serviceScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + serviceCoroutineExceptionHandler,
+    )
     private val playbackStartFadeController = PlaybackStartFadeController(serviceScope)
     @Volatile private var exclusionsSnapshot: LibraryExclusions = LibraryExclusions()
     private val exclusionsReady = CompletableDeferred<LibraryExclusions>()
@@ -361,13 +377,18 @@ class PlaybackService : MediaLibraryService() {
         // 收尾落盘故意保持同步且不加超时：onDestroy 返回后进程随时可能被杀，异步写会丢队列快照与播放计数；
         // 而任何超时都可能在写请求真正提交进 DataStore 之前取消协程，把「必落盘」变成静默丢失。
         // 主线程在这几毫秒到几十毫秒的阻塞上换来的是杀进程后播放位置不丢。
+        // 写失败只记日志（见 flushShutdownStateQuietly）：异常从生命周期回调里逃出去就是进程崩溃。
         playbackSessionStateCoordinator?.let { coordinator ->
-            runBlocking { coordinator.saveNow() }
+            runBlocking {
+                flushShutdownStateQuietly(stage = "session-state") { coordinator.saveNow() }
+            }
             coordinator.stop()
         }
         playbackSessionStateCoordinator = null
         playbackPlayCountTracker?.let { tracker ->
-            runBlocking { tracker.stopAndFlush() }
+            runBlocking {
+                flushShutdownStateQuietly(stage = "play-count") { tracker.stopAndFlush() }
+            }
         }
         playbackPlayCountTracker = null
         playbackStatsSync.cancelPendingRefreshes()
@@ -401,6 +422,28 @@ class PlaybackService : MediaLibraryService() {
         libraryRefreshExecutor.shutdown()
 
         super.onDestroy()
+    }
+
+    /**
+     * onDestroy 里的同步收尾写：失败只记日志。
+     *
+     * 这里连 [CancellationException] 一起吞掉是有意的：runBlocking 的作业没有外部取消方，
+     * 收到的取消只可能来自写内部（例如 DataStore 事务被打断），而从 Service 生命周期回调里
+     * 抛出去等于让进程崩溃——代价远大于少写这一次。后续拆卸（stop/release）必须照常走完。
+     */
+    private suspend fun flushShutdownStateQuietly(stage: String, flush: suspend () -> Unit) {
+        try {
+            flush()
+        } catch (error: CancellationException) {
+            Log.w(PlaybackDiagnosticsTag, "Shutdown flush cancelled stage=$stage")
+        } catch (error: Exception) {
+            Log.w(
+                PlaybackDiagnosticsTag,
+                "Shutdown flush failed stage=$stage type=${error.javaClass.simpleName} " +
+                    "message=${error.message}",
+                error,
+            )
+        }
     }
 
     /** 按当前播放器状态发布一帧歌词；publisher 内部做帧去重。 */

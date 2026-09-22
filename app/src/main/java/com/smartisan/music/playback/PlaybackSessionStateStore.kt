@@ -1,7 +1,10 @@
 package com.smartisan.music.playback
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -10,34 +13,47 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.media3.common.Player
-import java.io.IOException
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
 
-private const val PlaybackSessionStateStoreName = "playback_session_state"
+private const val PlaybackSessionQueueStoreName = "playback_session_state"
+private const val PlaybackSessionProgressStoreName = "playback_session_progress"
 private const val MediaIdSeparator = "\n"
 private const val QueueItemSeparator = "\n"
 private const val QueueItemFieldSeparator = "\t"
 
-private val Context.playbackSessionStateDataStore by preferencesDataStore(
-    name = PlaybackSessionStateStoreName,
+private val Context.playbackSessionQueueDataStore by preferencesDataStore(
+    name = PlaybackSessionQueueStoreName,
     corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
-internal data class PlaybackSessionSnapshot(
+private val Context.playbackSessionProgressDataStore by preferencesDataStore(
+    name = PlaybackSessionProgressStoreName,
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
+
+/** 整队列快照：条目数与文本量都随队列规模增长，只在队列结构变化时写。 */
+internal data class PlaybackSessionQueueSnapshot(
     val mediaIds: List<String> = emptyList(),
     val queueItems: List<PlaybackQueueSnapshotItem> = mediaIds.map { mediaId ->
         PlaybackQueueSnapshotItem(mediaId = mediaId)
     },
+)
+
+/** 轻量进度：播放中周期保存只写这几个键，与队列内容无关。 */
+internal data class PlaybackSessionProgressSnapshot(
     val currentMediaId: String? = null,
     val currentIndex: Int = 0,
     val positionMs: Long = 0L,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val shuffleModeEnabled: Boolean = false,
+)
+
+/** 一次恢复需要的全部状态：队列来自队列文件，进度来自进度文件（见 [PlaybackSessionStateStore]）。 */
+internal data class PlaybackSessionSnapshot(
+    val queue: PlaybackSessionQueueSnapshot = PlaybackSessionQueueSnapshot(),
+    val progress: PlaybackSessionProgressSnapshot = PlaybackSessionProgressSnapshot(),
 )
 
 internal data class PlaybackQueueSnapshotItem(
@@ -50,47 +66,163 @@ internal data class PlaybackQueueSnapshotItem(
     val artworkUri: String = "",
 )
 
-internal class PlaybackSessionStateStore(private val context: Context) {
+/**
+ * 播放会话状态的落盘。队列与进度分两个 preferences 文件存放，因为 DataStore 每次
+ * `edit` 都会整份重写文件：两者同文件时，播放中每 15s 的周期保存都要把几千首的队列文本
+ * 重新序列化、连 fsync 一起写一遍。
+ *
+ * - 队列文件 [PlaybackSessionQueueStoreName]：`media_ids` + `queue_items`，只在队列结构变化时写；
+ * - 进度文件 [PlaybackSessionProgressStoreName]：positionMs/currentIndex 等几个小键，随播放周期写。
+ *
+ * 键名沿用老版本单文件时的写法，所以老文件（队列与进度存在同一个文件里）能被原样读出来。
+ *
+ * 两个 [DataStore] 由构造函数注入，生产走 [Context] 上的委托（[Context.playbackSessionQueueDataStore]
+ * 等两个同名文件）；单测则在临时目录里建同样的两个真实文件，好断言「这一次落盘动了哪个文件」。
+ */
+internal class PlaybackSessionStateStore(
+    private val queueDataStore: DataStore<Preferences>,
+    private val progressDataStore: DataStore<Preferences>,
+) {
 
-    val snapshot: Flow<PlaybackSessionSnapshot> =
-        context.playbackSessionStateDataStore.data
-            .catch { error ->
-                if (error is IOException) emit(emptyPreferences()) else throw error
-            }
-            .map { preferences ->
-                val mediaIds = preferences[MediaIdsKey].orEmpty().decodeMediaIds()
-                PlaybackSessionSnapshot(
-                    mediaIds = mediaIds,
-                    queueItems =
-                        preferences[QueueItemsKey]
-                            ?.decodeQueueItemsFromStore()
-                            ?.takeIf(List<PlaybackQueueSnapshotItem>::isNotEmpty)
-                            ?: mediaIds.map { mediaId ->
-                                PlaybackQueueSnapshotItem(mediaId = mediaId)
-                            },
-                    currentMediaId = preferences[CurrentMediaIdKey]?.takeIf(String::isNotBlank),
-                    currentIndex = preferences[CurrentIndexKey] ?: 0,
-                    positionMs = preferences[PositionMsKey] ?: 0L,
-                    repeatMode = preferences[RepeatModeKey] ?: Player.REPEAT_MODE_OFF,
-                    shuffleModeEnabled = preferences[ShuffleModeEnabledKey] ?: false,
-                )
-            }
+    constructor(context: Context) : this(
+        queueDataStore = context.playbackSessionQueueDataStore,
+        progressDataStore = context.playbackSessionProgressDataStore,
+    )
 
-    suspend fun load(): PlaybackSessionSnapshot = snapshot.first()
+    /** 队列文件里的遗留进度键只在升级后的首次成功写进度时清一次，之后不再碰队列文件。 */
+    private var legacyProgressKeysPurged = false
 
-    suspend fun save(snapshot: PlaybackSessionSnapshot) {
-        context.playbackSessionStateDataStore.edit { preferences ->
-            preferences[MediaIdsKey] = snapshot.mediaIds.encodeMediaIds()
-            preferences[QueueItemsKey] = snapshot.queueItems.encodeQueueItemsForStore()
-            snapshot.currentMediaId?.let { currentMediaId ->
-                preferences[CurrentMediaIdKey] = currentMediaId
-            } ?: preferences.remove(CurrentMediaIdKey)
-            preferences[CurrentIndexKey] = snapshot.currentIndex
-            preferences[PositionMsKey] = snapshot.positionMs.coerceAtLeast(0L)
-            preferences[RepeatModeKey] = snapshot.repeatMode
-            preferences[ShuffleModeEnabledKey] = snapshot.shuffleModeEnabled
-        }
+    /**
+     * 读盘：两个文件各自缺失、被损坏处理器清空，或队列条目编码残缺，都只退化成默认值
+     * （空队列 / 0 进度）。
+     *
+     * 文件本身读写失败（IOException）不在这里吞掉，交给调用方决定：`PlaybackSessionStateCoordinator`
+     * 读不到就这一次不恢复也不落盘，免得拿空状态覆盖掉盘上的旧队列。
+     *
+     * 升级后的首次恢复时进度文件还是空的，此时回退读老文件里的进度键，续播位置不会丢一次。
+     */
+    suspend fun load(): PlaybackSessionSnapshot {
+        val queuePreferences = queueDataStore.data.first()
+        val progressPreferences = progressDataStore.data.first()
+        return PlaybackSessionSnapshot(
+            queue = queuePreferences.toPlaybackSessionQueueSnapshot(),
+            progress = resolvePlaybackSessionProgressSnapshot(
+                progressPreferences = progressPreferences,
+                legacyQueuePreferences = queuePreferences,
+            ),
+        )
     }
+
+    /**
+     * 整队列落盘。队列先写、进度后写：两次写之间被杀最坏是「新队列 + 旧进度」，
+     * 恢复时按 mediaId 重新定位（对不上就从 0 开始），不会串歌。
+     */
+    suspend fun saveQueueSnapshot(
+        queue: PlaybackSessionQueueSnapshot,
+        progress: PlaybackSessionProgressSnapshot,
+    ) {
+        queueDataStore.edit { preferences ->
+            preferences[MediaIdsKey] = queue.mediaIds.encodeMediaIds()
+            preferences[QueueItemsKey] = queue.queueItems.encodeQueueItemsForStore()
+        }
+        saveProgressSnapshot(progress)
+    }
+
+    /**
+     * 仅进度落盘：常规情况下只写进度文件，不动队列文件。唯一例外是升级后的首次成功写入，
+     * 顺带删掉队列文件里的遗留进度键（[purgeLegacyProgressKeysOnce]）。
+     */
+    suspend fun saveProgressSnapshot(progress: PlaybackSessionProgressSnapshot) {
+        progressDataStore.edit { preferences ->
+            progress.writeTo(preferences)
+        }
+        purgeLegacyProgressKeysOnce()
+    }
+
+    /**
+     * 单文件布局时代进度键留在队列文件里；新进度文件写入成功后，这些键就成了陈旧回退源
+     * （进度文件损坏或被清空时会读到升级前的位置）。首次成功写进度后删掉一次，之后不再碰队列文件。
+     */
+    private suspend fun purgeLegacyProgressKeysOnce() {
+        if (legacyProgressKeysPurged) return
+        val queuePreferences = queueDataStore.data.first()
+        val hasLegacyKeys =
+            queuePreferences.contains(CurrentMediaIdKey) ||
+                queuePreferences.contains(CurrentIndexKey) ||
+                queuePreferences.contains(PositionMsKey) ||
+                queuePreferences.contains(RepeatModeKey) ||
+                queuePreferences.contains(ShuffleModeEnabledKey)
+        if (hasLegacyKeys) {
+            queueDataStore.edit { preferences ->
+                preferences.remove(CurrentMediaIdKey)
+                preferences.remove(CurrentIndexKey)
+                preferences.remove(PositionMsKey)
+                preferences.remove(RepeatModeKey)
+                preferences.remove(ShuffleModeEnabledKey)
+            }
+        }
+        legacyProgressKeysPurged = true
+    }
+}
+
+internal fun Preferences.toPlaybackSessionQueueSnapshot(): PlaybackSessionQueueSnapshot {
+    val mediaIds = this[MediaIdsKey].orEmpty().decodeMediaIds()
+    return PlaybackSessionQueueSnapshot(
+        mediaIds = mediaIds,
+        queueItems =
+            this[QueueItemsKey]
+                ?.decodeQueueItemsFromStore()
+                ?.takeIf(List<PlaybackQueueSnapshotItem>::isNotEmpty)
+                ?: mediaIds.map { mediaId ->
+                    PlaybackQueueSnapshotItem(mediaId = mediaId)
+                },
+    )
+}
+
+/**
+ * 读进度：进度文件优先，还没写过（刚升级、或文件被损坏处理器清空）时回退读老文件里同名的键，
+ * 两处都没有才用默认值。键名在新旧文件里一致，所以两个文件共用这一个读取函数。
+ */
+internal fun resolvePlaybackSessionProgressSnapshot(
+    progressPreferences: Preferences,
+    legacyQueuePreferences: Preferences,
+): PlaybackSessionProgressSnapshot {
+    return progressPreferences.toPlaybackSessionProgressSnapshot()
+        ?: legacyQueuePreferences.toPlaybackSessionProgressSnapshot()
+        ?: PlaybackSessionProgressSnapshot()
+}
+
+/** 一个进度键都没有（而非「都是默认值」）时返回 null，交由调用方决定是否回退。 */
+internal fun Preferences.toPlaybackSessionProgressSnapshot(): PlaybackSessionProgressSnapshot? {
+    if (
+        CurrentMediaIdKey !in this &&
+        CurrentIndexKey !in this &&
+        PositionMsKey !in this &&
+        RepeatModeKey !in this &&
+        ShuffleModeEnabledKey !in this
+    ) {
+        return null
+    }
+    return PlaybackSessionProgressSnapshot(
+        currentMediaId = this[CurrentMediaIdKey]?.takeIf(String::isNotBlank),
+        currentIndex = this[CurrentIndexKey] ?: 0,
+        positionMs = this[PositionMsKey] ?: 0L,
+        repeatMode = this[RepeatModeKey] ?: Player.REPEAT_MODE_OFF,
+        shuffleModeEnabled = this[ShuffleModeEnabledKey] ?: false,
+    )
+}
+
+private fun PlaybackSessionProgressSnapshot.writeTo(preferences: MutablePreferences) {
+    val savedMediaId = currentMediaId
+    if (savedMediaId == null) {
+        preferences.remove(CurrentMediaIdKey)
+    } else {
+        preferences[CurrentMediaIdKey] = savedMediaId
+    }
+    preferences[CurrentIndexKey] = currentIndex
+    preferences[PositionMsKey] = positionMs.coerceAtLeast(0L)
+    preferences[RepeatModeKey] = repeatMode
+    preferences[ShuffleModeEnabledKey] = shuffleModeEnabled
 }
 
 private fun List<String>.encodeMediaIds(): String {

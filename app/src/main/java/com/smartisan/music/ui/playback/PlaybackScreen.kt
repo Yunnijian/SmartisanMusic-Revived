@@ -18,6 +18,8 @@ fun PlaybackScreen(
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
     onLibraryChanged: () -> Unit = {},
     onFavoriteToggle: ((MediaItem) -> Unit)? = null,
+    queueVisible: Boolean = false,
+    onDismissQueue: () -> Unit = {},
     showTopBar: Boolean = true,
 ) {
     val host =
@@ -29,6 +31,8 @@ fun PlaybackScreen(
             onRequestAddToQueue = onRequestAddToQueue,
             onLibraryChanged = onLibraryChanged,
             onFavoriteToggle = onFavoriteToggle,
+            queueVisible = queueVisible,
+            onDismissQueue = onDismissQueue,
         )
     PlaybackScreenLayout(
         host = host,

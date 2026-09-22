@@ -6,11 +6,22 @@ import androidx.media3.common.MediaItem
 import com.smartisan.music.data.settings.NeteaseVipLevel
 import kotlinx.coroutines.CancellationException
 
+/**
+ * 在线音乐分派层。
+ *
+ * [neteaseRepository] 承担网易云独有的接口（登录、播放解析、资料与音质）；账号数据面（喜欢状态、
+ * 我喜欢列表、歌单增删）统一走 [accountRepository]，让这部分直接改用户账号数据的逻辑可以脱离网络
+ * 与完整仓库构造被验证。
+ *
+ * 归档冲突预警：当前是网易云单源，[accountRepository] 固定为 [NeteaseAccountRepositoryAdapter]，
+ * 账号面不再按 provider 分派。若将来从 archive/qq-source 复活 QQ 音源，这层缝必须改回
+ * provider-aware 分派，否则 QQ 侧歌单/喜欢会被写进网易云账号。
+ */
 internal class OnlineMusicRepositoryRouter(
-    context: Context,
-    private val neteaseRepository: NeteaseOnlineMusicRepository =
-        NeteaseOnlineMusicRepository(context.applicationContext),
+    private val neteaseRepository: NeteaseOnlineMusicRepository,
+    private val accountRepository: OnlineAccountRepository = NeteaseAccountRepositoryAdapter(neteaseRepository),
 ) {
+    constructor(context: Context) : this(NeteaseOnlineMusicRepository(context.applicationContext))
 
     /**
      * 执行一次在线拉取：失败时返回 [fallback]。
@@ -150,7 +161,7 @@ internal class OnlineMusicRepositoryRouter(
         liked: Boolean,
     ): NeteaseAccountActionResult {
         return when (identity.source) {
-            OnlineMusicProvider.Netease.sourceId -> neteaseRepository.setTrackLiked(
+            OnlineMusicProvider.Netease.sourceId -> accountRepository.setTrackLiked(
                 trackId = identity.trackId,
                 liked = liked,
             )
@@ -162,7 +173,7 @@ internal class OnlineMusicRepositoryRouter(
      * 账号「我喜欢」的纯数字 trackId 集合；未登录、无内容或失败返回 null。
      */
     suspend fun accountLikedTrackIds(): Set<String>? {
-        return runOnlineFetch(null) { neteaseRepository.accountLikedTrackIds() }
+        return runOnlineFetch(null) { accountRepository.accountLikedTrackIds() }
     }
 
     /** 当前登录账号的音质权益档次；未登录或失败返回 null（调用方按未知处理）。 */
@@ -185,7 +196,7 @@ internal class OnlineMusicRepositoryRouter(
      */
     suspend fun accountLikedTrackMediaItems(): List<MediaItem> {
         return runOnlineFetch(emptyList()) {
-            neteaseRepository.currentUserLikedTracks()
+            accountRepository.currentUserLikedTracks()
                 .orEmpty()
                 .map { track -> track.toMediaItem().withOnlinePlaybackPlaceholderUri() }
         }
@@ -205,7 +216,7 @@ internal class OnlineMusicRepositoryRouter(
         if (trackIds.isEmpty()) {
             return NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
         }
-        return repositoryFor(playlist.provider).addTracksToAccountPlaylist(
+        return accountRepository.addTracksToAccountPlaylist(
             playlist = playlist,
             trackIds = trackIds,
         )
@@ -225,7 +236,7 @@ internal class OnlineMusicRepositoryRouter(
         if (trackIds.isEmpty()) {
             return NeteaseAccountActionResult(NeteaseAccountActionStatus.Failed)
         }
-        return repositoryFor(playlist.provider).removeTracksFromAccountPlaylist(
+        return accountRepository.removeTracksFromAccountPlaylist(
             playlist = playlist,
             trackIds = trackIds,
         )
@@ -234,7 +245,7 @@ internal class OnlineMusicRepositoryRouter(
     suspend fun deleteAccountPlaylist(
         playlist: OnlineAccountPlaylist,
     ): NeteaseAccountActionResult {
-        return repositoryFor(playlist.provider).deleteAccountPlaylist(playlist)
+        return accountRepository.deleteAccountPlaylist(playlist)
     }
 
     suspend fun createListenTogetherRoom(): ListenTogetherCreateResult {
@@ -332,4 +343,62 @@ internal class OnlineMusicRepositoryRouter(
             }
         }
     }
+}
+
+/**
+ * 账号数据面：会改动用户账号数据的读写（喜欢状态、我喜欢列表、歌单增删）。
+ *
+ * Router 的其余方法直接调用 [NeteaseOnlineMusicRepository] 的成员与扩展函数；只有账号域抽成接口，
+ * 因为它是唯一直接改用户数据、且真实实现必须登录联网才有结果的部分——没有这层接口，
+ * 分派与状态透传就只能靠真机验证。
+ */
+internal interface OnlineAccountRepository {
+    suspend fun setTrackLiked(trackId: String, liked: Boolean): NeteaseAccountActionResult
+
+    suspend fun accountLikedTrackIds(): Set<String>?
+
+    suspend fun currentUserLikedTracks(): List<OnlineTrack>?
+
+    suspend fun addTracksToAccountPlaylist(
+        playlist: OnlineAccountPlaylist,
+        trackIds: List<String>,
+    ): NeteaseAccountActionResult
+
+    suspend fun removeTracksFromAccountPlaylist(
+        playlist: OnlineAccountPlaylist,
+        trackIds: List<String>,
+    ): NeteaseAccountActionResult
+
+    suspend fun deleteAccountPlaylist(playlist: OnlineAccountPlaylist): NeteaseAccountActionResult
+}
+
+private class NeteaseAccountRepositoryAdapter(
+    private val repository: NeteaseOnlineMusicRepository,
+) : OnlineAccountRepository {
+    override suspend fun setTrackLiked(trackId: String, liked: Boolean): NeteaseAccountActionResult =
+        repository.setTrackLiked(trackId = trackId, liked = liked)
+
+    override suspend fun accountLikedTrackIds(): Set<String>? = repository.accountLikedTrackIds()
+
+    override suspend fun currentUserLikedTracks(): List<OnlineTrack>? = repository.currentUserLikedTracks()
+
+    override suspend fun addTracksToAccountPlaylist(
+        playlist: OnlineAccountPlaylist,
+        trackIds: List<String>,
+    ): NeteaseAccountActionResult = repository.addTracksToAccountPlaylist(
+        playlist = playlist,
+        trackIds = trackIds,
+    )
+
+    override suspend fun removeTracksFromAccountPlaylist(
+        playlist: OnlineAccountPlaylist,
+        trackIds: List<String>,
+    ): NeteaseAccountActionResult = repository.removeTracksFromAccountPlaylist(
+        playlist = playlist,
+        trackIds = trackIds,
+    )
+
+    override suspend fun deleteAccountPlaylist(
+        playlist: OnlineAccountPlaylist,
+    ): NeteaseAccountActionResult = repository.deleteAccountPlaylist(playlist)
 }

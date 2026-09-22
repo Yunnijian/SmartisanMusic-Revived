@@ -34,7 +34,6 @@ internal suspend fun NeteaseCloudMusicClient.sendLoginSmsCode(
             anonymous = true,
         )
     }.getOrNull() ?: return@withContext NeteaseSmsSendResult(NeteaseAccountActionStatus.Failed)
-    android.util.Log.d("NeteasePhoneDbg", "sms/sent resp=$response")
     parseNeteaseLoginCodeResponse(response)
 }
 
@@ -61,10 +60,6 @@ internal suspend fun NeteaseCloudMusicClient.loginWithPhone(
             anonymous = true,
         )
     }.getOrNull() ?: return@withContext NeteasePhoneLoginResult(NeteaseAccountActionStatus.Failed)
-    android.util.Log.d(
-        "NeteasePhoneDbg",
-        "login/cellphone keys=${params.keys} phoneLen=${safePhone.length} codeLen=${safeCode.length} resp=$response",
-    )
     parseNeteasePhoneLoginResponse(response)
 }
 

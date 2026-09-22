@@ -31,6 +31,7 @@ import com.smartisan.music.data.settings.ThemeSettingsStore
 import com.smartisan.music.listentogether.ListenTogetherInviteHost
 import com.smartisan.music.listentogether.ListenTogetherInvitePath
 import com.smartisan.music.listentogether.ListenTogetherShortHost
+import com.smartisan.music.listentogether.dispatchListenTogetherInviteDeepLink
 import com.smartisan.music.ui.artwork.AlbumArtworkBrowserHost
 import com.smartisan.music.ui.components.audioPermission
 import com.smartisan.music.ui.components.hasAudioPermission
@@ -109,8 +110,12 @@ class MainActivity : AppCompatActivity() {
 
         val listenTogetherUrl = launchIntent.listenTogetherInviteUrlOrNull()
         if (listenTogetherUrl != null && !isConsumedListenTogetherInvite(launchIntent)) {
-            (application as SmartisanMusicApplication).musicAppContainer
-                .listenTogetherStore.joinRoomFromUrl(listenTogetherUrl)
+            // 只登记待确认邀请，弹窗与入房由「一起听」自己走
+            // （见 ListenTogetherStore.offerJoinFromUrl / confirmPendingInvite）。
+            dispatchListenTogetherInviteDeepLink(
+                (application as SmartisanMusicApplication).musicAppContainer.listenTogetherStore,
+                listenTogetherUrl,
+            )
             launchIntent.putExtra(ExtraListenTogetherConsumed, true)
             return
         }

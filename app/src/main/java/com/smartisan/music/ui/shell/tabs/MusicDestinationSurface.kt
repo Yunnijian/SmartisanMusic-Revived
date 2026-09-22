@@ -109,6 +109,7 @@ internal fun MusicDestinationSurface(
                         onRequestDeleteSelected = uiState::requestDeleteSelectedSongs,
                         onEnterAlbumEditMode = uiState::enterAlbumEditMode,
                         onExitAlbumEditMode = uiState::exitAlbumEditMode,
+                        onRequestDeleteSelectedAlbums = uiState::requestDeleteSelectedAlbums,
                         onToggleAlbumViewMode = onToggleAlbumViewMode,
                         onAlbumDetailBack = uiState::closeAlbumDetail,
                         onArtistBack = uiState::closeArtistDetail,

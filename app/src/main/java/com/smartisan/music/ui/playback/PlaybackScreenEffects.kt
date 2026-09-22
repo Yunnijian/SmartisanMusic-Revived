@@ -101,12 +101,18 @@ internal fun rememberPlaybackDeleteCoordinator(
 @Composable
 internal fun PlaybackScreenSessionEffects(host: PlaybackScreenHost) {
     BackHandler {
-        if (host.showSleepTimerDialog) {
-            host.showSleepTimerDialog = false
-        } else if (host.showMorePanel) {
-            host.showMorePanel = false
-        } else {
-            host.onCollapse()
+        // 单次仲裁（含「队列可见」），见 PlaybackBackNavigation；值都在按键时读取，不会读到旧值。
+        when (
+            playbackBackTarget(
+                showSleepTimerDialog = host.showSleepTimerDialog,
+                showMorePanel = host.showMorePanel,
+                queueVisible = host.queueVisible,
+            )
+        ) {
+            PlaybackBackTarget.DismissSleepTimerDialog -> host.showSleepTimerDialog = false
+            PlaybackBackTarget.DismissMorePanel -> host.showMorePanel = false
+            PlaybackBackTarget.DismissQueue -> host.onDismissQueue()
+            PlaybackBackTarget.Collapse -> host.onCollapse()
         }
     }
 

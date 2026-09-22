@@ -127,6 +127,50 @@ class MusicShellViewModelTest {
     }
 
     @Test
+    fun albumDeleteConfirmationFlowRunsInOrder() {
+        val state = MusicShellViewModel()
+        state.enterAlbumEditMode()
+        state.selectAlbumRow("album:7", true)
+
+        state.requestDeleteSelectedAlbums()
+
+        assertTrue(state.showAlbumDeleteConfirm)
+        assertEquals(setOf("album:7"), state.pendingAlbumDeleteAlbumIds)
+
+        val deleted = linkedSetOf<String>()
+        state.confirmAlbumDelete { albumIds -> deleted += albumIds }
+
+        assertEquals(setOf("album:7"), deleted)
+        assertFalse(state.showAlbumDeleteConfirm)
+        assertFalse(state.albumEditMode)
+        assertTrue(state.selectedAlbumIds.isEmpty())
+    }
+
+    @Test
+    fun albumDeleteRequestIsIgnoredWithoutSelection() {
+        val state = MusicShellViewModel()
+
+        state.requestDeleteSelectedAlbums()
+        assertFalse(state.showAlbumDeleteConfirm)
+
+        state.confirmAlbumDelete { throw AssertionError("空集合不该触发系统删除") }
+        assertFalse(state.showAlbumDeleteConfirm)
+    }
+
+    @Test
+    fun exitingAlbumEditModeClosesPendingDeleteConfirmation() {
+        val state = MusicShellViewModel()
+        state.enterAlbumEditMode()
+        state.selectAlbumRow("album:7", true)
+        state.requestDeleteSelectedAlbums()
+
+        state.exitAlbumEditMode()
+
+        assertFalse(state.showAlbumDeleteConfirm)
+        assertTrue(state.pendingAlbumDeleteAlbumIds.isEmpty())
+    }
+
+    @Test
     fun playlistPickerVisibilityYieldsToCreateDialog() {
         val state = MusicShellViewModel()
         assertFalse(state.playlistPickerVisible)
